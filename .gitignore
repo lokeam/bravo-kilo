@@ -1,0 +1,18 @@
+# BE
+db-data/
+/node_modules
+
+# FE
+web/node_modules
+web/.cache
+web/build
+
+# Env
+.env
+.envrc
+
+# Make
+kbapi
+
+# IDE
+.vscode/
