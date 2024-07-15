@@ -36,7 +36,7 @@ func main() {
 	infoLog := log.New(os.Stdout, "INFO\t", log.Ldate|log.Ltime)
 	errorLog := log.New(os.Stdout, "ERROR\t", log.Ldate|log.Ltime|log.Lshortfile)
 
-	dataSrcName := "host=localhost port=7654 user=postgres password=password dbname=bkapi sslmode=disable timezone=UTC connect_timeout=5"
+	dataSrcName := os.Getenv("DSN")
 	fmt.Println("-----------------------------")
 	fmt.Println("DSN:", dataSrcName) // Print DSN for verification
 	fmt.Println("DSN from environment:", os.Getenv("DSN"))
