@@ -1,35 +1,38 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
+
+	"bravo-kilo/config"
 )
 
-type config struct {
+type appConfig struct {
 	port int
 }
 
 type application struct {
-	config config
+	config   appConfig
 	errorLog *log.Logger
-	infoLog *log.Logger
+	infoLog  *log.Logger
 }
 
-func main () {
-	var cfg config
+func main() {
+	var cfg appConfig
 	cfg.port = 8081
 
 	infoLog := log.New(os.Stdout, "INFO\t", log.Ldate|log.Ltime)
 	errorLog := log.New(os.Stdout, "ERROR\t", log.Ldate|log.Ltime|log.Lshortfile)
 
 	app := &application{
-		config: cfg,
-		infoLog: infoLog,
+		config:   cfg,
+		infoLog:  infoLog,
 		errorLog: errorLog,
 	}
+
+	config.InitConfig(infoLog)
 
 	err := app.serve()
 	if err != nil {
@@ -38,24 +41,12 @@ func main () {
 }
 
 func (app *application) serve() error {
-	http.HandleFunc("/", func(response http.ResponseWriter, request *http.Request) {
-		var payload struct {
-			GolangBackend bool `json:"golangBackend"`
-			Message string `json:"message"`
-		}
-		payload.GolangBackend = true
-		payload.Message = "Hello, world"
-
-		out, err := json.MarshalIndent(payload, "", "\t")
-		if err != nil {
-			app.errorLog.Println(err)
-		}
-
-		response.Header().Set("Content-Type", "application/json")
-		response.WriteHeader(http.StatusOK)
-		response.Write(out)
-	})
-
 	app.infoLog.Println("API listening on port", app.config.port)
-	return http.ListenAndServe(fmt.Sprintf(":%d", app.config.port), nil)
+
+	srv := &http.Server{
+		Addr:    fmt.Sprintf(":%d", app.config.port),
+		Handler: app.routes(),
+	}
+
+	return srv.ListenAndServe()
 }
