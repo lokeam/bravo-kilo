@@ -14,7 +14,7 @@ type Config struct {
 
 var AppConfig Config
 
-func InitConfig(infoLog *log.Logger) oauth2.Config {
+func InitConfig(infoLog *log.Logger) {
 	AppConfig.GoogleLoginConfig = oauth2.Config{
 		RedirectURL:  os.Getenv("GOOGLE_REDIRECT_URI"),
 		ClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
@@ -28,6 +28,4 @@ func InitConfig(infoLog *log.Logger) oauth2.Config {
 
 	// Use the passed logger to log the OAuth2 configuration
 	infoLog.Printf("Google OAuth2 Config: %+v", AppConfig.GoogleLoginConfig)
-
-	return AppConfig.GoogleLoginConfig
 }

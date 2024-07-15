@@ -9,7 +9,7 @@ import (
 	"github.com/go-chi/cors"
 )
 
-func (app *application) routes() http.Handler {
+func (app *application) routes(h *handlers.Handlers) http.Handler {
 	mux := chi.NewRouter()
 	mux.Use(middleware.Recoverer)
 	mux.Use(cors.Handler(cors.Options{
@@ -20,7 +20,8 @@ func (app *application) routes() http.Handler {
 		AllowCredentials: true,
 	}))
 
-	mux.Post("/google-signin", handlers.GoogleSignIn)
+	mux.Get("/google-signin", h.GoogleSignIn)
+	mux.Get("/google-callback", h.GoogleCallback)
 
 	return mux
 }
