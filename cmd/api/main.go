@@ -8,6 +8,7 @@ import (
 
 	"bravo-kilo/cmd/api/handlers"
 	"bravo-kilo/config"
+	"bravo-kilo/internal/driver"
 
 	"github.com/joho/godotenv"
 )
@@ -17,9 +18,10 @@ type appConfig struct {
 }
 
 type application struct {
-	config   appConfig
-	errorLog *log.Logger
-	infoLog  *log.Logger
+	config    appConfig
+	errorLog  *log.Logger
+	infoLog   *log.Logger
+	db        *driver.DB
 }
 
 func main() {
@@ -34,10 +36,23 @@ func main() {
 	infoLog := log.New(os.Stdout, "INFO\t", log.Ldate|log.Ltime)
 	errorLog := log.New(os.Stdout, "ERROR\t", log.Ldate|log.Ltime|log.Lshortfile)
 
+	dataSrcName := "host=localhost port=7654 user=postgres password=password dbname=bkapi sslmode=disable timezone=UTC connect_timeout=5"
+	fmt.Println("-----------------------------")
+	fmt.Println("DSN:", dataSrcName) // Print DSN for verification
+	fmt.Println("DSN from environment:", os.Getenv("DSN"))
+
+	db, err := driver.ConnectPostgres(dataSrcName)
+	if err != nil {
+		errorLog.Fatal("Cannot connect to database")
+	}
+
+	defer db.SQL.Close()
+
 	app := &application{
 		config:   cfg,
 		infoLog:  infoLog,
 		errorLog: errorLog,
+		db: db,
 	}
 
 	// Initialize the config package with the infoLog
