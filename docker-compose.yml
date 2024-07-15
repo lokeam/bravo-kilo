@@ -1,0 +1,21 @@
+version: '3'
+
+services:
+  postgres:
+    image: 'postgres:14.0'
+    ports:
+      - '7654:5432'
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: bkapi
+    volumes:
+      - ./db-data/postgres/:/var/lib/postgresql/data
+
+  mailhog:
+    image: 'jcalonso/mailhog:latest'
+    ports:
+      - '1026:1026'
+      - '8029:8026'
+    restart: always
