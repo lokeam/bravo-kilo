@@ -2,11 +2,12 @@ package handlers
 
 import (
 	"bravo-kilo/config"
+	"bravo-kilo/internal/data"
+	"bravo-kilo/internal/utils"
 	"context"
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
-	"io"
 	"log"
 	"log/slog"
 	"net/http"
@@ -21,6 +22,7 @@ import (
 // Handlers struct to hold the logger
 type Handlers struct {
 	logger *slog.Logger
+	models data.Models
 }
 
 type jsonResponse struct {
@@ -31,9 +33,10 @@ type jsonResponse struct {
 
 
 // NewHandlers creates a new Handlers instance
-func NewHandlers(logger *slog.Logger) *Handlers {
+func NewHandlers(logger *slog.Logger, models data.Models) *Handlers {
 	return &Handlers{
 		logger: logger,
+		models: models,
 	}
 }
 
@@ -81,7 +84,6 @@ func (h *Handlers) GoogleSignIn(response http.ResponseWriter, request *http.Requ
 	url := GoogleLoginConfig.AuthCodeURL(randomState)
 
 	http.Redirect(response, request, url, http.StatusSeeOther)
-	return
 }
 
 // Process Google OAuth callback
@@ -139,13 +141,37 @@ func (h *Handlers) GoogleCallback(response http.ResponseWriter, request *http.Re
 
 	h.logger.Info("User info recieved!", "user", userInfo)
 
-	userData, err := io.ReadAll(oauthResponse.Body)
+	firstName, lastName := utils.SplitFullName(userInfo.Name)
+
+	// Save userInfo + access tokens
+	user := data.User{
+		Email:      userInfo.Email,
+		FirstName:  firstName,
+		LastName:   lastName,
+	}
+
+	userId, err := h.models.User.Insert(user)
 	if err != nil {
-		h.logger.Error("JSON parsing failed: ", "error", err)
-		http.Error(response, "JSON parsing failed", http.StatusInternalServerError)
+		h.logger.Error("Error adding user to db", "error", err)
+		http.Error(response, "Error adding user to db", http.StatusInternalServerError)
 		return
 	}
 
-	response.Header().Set("Content-Type", "application/json")
-	response.Write(userData)
+	tokenRecord := data.Token{
+		UserID:        userId,
+		RefreshToken:  token.RefreshToken,
+		TokenExpiry:   token.Expiry,
+	}
+
+	if err := h.models.Token.Insert(tokenRecord); err != nil {
+		h.logger.Error("Error adding token to db", "error", err)
+		http.Error(response, "Error adding token to db", http.StatusInternalServerError)
+		return
+	}
+
+	h.logger.Info("User and tokens stored successfully")
+
+	// Redirect to FE dashboard
+	dashboardURL := "http://localhost:5173/library"
+	http.Redirect(response, request, dashboardURL, http.StatusSeeOther)
 }

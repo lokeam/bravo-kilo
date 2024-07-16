@@ -60,7 +60,7 @@ func main() {
 	config.InitConfig(log)
 
 	// Initialize handlers with the logger
-	h := handlers.NewHandlers(log)
+	h := handlers.NewHandlers(log, app.models)
 
 	err = app.serve(h)
 	if err != nil {

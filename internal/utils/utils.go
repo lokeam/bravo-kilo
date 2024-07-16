@@ -5,9 +5,10 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"strings"
 )
 
-func readJSON(response http.ResponseWriter, request *http.Request, data interface{}) error {
+func ReadJSON(response http.ResponseWriter, request *http.Request, data interface{}) error {
 	// Set size limit to 1mb
 	maxBytes := 1048576
 	request.Body = http.MaxBytesReader(response, request.Body, int64(maxBytes))
@@ -27,7 +28,7 @@ func readJSON(response http.ResponseWriter, request *http.Request, data interfac
 	return nil
 }
 
-func writeJSON(response http.ResponseWriter, status int, data interface{}, headers ...http.Header) error {
+func WriteJSON(response http.ResponseWriter, status int, data interface{}, headers ...http.Header) error {
 	out, err := json.MarshalIndent(data, "", "\t")
 	if err != nil {
 		return err
@@ -49,17 +50,30 @@ func writeJSON(response http.ResponseWriter, status int, data interface{}, heade
 	return nil
 }
 
-func errorJSON(response http.ResponseWriter, err error, status ...int) {
-	statusCode := http.StatusBadRequest
+// func ErrorJSON(response http.ResponseWriter, err error, status ...int) {
+// 	statusCode := http.StatusBadRequest
 
-	if len(status) > 0 {
-		statusCode = status[0]
+// 	if len(status) > 0 {
+// 		statusCode = status[0]
+// 	}
+
+// 	var payload jsonResponse
+// 	payload.Error = true
+// 	payload.Message = err.Error()
+
+// 	app.writeJSON(response, statusCode, payload)
+// }
+
+// Helper function to split full name into first and last names
+func SplitFullName(fullName string) (string, string) {
+	parts := strings.Fields(fullName)
+	if len(parts) == 0 {
+			return "", ""
 	}
-
-	var payload jsonResponse
-	payload.Error = true
-	payload.Message = err.Error()
-
-	app.writeJSON(response, statusCode, payload)
+	firstName := parts[0]
+	lastName := ""
+	if len(parts) > 1 {
+			lastName = strings.Join(parts[1:], " ")
+	}
+	return firstName, lastName
 }
-
