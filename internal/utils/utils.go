@@ -62,3 +62,4 @@ func errorJSON(response http.ResponseWriter, err error, status ...int) {
 
 	app.writeJSON(response, statusCode, payload)
 }
+

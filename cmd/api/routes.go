@@ -1,7 +1,7 @@
 package main
 
 import (
-	"bravo-kilo/cmd/api/handlers"
+	"bravo-kilo/cmd/handlers"
 	"net/http"
 
 	"github.com/go-chi/chi/middleware"

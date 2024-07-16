@@ -5,8 +5,10 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/json"
 	"io"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"time"
@@ -18,13 +20,20 @@ import (
 
 // Handlers struct to hold the logger
 type Handlers struct {
-  infoLog *log.Logger
+	logger *slog.Logger
 }
 
+type jsonResponse struct {
+	Error    bool        `json:"error"`
+	Message  string      `json:"message"`
+	Data     interface{} `json:"data,omitempty"`
+}
+
+
 // NewHandlers creates a new Handlers instance
-func NewHandlers(infoLog *log.Logger) *Handlers {
+func NewHandlers(logger *slog.Logger) *Handlers {
 	return &Handlers{
-		infoLog: infoLog,
+		logger: logger,
 	}
 }
 
@@ -39,8 +48,9 @@ func generateState() string {
 	return base64.URLEncoding.EncodeToString(byteSlice)
 }
 
+// Init OAuth with Google
 func (h *Handlers) GoogleSignIn(response http.ResponseWriter, request *http.Request) {
-	h.infoLog.Println("Handling Google OAuth callback")
+	h.logger.Info("Handling Google OAuth callback")
 	err := godotenv.Load(".env")
 	if err != nil {
 		log.Fatalf("Error loading .env file: %s", err)
@@ -74,21 +84,22 @@ func (h *Handlers) GoogleSignIn(response http.ResponseWriter, request *http.Requ
 	return
 }
 
+// Process Google OAuth callback
 func (h *Handlers) GoogleCallback(response http.ResponseWriter, request *http.Request) {
-	h.infoLog.Println("Handling Google OAuth callback")
+	h.logger.Info("Handling Google OAuth callback")
 
 	state := request.URL.Query().Get("state")
 
 	// Retrieve the state from the cookie
 	cookie, err := request.Cookie("oauthstate")
 	if err != nil {
-		h.infoLog.Println("Error: State cookie not found")
+		h.logger.Error("Error: State cookie not found", "error", err)
 		http.Error(response, "Error: State cookie not found", http.StatusBadRequest)
 		return
 	}
 
 	if state != cookie.Value {
-		h.infoLog.Println("Error: URL State and Cookie state don't match")
+		h.logger.Error("Error: URL State and Cookie state don't match", "error", err)
 		http.Error(response, "Error: States don't match", http.StatusBadRequest)
 		return
 	}
@@ -99,22 +110,38 @@ func (h *Handlers) GoogleCallback(response http.ResponseWriter, request *http.Re
 
 	token, err := googleCfg.Exchange(context.Background(), code)
 	if err != nil {
-		h.infoLog.Println("Code/Token exchange failed", err)
-		http.Error(response, "Code/Token exchange failed", http.StatusInternalServerError)
+		h.logger.Error("Error exchanging code for token", "error", err)
+		http.Error(response, "Error exchaning code for token", http.StatusInternalServerError)
 		return
 	}
 
 	oauthResponse, err := http.Get("https://www.googleapis.com/oauth2/v2/userinfo?access_token=" + token.AccessToken)
 	if err != nil {
-		h.infoLog.Println("User data fetch failed", err)
-		http.Error(response, "User data fetch failed", http.StatusInternalServerError)
+		h.logger.Error("Error getting user info", "error", err)
+		http.Error(response, "Error getting user info", http.StatusInternalServerError)
 		return
 	}
+
 	defer oauthResponse.Body.Close()
+
+	var userInfo struct {
+		Id     string `json:"od"`
+		Email  string `json:"email"`
+		Name   string `json:"name"`
+	}
+
+	// Decode response
+	if err := json.NewDecoder(oauthResponse.Body).Decode(&userInfo); err != nil {
+		h.logger.Error("Error decoding user info response:", "error", err)
+		http.Error(response, "Error decoding user info response", http.StatusInternalServerError)
+		return
+	}
+
+	h.logger.Info("User info recieved!", "user", userInfo)
 
 	userData, err := io.ReadAll(oauthResponse.Body)
 	if err != nil {
-		h.infoLog.Println("JSON parsing failed: ", err)
+		h.logger.Error("JSON parsing failed: ", "error", err)
 		http.Error(response, "JSON parsing failed", http.StatusInternalServerError)
 		return
 	}

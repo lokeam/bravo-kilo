@@ -2,7 +2,7 @@ package driver
 
 import (
 	"database/sql"
-	"fmt"
+	"log/slog"
 	"time"
 
 	_ "github.com/jackc/pgconn"
@@ -20,9 +20,10 @@ const maxOpenDbConn = 10
 const maxIdleDbConn = 5
 const maxDbLifetime = 5 * time.Minute
 
-func ConnectPostgres(dsn string) (*DB, error) {
+func ConnectPostgres(dsn string, logger *slog.Logger) (*DB, error) {
 	database, err := sql.Open("pgx", dsn)
 	if err != nil {
+		logger.Error("Error opening database", "error", err)
 		return nil, err
 	}
 
@@ -30,8 +31,9 @@ func ConnectPostgres(dsn string) (*DB, error) {
 	database.SetMaxIdleConns(maxIdleDbConn)
 	database.SetConnMaxLifetime(maxDbLifetime)
 
-	err = testDB(database)
+	err = testDB(database, logger)
 	if err != nil {
+		logger.Error("Error testing db connection", "error", err)
 		return nil, err
 	}
 
@@ -39,13 +41,13 @@ func ConnectPostgres(dsn string) (*DB, error) {
 	return dbConnection, nil
 }
 
-func testDB(database *sql.DB) error {
+func testDB(database *sql.DB, logger *slog.Logger) error {
 	err := database.Ping()
 	if err != nil {
-		fmt.Println("Error testing database! ", err)
+		logger.Error("DB ping failed ", "error", err)
 		return err
 	}
-	fmt.Println("***** DB ping successful *****")
+	logger.Info("***** DB ping successful *****")
 
 	return nil
 }

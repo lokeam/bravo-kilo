@@ -1,7 +1,7 @@
 package config
 
 import (
-	"log"
+	"log/slog"
 	"os"
 
 	"golang.org/x/oauth2"
@@ -14,7 +14,7 @@ type Config struct {
 
 var AppConfig Config
 
-func InitConfig(infoLog *log.Logger) {
+func InitConfig(logger *slog.Logger) {
 	AppConfig.GoogleLoginConfig = oauth2.Config{
 		RedirectURL:  os.Getenv("GOOGLE_REDIRECT_URI"),
 		ClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
@@ -27,5 +27,5 @@ func InitConfig(infoLog *log.Logger) {
 	}
 
 	// Use the passed logger to log the OAuth2 configuration
-	infoLog.Printf("Google OAuth2 Config: %+v", AppConfig.GoogleLoginConfig)
+	logger.Info("Google OAuth2 Config:", "appConfig", AppConfig.GoogleLoginConfig)
 }

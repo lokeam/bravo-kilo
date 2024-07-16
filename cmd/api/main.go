@@ -2,13 +2,15 @@ package main
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 
-	"bravo-kilo/cmd/api/handlers"
+	"bravo-kilo/cmd/handlers"
 	"bravo-kilo/config"
+	"bravo-kilo/internal/data"
 	"bravo-kilo/internal/driver"
+	"bravo-kilo/internal/logger"
 
 	"github.com/joho/godotenv"
 )
@@ -18,57 +20,56 @@ type appConfig struct {
 }
 
 type application struct {
-	config    appConfig
-	errorLog  *log.Logger
-	infoLog   *log.Logger
-	db        *driver.DB
+	config   appConfig
+	logger   *slog.Logger
+	models   data.Models
 }
 
 func main() {
 	err := godotenv.Load(".env")
+	handler := slog.NewJSONHandler(os.Stdout, nil)
 	if err != nil {
-		log.Fatalf("Error loading .env file: %s", err)
+		slog.New(handler).Error("Error loading .env file", "error", err)
 	}
+
+	logger.Init()
+	log := logger.Log
 
 	var cfg appConfig
 	cfg.port = 8081
-
-	infoLog := log.New(os.Stdout, "INFO\t", log.Ldate|log.Ltime)
-	errorLog := log.New(os.Stdout, "ERROR\t", log.Ldate|log.Ltime|log.Lshortfile)
 
 	dataSrcName := os.Getenv("DSN")
 	fmt.Println("-----------------------------")
 	fmt.Println("DSN:", dataSrcName) // Print DSN for verification
 	fmt.Println("DSN from environment:", os.Getenv("DSN"))
 
-	db, err := driver.ConnectPostgres(dataSrcName)
+	db, err := driver.ConnectPostgres(dataSrcName, log)
 	if err != nil {
-		errorLog.Fatal("Cannot connect to database")
+		log.Error("Cannot connect to database", "error", err)
 	}
 
 	defer db.SQL.Close()
 
 	app := &application{
 		config:   cfg,
-		infoLog:  infoLog,
-		errorLog: errorLog,
-		db: db,
+		logger:   log,
+		models:   data.New(db.SQL, log),
 	}
 
-	// Initialize the config package with the infoLog
-	config.InitConfig(infoLog)
+	// Initialize the config package with the logger
+	config.InitConfig(log)
 
-	// Initialize handlers with the infoLog
-	h := handlers.NewHandlers(infoLog)
+	// Initialize handlers with the logger
+	h := handlers.NewHandlers(log)
 
 	err = app.serve(h)
 	if err != nil {
-		log.Fatal(err)
+		log.Error("Error initializing ", "error", err)
 	}
 }
 
 func (app *application) serve(h *handlers.Handlers) error {
-	app.infoLog.Println("API listening on port", app.config.port)
+	app.logger.Info("API listening on port", "port", app.config.port)
 
 	srv := &http.Server{
 		Addr:    fmt.Sprintf(":%d", app.config.port),
