@@ -14,10 +14,18 @@ import (
 	"os"
 	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/joho/godotenv"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 )
+
+var jwtKey = []byte("extra-super-secret-256-bit-key")
+
+type Claims struct {
+	UserID int `json:"userId"`
+	jwt.RegisteredClaims
+}
 
 // Handlers struct to hold the logger
 type Handlers struct {
@@ -171,7 +179,38 @@ func (h *Handlers) GoogleCallback(response http.ResponseWriter, request *http.Re
 
 	h.logger.Info("User and tokens stored successfully")
 
+	// Create JWT
+	expirationTime := time.Now().Add(15 * time.Minute)
+	claims := &Claims{
+		UserID: userId,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(expirationTime),
+		},
+	}
+
+	jwtToken := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	jwtString, err := jwtToken.SignedString(jwtKey)
+	if err != nil {
+		h.logger.Error("Error generating JWT", "error", err)
+		http.Error(response, "Error generating JWT", http.StatusInternalServerError)
+		return
+	}
+
+	h.logger.Info("Generated JWT")
+
+	// JWT as a cookie
+	http.SetCookie(response, &http.Cookie{
+		Name:     "token",
+		Value:    jwtString,
+		Expires:  expirationTime,
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteNoneMode,
+	})
+
 	// Redirect to FE dashboard
 	dashboardURL := "http://localhost:5173/library"
 	http.Redirect(response, request, dashboardURL, http.StatusSeeOther)
+
+	h.logger.Info("JWT successfully sent to FE with status code: ", "info", http.StatusSeeOther)
 }
