@@ -216,6 +216,7 @@ func (h *Handlers) GoogleCallback(response http.ResponseWriter, request *http.Re
 	h.logger.Info("JWT successfully sent to FE with status code: ", "info", http.StatusSeeOther)
 }
 
+// Verify JWT Token
 func (h *Handlers) VerifyToken(response http.ResponseWriter, request *http.Request) {
 	cookie, err := request.Cookie("token")
 	if err != nil {
@@ -249,4 +250,22 @@ func (h *Handlers) VerifyToken(response http.ResponseWriter, request *http.Reque
 	json.NewEncoder(response).Encode(map[string]interface{}{
 			"user": user,
 	})
+}
+
+// Process user sign out
+func (h *Handlers) SignOut(response http.ResponseWriter, request *http.Request) {
+	// Clear token cookie
+	http.SetCookie(response, &http.Cookie{
+		Name:     "token",
+		Value:    "",
+		Expires:  time.Now().Add(-1 * time.Hour),
+		HttpOnly: true,
+		Secure:   false,
+		SameSite: http.SameSiteLaxMode,
+		Path:     "/",
+	})
+
+	h.logger.Info("User logged out, token cookie cleared")
+	response.WriteHeader(http.StatusOK)
+	response.Write([]byte("Logged out successfully"))
 }

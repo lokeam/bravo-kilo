@@ -23,6 +23,7 @@ func (app *application) routes(h *handlers.Handlers) http.Handler {
 	mux.Get("/google-signin", h.GoogleSignIn)
 	mux.Get("/google-callback", h.GoogleCallback)
 	mux.Get("/verify-token", h.VerifyToken)
+	mux.Post("/signout", h.SignOut)
 
 	return mux
 }

@@ -53,7 +53,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const logout = async () => {
-    await axios.post(`${import.meta.env.VITE_API_ENDPOINT}/logout`, {}, { withCredentials: true });
+    await axios.post(`${import.meta.env.VITE_API_ENDPOINT}/signout`, {}, { withCredentials: true });
     setUser(null);
     setIsAuthenticated(false);
     window.location.href = "/login";
