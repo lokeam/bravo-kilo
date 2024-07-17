@@ -13,15 +13,16 @@ func (app *application) routes(h *handlers.Handlers) http.Handler {
 	mux := chi.NewRouter()
 	mux.Use(middleware.Recoverer)
 	mux.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{"https://*", "http://*"},
-		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
-		ExposedHeaders:   []string{"Link"},
-		AllowCredentials: true,
+    AllowedOrigins:   []string{"https://*", "http://*"},
+    AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+    AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
+    ExposedHeaders:   []string{"Link"},
+    AllowCredentials: true,
 	}))
 
 	mux.Get("/google-signin", h.GoogleSignIn)
 	mux.Get("/google-callback", h.GoogleCallback)
+	mux.Get("/verify-token", h.VerifyToken)
 
 	return mux
 }

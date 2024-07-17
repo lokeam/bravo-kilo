@@ -180,7 +180,7 @@ func (h *Handlers) GoogleCallback(response http.ResponseWriter, request *http.Re
 	h.logger.Info("User and tokens stored successfully")
 
 	// Create JWT
-	expirationTime := time.Now().Add(15 * time.Minute)
+	expirationTime := time.Now().Add(60 * time.Minute)
 	claims := &Claims{
 		UserID: userId,
 		RegisteredClaims: jwt.RegisteredClaims{
@@ -204,8 +204,9 @@ func (h *Handlers) GoogleCallback(response http.ResponseWriter, request *http.Re
 		Value:    jwtString,
 		Expires:  expirationTime,
 		HttpOnly: true,
-		Secure:   true,
-		SameSite: http.SameSiteNoneMode,
+		Secure:   false,
+		SameSite: http.SameSiteLaxMode,
+		Path:     "/",
 	})
 
 	// Redirect to FE dashboard
@@ -213,4 +214,39 @@ func (h *Handlers) GoogleCallback(response http.ResponseWriter, request *http.Re
 	http.Redirect(response, request, dashboardURL, http.StatusSeeOther)
 
 	h.logger.Info("JWT successfully sent to FE with status code: ", "info", http.StatusSeeOther)
+}
+
+func (h *Handlers) VerifyToken(response http.ResponseWriter, request *http.Request) {
+	cookie, err := request.Cookie("token")
+	if err != nil {
+			h.logger.Error("Error: No token cookie", "error", err)
+			http.Error(response, "Error: No token cookie", http.StatusUnauthorized)
+			return
+	}
+
+	tokenStr := cookie.Value
+	claims := &Claims{}
+
+	token, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (interface{}, error) {
+			return jwtKey, nil
+	})
+	if err != nil || !token.Valid {
+			h.logger.Error("Error: Invalid token", "error", err)
+			http.Error(response, "Invalid token", http.StatusUnauthorized)
+			return
+	}
+
+	user, err := h.models.User.GetByID(claims.UserID)
+	if err != nil {
+			h.logger.Error("Error: User not found", "error", err)
+			http.Error(response, "User not found", http.StatusInternalServerError)
+			return
+	}
+
+	h.logger.Info("User info retrieved!", "user", user)
+
+	response.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(response).Encode(map[string]interface{}{
+			"user": user,
+	})
 }

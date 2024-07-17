@@ -47,6 +47,7 @@ type Token struct {
 	TokenExpiry  time.Time `json:"token_expiry"`
 }
 
+// User
 func (u *UserModel) Insert(user User) (int, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
@@ -69,7 +70,35 @@ func (u *UserModel) Insert(user User) (int, error) {
 	return newId, nil
 }
 
+func (u *UserModel) GetByID(id int) (*User, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
 
+	var user User
+	statement := `SELECT id, email, first_name, last_name, created_at, updated_at FROM users WHERE id = $1`
+	row := u.DB.QueryRowContext(ctx, statement, id)
+	err := row.Scan(
+		&user.ID,
+		&user.Email,
+		&user.FirstName,
+		&user.LastName,
+		&user.CreatedAt,
+		&user.UpdatedAt,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		} else {
+			u.Logger.Error("User Model - Error fetching user by ID", "error", err)
+			return nil, err
+		}
+	}
+
+	return &user, nil
+}
+
+
+// Token
 func (t *TokenModel) Insert(token Token) error {
 	// create context with a timeout to ensure db transaction doesn't go on forever
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
