@@ -1,10 +1,10 @@
 
 const Login = () => {
   const handleLogin = () => {
-    window.location.href = `${import.meta.env.VITE_API_ENDPOINT}/google-signin`;
+    window.location.href = `${import.meta.env.VITE_API_ENDPOINT}/auth/google/signin`;
   };
 
-  console.log('test url:', `${import.meta.env.VITE_API_ENDPOINT}/google-signin`);
+  console.log('test url:', `${import.meta.env.VITE_API_ENDPOINT}/auth/google/signin`);
   return (
 
     <div className="bk_login grid lg:grid-cols-2 h-screen">

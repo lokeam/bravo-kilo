@@ -20,10 +20,10 @@ func (app *application) routes(h *handlers.Handlers) http.Handler {
     AllowCredentials: true,
 	}))
 
-	mux.Get("/google-signin", h.GoogleSignIn)
-	mux.Get("/google-callback", h.GoogleCallback)
-	mux.Get("/verify-token", h.VerifyToken)
-	mux.Post("/signout", h.SignOut)
+	mux.Get("/auth/google/signin", h.GoogleSignIn)
+	mux.Get("/auth/google/callback", h.GoogleCallback)
+	mux.Get("/auth/token/verify", h.VerifyToken)
+	mux.Post("/auth/signout", h.SignOut)
 
 	return mux
 }

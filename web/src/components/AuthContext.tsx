@@ -13,7 +13,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const fetchUser = async () => {
-  const { data } = await axios.get(`${import.meta.env.VITE_API_ENDPOINT}/verify-token`, { withCredentials: true });
+  const { data } = await axios.get(`${import.meta.env.VITE_API_ENDPOINT}/auth/token/verify`, { withCredentials: true });
   console.log('Fetch user data:', data);
   return data.user;
 };
@@ -49,11 +49,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, [isError]);
 
   const login = () => {
-    window.location.href = `${import.meta.env.VITE_API_ENDPOINT}/google-signin`;
+    window.location.href = `${import.meta.env.VITE_API_ENDPOINT}/auth/google/signin`;
   };
 
   const logout = async () => {
-    await axios.post(`${import.meta.env.VITE_API_ENDPOINT}/signout`, {}, { withCredentials: true });
+    await axios.post(`${import.meta.env.VITE_API_ENDPOINT}/auth/signout`, {}, { withCredentials: true });
     setUser(null);
     setIsAuthenticated(false);
     window.location.href = "/login";

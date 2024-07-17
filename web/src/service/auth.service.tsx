@@ -11,7 +11,7 @@ interface LoginData {
 }
 
 const login = async (loginData: LoginData): Promise<LoginResponse> => {
-  const response = await axios.post('google-signin', loginData);
+  const response = await axios.post('google/signin', loginData);
 
   document.cookie = `token=${response.data.token}; HttpOnly; Secure`
   return response.data;
