@@ -1,4 +1,3 @@
-import { Outlet } from 'react-router-dom';
 import Avatar from '../Avatar/Avatar';
 
 import { IoSearchOutline } from 'react-icons/io5';
@@ -15,6 +14,7 @@ const avatarData = {
 };
 
 export default function TopNavigation() {
+
   return (
     <>
       <header className="antialiased">
@@ -93,7 +93,7 @@ export default function TopNavigation() {
                     >
                       <span className="sr-only">Open user menu</span>
                       {/* ----- Avatar Component ----- */}
-                      <Avatar alt={avatarData.alt} img={avatarData.img} initials={avatarData.initials} size="sm"/>
+                      <Avatar />
                     </button>
 
               </div>
@@ -102,7 +102,6 @@ export default function TopNavigation() {
           </div>
         </nav>
       </header>
-      <Outlet />
     </>
   )
 }

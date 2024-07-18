@@ -38,6 +38,7 @@ type User struct {
 	LastName  string    `json:"last_name,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
+	Picture   string    `json:"picture,omitempty"`
 }
 
 type Token struct {
@@ -53,14 +54,15 @@ func (u *UserModel) Insert(user User) (int, error) {
 	defer cancel()
 
 	var newId int
-	statement := `INSERT INTO users (email, first_name, last_name, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5) RETURNING id`
+	statement := `INSERT INTO users (email, first_name, last_name, created_at, updated_at, picture)
+		VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`
 	err := u.DB.QueryRowContext(ctx, statement,
 		user.Email,
 		user.FirstName,
 		user.LastName,
 		time.Now(),
 		time.Now(),
+		user.Picture,
 	).Scan(&newId)
 	if err != nil {
 		u.Logger.Error("User Model - Error inserting user", "error", err)
@@ -75,7 +77,7 @@ func (u *UserModel) GetByID(id int) (*User, error) {
 	defer cancel()
 
 	var user User
-	statement := `SELECT id, email, first_name, last_name, created_at, updated_at FROM users WHERE id = $1`
+	statement := `SELECT id, email, first_name, last_name, created_at, updated_at, picture FROM users WHERE id = $1`
 	row := u.DB.QueryRowContext(ctx, statement, id)
 	err := row.Scan(
 		&user.ID,
@@ -84,6 +86,7 @@ func (u *UserModel) GetByID(id int) (*User, error) {
 		&user.LastName,
 		&user.CreatedAt,
 		&user.UpdatedAt,
+		&user.Picture,
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {

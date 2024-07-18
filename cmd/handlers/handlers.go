@@ -135,9 +135,10 @@ func (h *Handlers) GoogleCallback(response http.ResponseWriter, request *http.Re
 	defer oauthResponse.Body.Close()
 
 	var userInfo struct {
-		Id     string `json:"od"`
-		Email  string `json:"email"`
-		Name   string `json:"name"`
+		Id       string `json:"od"`
+		Email    string `json:"email"`
+		Name     string `json:"name"`
+		Picture  string `json:"picture"`
 	}
 
 	// Decode response
@@ -156,6 +157,7 @@ func (h *Handlers) GoogleCallback(response http.ResponseWriter, request *http.Re
 		Email:      userInfo.Email,
 		FirstName:  firstName,
 		LastName:   lastName,
+		Picture:    userInfo.Picture,
 	}
 
 	userId, err := h.models.User.Insert(user)

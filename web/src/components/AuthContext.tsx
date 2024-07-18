@@ -1,9 +1,19 @@
-import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
+import { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import { useQuery, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import axios from 'axios';
 
+export interface User {
+  id?: number;
+  email?: string;
+  first_name?: string;
+  last_name?: string;
+  picture?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
 interface AuthContextType {
-  user: any;
+  user: User | null;
   isAuthenticated: boolean;
   login: () => void;
   logout: () => void;
@@ -19,7 +29,7 @@ const fetchUser = async () => {
 };
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
 
