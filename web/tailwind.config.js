@@ -11,6 +11,7 @@ export default {
         'dark-gunmetal': '#182235', // top nav bg
         'yankees-blue': '#1E293B', // sidebar bg,
         'ebony': '#0F172A', // main dark bg
+        'night': '#111827', // potential dark bg
         'charcoal': '#334155', // top nav/other border color
         'hepatica': '#6366F1', // bright purple, cta btn
         'majorelle': '#4F46E5', // dark purple, cta btn, white text (#fff)\
