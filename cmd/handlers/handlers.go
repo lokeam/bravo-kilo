@@ -271,3 +271,51 @@ func (h *Handlers) SignOut(response http.ResponseWriter, request *http.Request) 
 	response.WriteHeader(http.StatusOK)
 	response.Write([]byte("Logged out successfully"))
 }
+
+// Process Google Books API Search
+func (h *Handlers) SearchBooks(response http.ResponseWriter, request *http.Request) {
+	query := request.URL.Query().Get("query")
+	if query == "" {
+		h.logger.Error("Search query is missing", "error", "missing query")
+		http.Error(response, "Query parameter is required", http.StatusBadRequest)
+		return
+	}
+
+	googleBooksAPI := "https://www.googleapis.com/books/v1/volumes"
+	req, err := http.NewRequest("GET", googleBooksAPI, nil)
+	if err != nil {
+		h.logger.Error("Error creating request", "error", err)
+		http.Error(response, "Error creating request", http.StatusInternalServerError)
+		return
+	}
+
+	q := req.URL.Query()
+	q.Add("q", query)
+	req.URL.RawQuery = q.Encode()
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		h.logger.Error("Error making request to Google Books API", "error", err)
+		http.Error(response, "Error making request to Google Books API", http.StatusInternalServerError)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		h.logger.Error("Error response from Google Books API", "status", resp.Status)
+		http.Error(response, "Error response from Google Books API", resp.StatusCode)
+		return
+	}
+
+	var result map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		h.logger.Error("Error decoding Google Books API response", "error", err)
+		http.Error(response, "Error decoding Google Books API response", http.StatusInternalServerError)
+		return
+	}
+
+	response.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(response).Encode(result)
+}
+
