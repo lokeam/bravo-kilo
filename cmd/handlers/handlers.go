@@ -308,14 +308,25 @@ func (h *Handlers) SearchBooks(response http.ResponseWriter, request *http.Reque
 		return
 	}
 
-	var result map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	var searchResult map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&searchResult); err != nil {
 		h.logger.Error("Error decoding Google Books API response", "error", err)
 		http.Error(response, "Error decoding Google Books API response", http.StatusInternalServerError)
 		return
 	}
 
+	// Transform response for client
+	books, err := utils.TransformGoogleBooksResponse(searchResult)
+	if err != nil {
+		h.logger.Error("Error transforming Google Books API response", "error", err)
+		http.Error(response, "Error transforming Google Books API response", http.StatusInternalServerError)
+		return
+	}
+
 	response.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(response).Encode(result)
+	if err := json.NewEncoder(response).Encode(map[string]interface{}{"items": books}); err != nil {
+		h.logger.Error("Error encoding response", "error", err)
+		http.Error(response, "Error encoding response", http.StatusInternalServerError)
+	}
 }
 
