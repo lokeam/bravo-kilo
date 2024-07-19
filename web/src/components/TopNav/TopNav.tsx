@@ -1,3 +1,5 @@
+import { useState } from 'react';
+import axios from 'axios';
 import Avatar from '../Avatar/Avatar';
 
 import { IoSearchOutline } from 'react-icons/io5';
@@ -6,14 +8,33 @@ import { FaBell, FaPlus } from 'react-icons/fa6';
 
 import bkLogo from '../../assets/tk_icon.webp';
 
-// Avatar test data
-const avatarData = {
-  alt: 'picture of border collie',
-  img: 'https://images.unsplash.com/photo-1503256207526-0d5d80fa2f47?q=80&w=150&h=150&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D',
-  initials: 'HD'
-};
-
 export default function TopNavigation() {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchQuery(e.target.value);
+  };
+
+  const handleSearchSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!searchQuery) return;
+
+    try {
+      const response = await axios.get(`${import.meta.env.VITE_API_ENDPOINT}/api/v1/books/search`, {
+        params: { query: searchQuery },
+        withCredentials: true,
+      });
+      setSearchResults(response.data.items);
+      console.log('Search results:', response.data.items); // Add this line for debugging
+    } catch (error) {
+      console.error('Error fetching search results:', error);
+    }
+  };
+
+  console.log('Search query:', searchQuery);
+
 
   return (
     <>
@@ -51,18 +72,21 @@ export default function TopNavigation() {
 
             {/* ----- Search / Nav Center ----- */}
             <div className="navCenter pl-36">
-              <form method="" className="hidden lg:block lg:pl-10 navCenterSearch">
+              <form onSubmit={handleSearchSubmit} className="hidden lg:block lg:pl-10 navCenterSearch">
                 <label htmlFor="topbar-search" className="sr-only">Search</label>
                 <div className="flex flex-row relative mt-1">
                   <div className="flex absolute inset-y-0 left-0 items-center pl-3 pointer-events-none dark:text-white">
                     <IoSearchOutline />
                   </div>
                   <input
-                    type="text"
-                    name="email"
-                    id="topbar-search"
                     className="bg-gray-700 border border-gray-600 text-gray-900 sm:text-sm rounded focus:ring-primary-500 focus:border-primary-500 block w-full pl-9 p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
-                    placeholder="Search current library" />
+                    id="topbar-search"
+                    name="search"
+                    onChange={handleSearchChange}
+                    placeholder="Search for a book"
+                    type="text"
+                    value={searchQuery}
+                  />
                 </div>
               </form>
             </div>
