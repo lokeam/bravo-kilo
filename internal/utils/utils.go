@@ -17,7 +17,7 @@ type Book struct {
 
 // BookDetails struct to hold product specific info
 type BookDetails struct {
-	Categories   []string      `json:"categories"`
+	Genres       []string      `json:"categories"`
 	Description  string        `json:"description"`
 	IndustryID   []IndustryID  `json:"industryID"`
 	Language     string        `json:"language"`
@@ -101,7 +101,7 @@ func TransformGoogleBooksResponse(searchResult map[string]interface{}) ([]Book, 
 			Title:       volumeInfo["title"].(string),
 			Subtitle:    getStringVal(volumeInfo, "subtitle"),
 			Details:     BookDetails{
-				Categories:  getStringArrVal(volumeInfo, "categories"),
+				Genres:      getStringArrVal(volumeInfo, "categories"),
 				Description: getStringVal(volumeInfo, "description"),
 				IndustryID:  industryIDs,
 				Language:    getStringVal(volumeInfo, "language"),
