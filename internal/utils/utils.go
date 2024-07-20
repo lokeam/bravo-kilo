@@ -19,7 +19,8 @@ type Book struct {
 type BookDetails struct {
 	Genres       []string      `json:"categories"`
 	Description  string        `json:"description"`
-	IndustryID   []IndustryID  `json:"industryID"`
+	ISBN10       string        `json:"isbn10"`
+	ISBN13       string        `json:"ibsn13"`
 	Language     string        `json:"language"`
 	PageCount    int           `json:"pageCount"`
 	PublishDate  string        `json:"publishDate"`
@@ -83,14 +84,16 @@ func TransformGoogleBooksResponse(searchResult map[string]interface{}) ([]Book, 
 		}
 
 		// Check for ISBN
-		industryIDs := []IndustryID{}
+		var isbn10, isbn13 string
 		if industryIDsData, exists := volumeInfo["industryIdentifiers"].([]interface{}); exists {
 			for _, id := range industryIDsData {
 				identifier := id.(map[string]interface{})
-				industryIDs = append(industryIDs, IndustryID{
-					Indentifier: identifier["identifier"].(string),
-					Type:        identifier["type"].(string),
-				})
+				switch identifier["type"].(string) {
+				case "ISBN_10":
+					isbn10 = identifier["identifier"].(string)
+				case "ISBN_13":
+					isbn13 = identifier["identifier"].(string)
+				}
 			}
 		}
 
@@ -103,7 +106,8 @@ func TransformGoogleBooksResponse(searchResult map[string]interface{}) ([]Book, 
 			Details:     BookDetails{
 				Genres:      getStringArrVal(volumeInfo, "categories"),
 				Description: getStringVal(volumeInfo, "description"),
-				IndustryID:  industryIDs,
+				ISBN10:      isbn10,
+				ISBN13:      isbn13,
 				Language:    getStringVal(volumeInfo, "language"),
 				PageCount:   getIntVal(volumeInfo, "pageCount"),
 				PublishDate: getStringVal(volumeInfo, "publishedDate"),
