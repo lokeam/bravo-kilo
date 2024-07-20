@@ -6,6 +6,7 @@ import (
 	"bravo-kilo/internal/utils"
 	"context"
 	"crypto/rand"
+	"database/sql"
 	"encoding/base64"
 	"encoding/json"
 	"log"
@@ -121,7 +122,7 @@ func (h *Handlers) GoogleCallback(response http.ResponseWriter, request *http.Re
 	token, err := googleCfg.Exchange(context.Background(), code)
 	if err != nil {
 		h.logger.Error("Error exchanging code for token", "error", err)
-		http.Error(response, "Error exchaning code for token", http.StatusInternalServerError)
+		http.Error(response, "Error exchanging code for token", http.StatusInternalServerError)
 		return
 	}
 
@@ -135,7 +136,7 @@ func (h *Handlers) GoogleCallback(response http.ResponseWriter, request *http.Re
 	defer oauthResponse.Body.Close()
 
 	var userInfo struct {
-		Id       string `json:"od"`
+		Id       string `json:"id"`
 		Email    string `json:"email"`
 		Name     string `json:"name"`
 		Picture  string `json:"picture"`
@@ -148,24 +149,38 @@ func (h *Handlers) GoogleCallback(response http.ResponseWriter, request *http.Re
 		return
 	}
 
-	h.logger.Info("User info recieved!", "user", userInfo)
+	h.logger.Info("User info received!", "user", userInfo)
 
 	firstName, lastName := utils.SplitFullName(userInfo.Name)
 
-	// Save userInfo + access tokens
-	user := data.User{
-		Email:      userInfo.Email,
-		FirstName:  firstName,
-		LastName:   lastName,
-		Picture:    userInfo.Picture,
-	}
-
-	userId, err := h.models.User.Insert(user)
-	if err != nil {
-		h.logger.Error("Error adding user to db", "error", err)
-		http.Error(response, "Error adding user to db", http.StatusInternalServerError)
+	// Check if user already exists in db
+	existingUser, err := h.models.User.GetByEmail(userInfo.Email)
+	if err != nil && err != sql.ErrNoRows {
+		h.logger.Error("Error checking for existing user", "error", err)
+		http.Error(response, "Error checking for existing user", http.StatusInternalServerError)
 		return
 	}
+
+	var userId int
+	if existingUser != nil {
+		userId = existingUser.ID
+	} else {
+		// Save userInfo + access tokens
+		user := data.User{
+			Email:      userInfo.Email,
+			FirstName:  firstName,
+			LastName:   lastName,
+			Picture:    userInfo.Picture,
+		}
+
+		userId, err = h.models.User.Insert(user)
+		if err != nil {
+			h.logger.Error("Error adding user to db", "error", err)
+			http.Error(response, "Error adding user to db", http.StatusInternalServerError)
+			return
+		}
+	}
+
 
 	tokenRecord := data.Token{
 		UserID:        userId,
@@ -267,7 +282,34 @@ func (h *Handlers) SignOut(response http.ResponseWriter, request *http.Request) 
 		Path:     "/",
 	})
 
-	h.logger.Info("User logged out, token cookie cleared")
+	// Get the user ID from JWT token
+	cookie, err := request.Cookie("token")
+	if err != nil {
+		h.logger.Error("Error: No token cookie", "error", err)
+		http.Error(response, "Error: No token cookie", http.StatusUnauthorized)
+		return
+	}
+
+	tokenStr := cookie.Value
+	claims := &Claims{}
+
+	token, err := jwt.ParseWithClaims(tokenStr, claims, func(t *jwt.Token) (interface{}, error) {
+		return jwtKey, nil
+	})
+	if err != nil || !token.Valid {
+		h.logger.Error("Error: Invalid token", "error", err)
+		http.Error(response, "Error: Invalid token", http.StatusUnauthorized)
+		return
+	}
+
+	// Delete the refresh token from db
+	if err := h.models.Token.DeleteByUserID(claims.UserID); err != nil {
+		h.logger.Error("Error deleting refresh token by user ID", "error", err)
+		http.Error(response, "Error deleting refresh token", http.StatusInternalServerError)
+		return
+	}
+
+	h.logger.Info("User logged out, token cookie cleared, token deleted")
 	response.WriteHeader(http.StatusOK)
 	response.Write([]byte("Logged out successfully"))
 }

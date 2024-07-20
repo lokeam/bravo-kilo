@@ -135,6 +135,32 @@ func (u *UserModel) GetByID(id int) (*User, error) {
 	return &user, nil
 }
 
+func (u *UserModel) GetByEmail(email string) (*User, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	var user User
+	statement := `SELECT id, email, first_name, last_name, created_at, updated_at, picture FROM users WHERE email = $1`
+	row := u.DB.QueryRowContext(ctx, statement, email)
+	err := row.Scan(
+		&user.ID,
+		&user.Email,
+		&user.FirstName,
+		&user.LastName,
+		&user.CreatedAt,
+		&user.UpdatedAt,
+		&user.Picture,
+	)
+	if err != nil {
+		if err != sql.ErrNoRows {
+			return nil, nil
+		} else {
+			u.Logger.Error("User Model - Error fetching user by email", "error", err)
+			return nil, err
+		}
+	}
+	return &user, nil
+}
 
 // Token
 func (t *TokenModel) Insert(token Token) error {
@@ -159,6 +185,20 @@ func (t *TokenModel) Insert(token Token) error {
 	}
 
 	// rt nil if no error
+	return nil
+}
+
+func (t *TokenModel) DeleteByUserID(userID int) error {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	statement := `DELETE FROM tokens WHERE user_id = $1`
+	_, err := t.DB.ExecContext(ctx, statement, userID)
+	if err != nil {
+		t.Logger.Error("Token Model - Error deleting token by user ID", "error", err)
+		return err
+	}
+
 	return nil
 }
 
