@@ -58,10 +58,11 @@ type User struct {
 }
 
 type Token struct {
-	ID           int       `json:"id"`
-	UserID       int       `json:"user_id"`
-	RefreshToken string    `json:"refresh_token"`
-	TokenExpiry  time.Time `json:"token_expiry"`
+	ID             int       `json:"id"`
+	UserID         int       `json:"user_id"`
+	RefreshToken   string    `json:"refresh_token"`
+	TokenExpiry    time.Time `json:"token_expiry"`
+	PreviousToken  string    `json:"previous_token,omitempty"`
 }
 
 type Book struct {
@@ -164,27 +165,35 @@ func (u *UserModel) GetByEmail(email string) (*User, error) {
 
 // Token
 func (t *TokenModel) Insert(token Token) error {
-	// create context with a timeout to ensure db transaction doesn't go on forever
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
-
-	// ensure context is cancelled when fn runs
 	defer cancel()
 
-	// define SQL statement to do the things
-	statement := `INSERT INTO tokens (user_id, refresh_token, token_expiry)
-			VALUES ($1, $2, $3)`
+	statement := `INSERT INTO tokens (user_id, refresh_token, token_expiry, previous_token)
+		VALUES ($1, $2, $3, $4)`
 	_, err := t.DB.ExecContext(ctx, statement,
 		token.UserID,
 		token.RefreshToken,
 		token.TokenExpiry,
+		token.PreviousToken,
 	)
-	// if there was an error, log it and return
 	if err != nil {
 		t.Logger.Error("Token Model - Error inserting token", "error", err)
 		return err
 	}
 
-	// rt nil if no error
+	return nil
+}
+
+func (t *TokenModel) Rotate(userID int, newToken, oldToken string, expiry time.Time) error {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	statement := `UPDATE tokens SET refresh_token = $1, previous_token = $2, token_expiry = $3 WHERE user_id = $4 AND refresh_token = $5`
+	_, err := t.DB.ExecContext(ctx, statement, newToken, oldToken, expiry, userID, oldToken)
+	if err != nil {
+		t.Logger.Error("Token Model - Error rotating token", "error", err)
+		return err
+	}
 	return nil
 }
 

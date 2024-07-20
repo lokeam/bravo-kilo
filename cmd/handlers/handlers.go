@@ -269,6 +269,69 @@ func (h *Handlers) VerifyToken(response http.ResponseWriter, request *http.Reque
 	})
 }
 
+// Refresh Token
+func (h *Handlers) RefreshToken(response http.ResponseWriter, request *http.Request) {
+	// Grab refresh token from request
+	cookie, err := request.Cookie("token")
+	if err != nil {
+		h.logger.Error("Error: No refresh token cookie", "error", err)
+		http.Error(response, "Error: No refresh token cookie", http.StatusUnauthorized)
+		return
+	}
+
+	oldTokenStr := cookie.Value
+
+	// Parse old token
+	claims := &Claims{}
+	token, err := jwt.ParseWithClaims(oldTokenStr, claims, func(token *jwt.Token) (interface{}, error) {
+		return jwtKey, nil
+	})
+	if err != nil || !token.Valid {
+		h.logger.Error("Error: Invalid refresh token", "error", err)
+		http.Error(response, "Invalid refresh token", http.StatusUnauthorized)
+		return
+	}
+
+	// Generate new token (1 week)
+	expirationTime := time.Now().Add(7 * 24 * time.Hour)
+	newClaims := &Claims{
+		UserID: claims.UserID,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(expirationTime),
+		},
+	}
+
+	newToken := jwt.NewWithClaims(jwt.SigningMethodHS256, newClaims)
+	newTokenStr, err := newToken.SignedString(jwtKey)
+	if err != nil {
+		h.logger.Error("Error generating new JWT", "error", err)
+		http.Error(response, "Error generating new JWT", http.StatusInternalServerError)
+		return
+	}
+
+	// Rotate the refresh one
+	err = h.models.Token.Rotate(claims.UserID, newTokenStr, oldTokenStr, expirationTime)
+	if err != nil {
+		h.logger.Error("Error rotating refresh token", "error", err)
+		http.Error(response, "Error rotating refresh token", http.StatusInternalServerError)
+		return
+	}
+
+	// Set the new refresh as a cookie
+	http.SetCookie(response, &http.Cookie{
+		Name:     "token",
+		Value:    newTokenStr,
+		Expires:  expirationTime,
+		HttpOnly: true,
+		Secure:   false,
+		SameSite: http.SameSiteLaxMode,
+		Path:     "/",
+	})
+
+	response.WriteHeader(http.StatusOK)
+	response.Write([]byte("Token refreshed successfully"))
+}
+
 // Process user sign out
 func (h *Handlers) SignOut(response http.ResponseWriter, request *http.Request) {
 	// Clear token cookie
