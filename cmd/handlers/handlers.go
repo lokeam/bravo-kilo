@@ -9,6 +9,7 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"log"
 	"log/slog"
 	"net/http"
@@ -226,8 +227,8 @@ func (h *Handlers) GoogleCallback(response http.ResponseWriter, request *http.Re
 		Path:     "/",
 	})
 
-	// Redirect to FE dashboard
-	dashboardURL := "http://localhost:5173/library"
+	// Redirect to FE dashboard with userID as query parameter
+	dashboardURL := fmt.Sprintf("http://localhost:5173/library?userID=%d", userId)
 	http.Redirect(response, request, dashboardURL, http.StatusSeeOther)
 
 	h.logger.Info("JWT successfully sent to FE with status code: ", "info", http.StatusSeeOther)
@@ -435,3 +436,45 @@ func (h *Handlers) SearchBooks(response http.ResponseWriter, request *http.Reque
 	}
 }
 
+// Get all User Books
+func (h *Handlers) GetAllUserBooks(response http.ResponseWriter, request *http.Request) {
+	// Grab token from cookie
+	cookie, err := request.Cookie("token")
+	if err != nil {
+		h.logger.Error("No token cookie", "error", err)
+		http.Error(response, "No token cookie", http.StatusUnauthorized)
+		return
+	}
+
+	tokenStr := cookie.Value
+	claims := &Claims{}
+
+	// Parse JWT token to get userID
+	token, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (interface{}, error) {
+		return jwtKey, nil
+	})
+	if err != nil || !token.Valid {
+		h.logger.Error("Invalid token", "error", err)
+		http.Error(response, "Invalid token", http.StatusUnauthorized)
+		return
+	}
+
+	userID := claims.UserID
+
+	books, err := h.models.Book.GetAllBooksByUserID(userID)
+	if err != nil {
+		h.logger.Error("Error fetching books", "error", err)
+		http.Error(response, "Error fetching books", http.StatusInternalServerError)
+		return
+	}
+
+	dbResponse := map[string]interface{}{
+		"books": books,
+	}
+
+	response.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(response).Encode(dbResponse); err != nil {
+		http.Error(response, "Error encoding response", http.StatusInternalServerError)
+		return
+	}
+}

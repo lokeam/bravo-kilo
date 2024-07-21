@@ -17,7 +17,7 @@ type Book struct {
 
 // BookDetails struct to hold product specific info
 type BookDetails struct {
-	Genres       []string      `json:"categories"`
+	Genres       []string      `json:"genres"`
 	Description  string        `json:"description"`
 	ISBN10       string        `json:"isbn10"`
 	ISBN13       string        `json:"ibsn13"`

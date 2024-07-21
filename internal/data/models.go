@@ -3,6 +3,7 @@ package data
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"log/slog"
 	"time"
 
@@ -75,7 +76,7 @@ type Book struct {
 	PublishDate string     `json:"publish_date"`
 	Authors     []string   `json:"authors"`
 	ImageLinks  []string   `json:"image_links"`
-	Categories  []string   `json:"categories"`
+	Genres      []string   `json:"genres"`
 	CreatedAt   time.Time  `json:"created_at"`
 }
 
@@ -268,6 +269,70 @@ func (b *BookModel) GetByID(id int) (*Book, error) {
 	}
 
 	return &book, nil
+}
+
+func (b *BookModel) GetAllBooksByUserID(userID int) ([]Book, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	query := `
+	SELECT b.id, b.title, b.subtitle, b.description, b.language, b.page_count, b.publish_date, b.authors, b.genres, b.image_links, b.created_at
+	FROM books b
+	INNER JOIN user_books ub ON b.id = ub.book_id
+	WHERE ub.user_id = $1`
+
+	rows, err := b.DB.QueryContext(ctx, query, userID)
+	if err != nil {
+		b.Logger.Error("Error retrieving books for user", "error", err)
+		return nil, err
+	}
+	defer rows.Close()
+
+	var books []Book
+	for rows.Next() {
+		var book Book
+		var authorsJSON []byte
+		var genresJSON []byte
+		var imageLinksJSON []byte
+		if err := rows.Scan(
+			&book.ID,
+			&book.Title,
+			&book.Subtitle,
+			&book.Description,
+			&book.Language,
+			&book.PageCount,
+			&book.PublishDate,
+			&genresJSON,
+			&authorsJSON,
+			&imageLinksJSON,
+			&book.CreatedAt,
+		); err != nil {
+			b.Logger.Error("Error scanning book", "error", err)
+			return nil, err
+		}
+
+		// Unmarshall JSONB fields
+		if err := json.Unmarshal(authorsJSON, &book.Authors); err != nil {
+			b.Logger.Error("Error unmarshalling authors JSON", "error", err)
+			return nil, err
+		}
+		if err := json.Unmarshal(genresJSON, &book.Genres); err != nil {
+			b.Logger.Error("Error unmarshalling genres JSON", "err", err)
+			return nil, err
+		}
+		if err := json.Unmarshal(imageLinksJSON, &book.ImageLinks); err != nil {
+			b.Logger.Error("Error unmarshalling image links JSON", "error", err)
+			return nil, err
+		}
+		books = append(books, book)
+	}
+
+	if err = rows.Err(); err != nil {
+		b.Logger.Error("Error with rows", "error", err)
+		return nil, err
+	}
+
+	return books, nil
 }
 
 // Category
