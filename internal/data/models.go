@@ -51,10 +51,10 @@ type CategoryModel struct {
 type User struct {
 	ID        int       `json:"id"`
 	Email     string    `json:"email"`
-	FirstName string    `json:"first_name,omitempty"`
-	LastName  string    `json:"last_name,omitempty"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	FirstName string    `json:"firstName,omitempty"`
+	LastName  string    `json:"lastName,omitempty"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
 	Picture   string    `json:"picture,omitempty"`
 }
 
@@ -72,10 +72,10 @@ type Book struct {
 	Subtitle    string     `json:"subtitle"`
 	Description string     `json:"description"`
 	Language    string     `json:"language"`
-	PageCount   int        `json:"page_count"`
-	PublishDate string     `json:"publish_date"`
+	PageCount   int        `json:"pageCount"`
+	PublishDate string     `json:"publishDate"`
 	Authors     []string   `json:"authors"`
-	ImageLinks  []string   `json:"image_links"`
+	ImageLinks  []string   `json:"imageLinks"`
 	Genres      []string   `json:"genres"`
 	CreatedAt   time.Time  `json:"created_at"`
 }
@@ -302,8 +302,8 @@ func (b *BookModel) GetAllBooksByUserID(userID int) ([]Book, error) {
 			&book.Language,
 			&book.PageCount,
 			&book.PublishDate,
-			&genresJSON,
 			&authorsJSON,
+			&genresJSON,
 			&imageLinksJSON,
 			&book.CreatedAt,
 		); err != nil {

@@ -5,11 +5,11 @@ import axios from 'axios';
 export interface User {
   id?: number;
   email?: string;
-  first_name?: string;
-  last_name?: string;
+  firstName?: string;
+  lastName?: string;
   picture?: string;
-  created_at?: string;
-  updated_at?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 interface AuthContextType {

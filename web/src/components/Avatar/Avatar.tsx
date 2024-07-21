@@ -5,7 +5,7 @@ const isUser = (user: User | null): user is User => {
   return (
     user !== null &&
     typeof user === 'object' &&
-    'first_name' in user &&
+    'firstName' in user &&
     'last_name' in user &&
     'picture' in user
   );
@@ -16,13 +16,13 @@ export default function Avatar() {
 
   if (!isUser(user)) return null;
 
-  const { picture, first_name, last_name } = user;
+  const { picture, firstName, lastName } = user;
 
   const createInitials = (firstName = 'N', lastName='A') => {
     return firstName[0]+lastName[0];
   }
 
-  const userInitials = createInitials(first_name, last_name);
+  const userInitials = createInitials(firstName, lastName);
 
   // Development: Save sizes for Design audit
   const avatarSize = {
@@ -41,7 +41,7 @@ export default function Avatar() {
             </div>
           ) : (
             <img
-              alt={`User avatar for ${first_name}`}
+              alt={`User avatar for ${firstName}`}
               className={`rounded-full ${avatarSize['sm']}`}
               src={picture}
             />
