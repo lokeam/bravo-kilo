@@ -26,6 +26,7 @@ func (app *application) routes(h *handlers.Handlers) http.Handler {
 	mux.Post("/auth/signout", h.SignOut)
 
 	mux.Get("/api/v1/books/search", h.SearchBooks)
+	mux.Get("/api/v1/user/books", h.GetAllUserBooks)
 
 	return mux
 }
