@@ -5,6 +5,7 @@ import axios from "axios";
 
 import TopNavigation from "../components/TopNav/TopNav";
 import SideNavigation from "../components/SideNav/SideNavigation";
+import CardList from "../components/CardList/CardList";
 
 interface Book {
   authors: string[];
@@ -49,21 +50,17 @@ const Library = () => {
     return <div>Error loading books</div>;
   }
 
+  console.log('books:', books)
+
   return (
-    <div className="bk_lib">
+    <div className="bk_lib flex flex-col place-content-around lg:px-8 antialiased md:ml-64 h-screen pt-24">
       <TopNavigation />
       <SideNavigation />
 
       <h1>Library</h1>
-
       <button onClick={logout}>Sign out of your Kilo Bravo account</button>
 
-      {books.map((book: Book) => (
-        <div key={book.title}>
-          <h2>{book.title}</h2>
-          <p>{book.authors.join(', ')}</p>
-        </div>
-      ))}
+      <CardList books={books} />
 
       <Outlet />
     </div>
