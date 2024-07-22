@@ -78,6 +78,8 @@ type Book struct {
 	ImageLinks  []string   `json:"imageLinks"`
 	Genres      []string   `json:"genres"`
 	CreatedAt   time.Time  `json:"created_at"`
+	ISBN10      string     `json:"isbn10"`
+	ISBN13      string     `json:"ibsn13"`
 }
 
 type Category struct {
@@ -218,7 +220,7 @@ func (b *BookModel) Insert(book Book) (int, error) {
 	defer cancel()
 
 	var newId int
-	statement := `INSERT INTO books (title, subtitle, description, language, page_count, publish_date, authors, image_links, created_at)
+	statement := `INSERT INTO books (title, subtitle, description, language, page_count, publish_date, authors, image_links, created_at, isbn_10, isbn_13)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`
 
 	err := b.DB.QueryRowContext(ctx, statement,
@@ -231,6 +233,8 @@ func (b *BookModel) Insert(book Book) (int, error) {
 		pq.Array(book.Authors),
 		pq.Array(book.ImageLinks),
 		time.Now(),
+		book.ISBN10,
+		book.ISBN13,
 	).Scan(&newId)
 	if err != nil {
 		b.Logger.Error("Book Model - Error inserting book", "error", err)
@@ -245,7 +249,7 @@ func (b *BookModel) GetByID(id int) (*Book, error) {
 	defer cancel()
 
 	var book Book
-	statement := `SELECT id, title, subtitle, description, language, page_count, publish_date, authors, image_links, created_at FROM books WHERE id = $1`
+	statement := `SELECT id, title, subtitle, description, language, page_count, publish_date, authors, image_links, created_at, isbn_10, isbn_13 FROM books WHERE id = $1`
 	row := b.DB.QueryRowContext(ctx, statement, id)
 	err := row.Scan(
 		&book.ID,
@@ -258,6 +262,8 @@ func (b *BookModel) GetByID(id int) (*Book, error) {
 		pq.Array(&book.Authors),
 		pq.Array(&book.ImageLinks),
 		&book.CreatedAt,
+		&book.ISBN10,
+		&book.ISBN13,
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -276,7 +282,7 @@ func (b *BookModel) GetAllBooksByUserID(userID int) ([]Book, error) {
 	defer cancel()
 
 	query := `
-	SELECT b.id, b.title, b.subtitle, b.description, b.language, b.page_count, b.publish_date, b.authors, b.genres, b.image_links, b.created_at
+	SELECT b.id, b.title, b.subtitle, b.description, b.language, b.page_count, b.publish_date, b.authors, b.genres, b.image_links, b.created_at, b.isbn_10, b.isbn_13
 	FROM books b
 	INNER JOIN user_books ub ON b.id = ub.book_id
 	WHERE ub.user_id = $1`
@@ -306,6 +312,8 @@ func (b *BookModel) GetAllBooksByUserID(userID int) ([]Book, error) {
 			&genresJSON,
 			&imageLinksJSON,
 			&book.CreatedAt,
+			&book.ISBN10,
+			&book.ISBN13,
 		); err != nil {
 			b.Logger.Error("Error scanning book", "error", err)
 			return nil, err

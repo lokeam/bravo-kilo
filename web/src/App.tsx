@@ -1,10 +1,13 @@
-import { Suspense } from 'react'
-import { Route, Routes } from 'react-router-dom'
-import { AuthProvider } from './components/AuthContext'
-import ProtectedRoute from './components/ProtectedRoute'
-import Home from './pages/home'
-import Login from './pages/login'
-import Library from './pages/library'
+import { Suspense } from 'react';
+import { Route, Routes } from 'react-router-dom';
+import { AuthProvider } from './components/AuthContext';
+import ProtectedRoute from './components/ProtectedRoute';
+import Home from './pages/home';
+import Login from './pages/login';
+import Library from './pages/library';
+import BookDetail from './pages/bookDetail';
+
+import NotFound from './pages/notFound';
 
 import './App.css'
 
@@ -21,6 +24,12 @@ function App() {
               <Library />
             </ProtectedRoute>
           } />
+          <Route path="/library/books/:bookID" element={
+            <ProtectedRoute>
+              <BookDetail />
+            </ProtectedRoute>
+          } />
+          <Route path="*" element={<NotFound />}/>
         </Routes>
       </Suspense>
     </AuthProvider>

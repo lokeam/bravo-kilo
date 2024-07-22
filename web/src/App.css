@@ -1,3 +1,7 @@
+:root {
+  --scroll: 0;
+}
+
 #root {
   /*max-width: 1280px;*/
   width: 100%;
@@ -6,22 +10,30 @@
   text-align: center;
 }
 
-  /* Custom Nav classes */
-  .navCenter {
-    flex: 0 1 732px;
-    min-width: 0;
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-  }
+/* Custom Nav classes */
+.navCenter {
+  flex: 0 1 732px;
+  min-width: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}
 
-  .navCenterSearch {
-    flex: 1;
-    flex-basis: 0.000000001px;
-  }
+.navCenterSearch {
+  flex: 1;
+  flex-basis: 0.000000001px;
+}
 
-  .navEnd {
-    min-width: 150px;
-    align-items: center;
-    justify-content: flex-end;
-  }
+.navEnd {
+  min-width: 150px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+/* Book page thumbnail animation */
+
+.bk_book_thumb_img {
+  width: 100%;
+  height: auto;
+  transition: transform 0.1s ease, opacity 0.1s ease;
+}

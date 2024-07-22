@@ -7,23 +7,21 @@ import TopNavigation from "../components/TopNav/TopNav";
 import SideNavigation from "../components/SideNav/SideNavigation";
 import CardList from "../components/CardList/CardList";
 
-interface Book {
+export interface Book {
   authors: string[];
+  createdAt: string;
+  description: string;
+  genres: string[];
+  id: number;
   imageLinks: string[];
+  language: string;
+  pageCount: number;
+  publishDate: string;
+  subtitle?: string;
   title: string;
-  subtitle: string;
-  details: {
-    genres: string[];
-    description: string;
-    isbn10: string;
-    isbn13: string;
-    language: string;
-    pageCount: number;
-    publishDate: number;
-  };
 }
 
-const fetchUserBooks = async () => {
+const fetchUserBooks = async (): Promise<Book[]> => {
   const { data } = await axios.get(`${import.meta.env.VITE_API_ENDPOINT}/api/v1/user/books`, {
     withCredentials: true
   });
@@ -50,7 +48,7 @@ const Library = () => {
     return <div>Error loading books</div>;
   }
 
-  console.log('books:', books)
+  console.log('books: ', books)
 
   return (
     <div className="bk_lib flex flex-col place-content-around lg:px-8 antialiased md:ml-64 h-screen pt-24">
@@ -60,7 +58,7 @@ const Library = () => {
       <h1>Library</h1>
       <button onClick={logout}>Sign out of your Kilo Bravo account</button>
 
-      <CardList books={books} />
+      {books && <CardList books={books} />}
 
       <Outlet />
     </div>
