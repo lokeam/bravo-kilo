@@ -14,8 +14,10 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/joho/godotenv"
 	"golang.org/x/oauth2"
@@ -476,5 +478,48 @@ func (h *Handlers) GetAllUserBooks(response http.ResponseWriter, request *http.R
 	if err := json.NewEncoder(response).Encode(dbResponse); err != nil {
 		http.Error(response, "Error encoding response", http.StatusInternalServerError)
 		return
+	}
+}
+
+// Get Single Book by ID
+func (h *Handlers) GetBookByID(response http.ResponseWriter, request *http.Request) {
+	// Grab token from cookie
+	cookie, err := request.Cookie("token")
+	if err != nil {
+		h.logger.Error("No token cookie", "error", err)
+		http.Error(response, "No token cookie", http.StatusUnauthorized)
+		return
+	}
+
+	tokenStr := cookie.Value
+	claims := &Claims{}
+
+	// Parse JWT to get userID
+	token, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (interface{}, error) {
+		return jwtKey, nil
+	})
+	if err != nil || !token.Valid {
+		h.logger.Error("Invalid token", "error", err)
+		http.Error(response, "Invalid token", http.StatusUnauthorized)
+		return
+	}
+
+	bookIDStr := chi.URLParam(request, "bookID")
+	bookID, err := strconv.Atoi(bookIDStr)
+	if err != nil {
+		http.Error(response, "Invalid book ID", http.StatusBadRequest)
+		return
+	}
+
+	book, err := h.models.Book.GetByID(bookID)
+	if err != nil {
+		h.logger.Error("Error fetching book", "error", err)
+		http.Error(response, "Error fetching book", http.StatusInternalServerError)
+		return
+	}
+
+	response.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(response).Encode(map[string]interface{}{"book": book}); err != nil {
+		http.Error(response, "Error encoding response", http.StatusInternalServerError)
 	}
 }
