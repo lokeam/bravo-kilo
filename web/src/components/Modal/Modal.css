@@ -10,7 +10,8 @@
 }
 
 .modal-content {
-  background: white;
+  background: #0d1e2f;
+  color: #fefffe;
   padding: 20px;
   border-radius: 8px;
   position: relative;
@@ -22,6 +23,7 @@
 }
 
 .modal-container {
+  color: #fefffe;
   height: 100vh;
 }
 
@@ -42,6 +44,7 @@
   }
 
   .modal-container {
+    color: #fefffe;
     height: 100%;
   }
 }

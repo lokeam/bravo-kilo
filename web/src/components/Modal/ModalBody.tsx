@@ -6,7 +6,7 @@ interface ModalBodyProps {
 }
 
 const ModalBody: React.FC<ModalBodyProps> = ({ children }) => {
-  return <div className="modal-body text-black">{children}</div>;
+  return <div className="modal-body">{children}</div>;
 };
 
 export default ModalBody;

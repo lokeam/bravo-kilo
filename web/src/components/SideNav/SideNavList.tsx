@@ -5,5 +5,5 @@ interface SideNavListProps {
 }
 
 export const SideNavList = ({ children }: SideNavListProps) => {
-  return <div>{children}</div>;
+  return <>{children}</>;
 };

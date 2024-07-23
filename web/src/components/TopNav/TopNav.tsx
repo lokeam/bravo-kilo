@@ -39,7 +39,7 @@ export default function TopNavigation() {
   return (
     <>
       <header className="antialiased">
-        <nav className="fixed left-0 right-0 top-0 z-40 bg-dark-gunmetal border-b border-gray-700 px-4 lg:px-6 py-2.5 text-white">
+        <nav className="fixed left-0 right-0 top-0 z-40 bg-black px-4 lg:px-6 h-[67px] py-2.5 text-white">
           <div className="flex flex-row justify-between items-center">
 
             {/* ----- Logo / Nav Start ----- */}
@@ -52,21 +52,8 @@ export default function TopNavigation() {
                   aria-controls="sidebar"
                   className="hidden p-2 mr-3 text-gray-600 rounded cursor-pointer lg:inline hover:text-gray-900 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-white dark:hover:bg-gray-700"
                 >
-                  <GiHamburgerMenu />
+                  <img src="bkLogo" alt="" />
                 </button>
-                <button
-                  aria-expanded="true"
-                  aria-controls="sidebar"
-                  className="p-2 mr-2 text-gray-600 rounded cursor-pointer lg:hidden hover:text-gray-900 hover:bg-gray-100 focus:bg-gray-100 dark:focus:bg-gray-700 focus:ring-2 focus:ring-gray-100 dark:focus:ring-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white"
-                >
-                  <GiHamburgerMenu />
-                  <span className="sr-only">Toggle sidebar</span>
-                </button>
-
-                {/* {<!-- Logo -->} */}
-                <a className="block h-9 w-9" href="index.html">
-                  <img src={bkLogo} alt="Bravo Kilo Logo" />
-                </a>
               </div>
             </div>
 
@@ -79,11 +66,11 @@ export default function TopNavigation() {
                     <IoSearchOutline />
                   </div>
                   <input
-                    className="bg-gray-700 border border-gray-600 text-gray-900 sm:text-sm rounded focus:ring-primary-500 focus:border-primary-500 block w-full pl-9 p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
+                    className="bg-maastricht border border-gray-600 text-az-white font-bold sm:text-sm rounded focus:ring-primary-500 focus:border-primary-500 block w-full pl-9 p-2.5 placeholder:polo-blue placeholder:font-bold"
                     id="topbar-search"
                     name="search"
                     onChange={handleSearchChange}
-                    placeholder="Search for a book"
+                    placeholder="Search your library"
                     type="text"
                     value={searchQuery}
                   />
@@ -92,34 +79,13 @@ export default function TopNavigation() {
             </div>
 
             {/* ----- Mobile / Nav End ----- */}
-            <div className="navEnd">
+            <div className="navEnd lg:invisible ">
               <div className="flex items-center">
-
-                    {/* ---- Add Book btn ---- */}
-                    <button
-                      type="button"
-                      className="flex items-center justify-center text-hepatica hover:bg-gray-700 focus:ring-4 focus:ring-primary-300 font-medium rounded text-lg p-3 focus:outline-none dark:focus:ring-primary-800 mr-1"
-                    >
-                      <FaPlus />
-                    </button>
 
                     <button type="button" data-dropdown-toggle="notification-dropdown" className="p-3 mr-1 text-gray-500 rounded hover:text-gray-900 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-white dark:hover:bg-gray-700 focus:ring-4 focus:ring-gray-300 dark:focus:ring-gray-600">
                       <span className="sr-only">View notifications</span>
-                      <FaBell />
+                      <IoSearchOutline />
                     </button>
-
-                    <button
-                      type="button"
-                      className="flex mx-3 text-sm bg-gray-800 rounded-full md:mr-0 focus:ring-4 focus:ring-gray-300 dark:focus:ring-gray-600 p-0"
-                      id="user-menu-button"
-                      aria-expanded="false"
-                      data-dropdown-toggle="dropdown"
-                    >
-                      <span className="sr-only">Open user menu</span>
-                      {/* ----- Avatar Component ----- */}
-                      <Avatar />
-                    </button>
-
               </div>
             </div>
 
