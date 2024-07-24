@@ -20,7 +20,11 @@ export default {
         'az-white': '#E2E8F0', // sidebar text white, hover
         'mystic-white':'#DBE2EB', // sidebar text white, disabled
         'cadet-gray': '#94A3B8', // form field label, subheading text, breadcrumb
-
+        'maastricht': '#0d1e2f', // search bar background
+        'ceil': '#93accd',
+        'ebony-clay': '#253038',
+        'polo-blue': '#93accd',
+        'nevada-gray': '#606d79',
       }
     },
   },
