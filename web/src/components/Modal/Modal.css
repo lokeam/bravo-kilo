@@ -12,12 +12,17 @@
 .modal-content {
   background: #0d1e2f;
   color: #fefffe;
+  padding: 20px;
   border-radius: 8px;
   position: relative;
   z-index: 1001;
   max-width: 100%;
   box-shadow: 0 0 10px rgba(0, 0, 0, 0.25);
-  transition: transform 0.3s ease, opacity 0.3s ease;
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  left: 0;
+
 }
 
 .modal-container {
@@ -36,21 +41,24 @@
   }
 
   .modal-content {
-    transform: scale(1);
+    /*transform: scale(1);*/
     opacity: 1;
-    max-width: 90%;
     max-height: 90%;
+    min-width: 300px;
   }
 
   .modal-container {
     color: #fefffe;
-    height: 100%;
     flex-direction: column;
+    position: relative;
+    bottom: unset;
+    left: unset;
+    right: unset;
   }
 }
 
 /* Animation for smaller viewports */
-@media (max-width: 768px) {
+@media (max-width: 960px) {
   .modal-overlay {
     opacity: 1;
   }
@@ -64,6 +72,12 @@
   }
 }
 
+@media (min-width: 961px) {
+  .modal-content {
+    min-width: 400px
+  }
+}
+
 @keyframes showBottom {
   from {
     opacity: 0;
@@ -71,14 +85,14 @@
   }
   to {
     opacity: 1;
-    transform: translateY(45%);
+    transform: translateY(0%);
   }
 }
 
 @keyframes hideBottom {
   from {
     opacity: 1;
-    transform: translateY(45%);
+    transform: translateY(0%);
   }
   to {
     opacity: 0;

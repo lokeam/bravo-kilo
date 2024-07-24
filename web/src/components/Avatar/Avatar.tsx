@@ -1,21 +1,23 @@
 import { useAuth } from "../AuthContext";
 import { User } from "../AuthContext";
 
-const isUser = (user: User | null): user is User => {
-  return (
-    user !== null &&
-    typeof user === 'object' &&
-    'firstName' in user &&
-    'last_name' in user &&
-    'picture' in user
-  );
-}
+// const isUser = (user: User | null): user is User => {
+//   return (
+//     user !== null &&
+//     typeof user === 'object' &&
+//     'firstName' in user &&
+//     'last_name' in user &&
+//     'picture' in user
+//   );
+// }
 
 export default function Avatar() {
+  console.log('Avatar root');
   const { user } = useAuth();
 
-  if (!isUser(user)) return null;
+  console.log('User from autAuth: ',user);
 
+  // if (!isUser(user)) return null;
   const { picture, firstName, lastName } = user;
 
   const createInitials = (firstName = 'N', lastName='A') => {
@@ -31,11 +33,15 @@ export default function Avatar() {
     'lg': 'h-32 w-32'
   };
 
-  return (
-    <div className="flex items-center justify-center space-x-4 rounded avatar text-white">
-      <div aria-label="Bravo Kilo user avatar" className="relative">
+  console.log('Avatar component firstName: ', firstName);
+  console.log('Avatar component userInitials: ', userInitials)
+
+
+
+
+/*
         {
-          picture === '' ? (
+          picture === '' || picture === undefined ? (
             <div className="relative inline-flex items-center justify-center overflow-hidden bg-gray-600 h-10 w-10 rounded-full">
               <span className="font-medium text-gray-600 dark:text-gray-300">{userInitials}</span>
             </div>
@@ -47,7 +53,22 @@ export default function Avatar() {
             />
           )
         }
+
+*/
+
+
+
+  return (
+    <div className="flex flex-row justify-center space-x-4 rounded avatar text-white">
+      <div aria-label="Bravo Kilo user avatar" className="relative">
+        <div className="relative inline-flex items-center justify-center overflow-hidden bg-gray-600 h-10 w-10 rounded-full">
+          <span className="font-medium text-gray-600 dark:text-gray-300">{userInitials}</span>
+        </div>
       </div>
+      <div className="flex flex-col text-left">
+          <div className="text-base font-bold">{user?.firstName}'s Login</div>
+          <div className="text-nevada-gray text-sm">{user?.email}</div>
+        </div>
     </div>
   )
 }

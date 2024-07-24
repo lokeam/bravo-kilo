@@ -14,7 +14,7 @@ interface ModalProps {
 const Modal: React.FC<ModalProps> = ({ opened, onClose, title, children }) => {
   return (
     <ModalRoot opened={opened} onClose={onClose}>
-      <div className="modal-container flex flex-col-reverse h-[60vh] md:h-auto">
+      <div className="modal-container flex flex-col-reverse h-auto">
         <ModalHeader title={title} onClose={onClose} />
         <ModalBody>{children}</ModalBody>
       </div>

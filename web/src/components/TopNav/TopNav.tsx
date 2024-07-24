@@ -1,14 +1,21 @@
 import { useState } from 'react';
+import { useAuth } from "../AuthContext";
 import axios from 'axios';
 import Avatar from '../Avatar/Avatar';
+import Modal from '../Modal/Modal';
 
 import { IoSearchOutline } from 'react-icons/io5';
-import { GiHamburgerMenu } from 'react-icons/gi';
-import { FaBell, FaPlus } from 'react-icons/fa6';
+import { IoMdSettings } from "react-icons/io";
+import { MdLogout } from "react-icons/md";
 
 import bkLogo from '../../assets/tk_icon.webp';
 
 export default function TopNavigation() {
+  const [opened, setOpened] = useState(false);
+  const { logout } = useAuth();
+
+  console.log('Top nav')
+
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
 
@@ -33,32 +40,40 @@ export default function TopNavigation() {
     }
   };
 
-  console.log('Search query:', searchQuery);
+  console.log('Search results state:', searchResults);
 
+  const openModal = () => setOpened(true);
+  const closeModal = () => setOpened(false);
 
   return (
     <>
       <header className="antialiased">
-        <nav className="fixed left-0 right-0 top-0 z-40 bg-black px-4 lg:px-6 h-[67px] py-2.5 text-white">
+        <nav className="fixed left-0 right-0 top-0 z-50 bg-black px-4 lg:px-6 h-[67px] py-2.5 text-white">
           <div className="flex flex-row justify-between items-center">
 
             {/* ----- Logo / Nav Start ----- */}
             <div className="navLeft">
-              <div className="flex antialiased translate-x-0 mid:translate-x-0">
-                {/* {<!-- Close button -->} */}
                 <button
-                  id="toggleSidebar"
-                  aria-expanded="true"
-                  aria-controls="sidebar"
-                  className="hidden p-2 mr-3 text-gray-600 rounded cursor-pointer lg:inline hover:text-gray-900 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-white dark:hover:bg-gray-700"
+                  className="flex border-none bg-transparent antialiased translate-x-0 mid:translate-x-0"
+                  onClick={openModal}
                 >
-                  <img src="bkLogo" alt="" />
+                  <Avatar />
                 </button>
-              </div>
             </div>
 
+            <Modal opened={opened} onClose={closeModal} title="">
+              <button className="flex flex-row justify-between items-center bg-transparent mr-1">
+                <span>Settings</span>
+                <IoMdSettings size={22} />
+              </button>
+              <button className="flex flex-row justify-between items-center bg-transparent mr-1" onClick={logout}>
+                <span>Log out</span>
+                <MdLogout size={25}/>
+              </button>
+            </Modal>
+
             {/* ----- Search / Nav Center ----- */}
-            <div className="navCenter pl-36">
+            <div className="navCenter hidden md:flex">
               <form onSubmit={handleSearchSubmit} className="hidden lg:block lg:pl-10 navCenterSearch">
                 <label htmlFor="topbar-search" className="sr-only">Search</label>
                 <div className="flex flex-row relative mt-1">

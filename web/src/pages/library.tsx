@@ -95,12 +95,9 @@ const Library = () => {
   const closeModal = () => setOpened(false);
 
   return (
-    <div className="bk_lib flex flex-col items-center place-content-around p-6 lg:px-8 antialiased md:ml-28 h-screen pt-24">
+    <div className="bk_lib flex flex-col items-center place-content-around px-5 antialiased md:px-1 md:ml-24 h-screen pt-40">
       <TopNavigation />
       <SideNavigation />
-
-      <h1>Library</h1>
-      <button onClick={logout}>Sign out of your Kilo Bravo account</button>
 
       <Modal opened={opened} onClose={closeModal} title="">
         <button onClick={() => handleSort("publishDate")} className="flex flex-row bg-transparent mr-1">
@@ -121,7 +118,7 @@ const Library = () => {
         <div className="mt-1">{sortedBooks.length} volumes</div>
 
         <div className="flex flex-row">
-          <button className="flex flex-row justify-between" onClick={openModal}>
+          <button className="flex flex-row justify-between bg-transparent border border-gray-600" onClick={openModal}>
             <PiArrowsDownUp className="w-5 h-5 pt-1 mr-2" color="white"/>
             <span>{sortButtonTitle[sortCriteria]}</span>
           </button>
