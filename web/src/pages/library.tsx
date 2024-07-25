@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { useAuth } from "../components/AuthContext";
+import useStore from '../store/useStore';
 import axios from "axios";
 
 import TopNavigation from "../components/TopNav/TopNav";
@@ -36,14 +36,10 @@ const fetchUserBooks = async (): Promise<Book[]> => {
 
 const Library = () => {
   const [opened, setOpened] = useState(false);
-
-  const { logout } = useAuth();
   const { search } = useLocation();
   const query = new URLSearchParams(search);
   const userID = parseInt(query.get('userID') || '0', 10);
-
-  const [sortCriteria, setSortCriteria] = useState<"title" | "publishDate" | "author">("title");
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
+  const { sortCriteria, sortOrder, setSort } = useStore();
 
   const { data: books, isLoading, isError } = useQuery({
     queryKey: ['userBooks'],
@@ -61,8 +57,8 @@ const Library = () => {
 
 
   const handleSort = (criteria: "title" | "publishDate" | "author" | "pageCount") => {
-    setSortCriteria(criteria);
-    setSortOrder(prevOrder => prevOrder === 'asc' ? 'desc' : 'asc');
+    const order = sortOrder === 'asc' ? 'desc' : 'asc';
+    setSort(criteria, order);
     setOpened(false);
   };
 
