@@ -258,33 +258,57 @@ func (b *BookModel) GetByID(id int) (*Book, error) {
 	defer cancel()
 
 	var book Book
+	var authorsJSON, imageLinksJSON, genresJSON, formatsJSON, tagsJSON []byte
 	statement := `SELECT id, title, subtitle, description, language, page_count, publish_date, authors, image_links, genres, notes, formats, tags, created_at, last_updated, isbn_10, isbn_13 FROM books WHERE id = $1`
 	row := b.DB.QueryRowContext(ctx, statement, id)
 	err := row.Scan(
-		&book.ID,
-		&book.Title,
-		&book.Subtitle,
-		&book.Description,
-		&book.Language,
-		&book.PageCount,
-		&book.PublishDate,
-		pq.Array(&book.Authors),
-		pq.Array(&book.ImageLinks),
-		pq.Array(&book.Genres),
-		&book.Notes,
-		pq.Array(&book.Formats),
-		pq.Array(&book.Tags),
-		&book.CreatedAt,
-		&book.ISBN10,
-		&book.ISBN13,
+			&book.ID,
+			&book.Title,
+			&book.Subtitle,
+			&book.Description,
+			&book.Language,
+			&book.PageCount,
+			&book.PublishDate,
+			&authorsJSON,
+			&imageLinksJSON,
+			&genresJSON,
+			&book.Notes,
+			&formatsJSON,
+			&tagsJSON,
+			&book.CreatedAt,
+			&book.LastUpdated,
+			&book.ISBN10,
+			&book.ISBN13,
 	)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, nil
-		} else {
-			b.Logger.Error("Book Model - Error fetching book by ID", "error", err)
+			if err == sql.ErrNoRows {
+					return nil, nil
+			} else {
+					b.Logger.Error("Book Model - Error fetching book by ID", "error", err)
+					return nil, err
+			}
+	}
+
+	// Unmarshal JSONB fields
+	if err := json.Unmarshal(authorsJSON, &book.Authors); err != nil {
+			b.Logger.Error("Error unmarshalling authors JSON", "error", err)
 			return nil, err
-		}
+	}
+	if err := json.Unmarshal(imageLinksJSON, &book.ImageLinks); err != nil {
+			b.Logger.Error("Error unmarshalling image links JSON", "error", err)
+			return nil, err
+	}
+	if err := json.Unmarshal(genresJSON, &book.Genres); err != nil {
+			b.Logger.Error("Error unmarshalling genres JSON", "error", err)
+			return nil, err
+	}
+	if err := json.Unmarshal(formatsJSON, &book.Formats); err != nil {
+			b.Logger.Error("Error unmarshalling formats JSON", "error", err)
+			return nil, err
+	}
+	if err := json.Unmarshal(tagsJSON, &book.Tags); err != nil {
+			b.Logger.Error("Error unmarshalling tags JSON", "error", err)
+			return nil, err
 	}
 
 	return &book, nil
@@ -384,29 +408,54 @@ func (b *BookModel) Update(book Book) error {
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
 
-	statement := `UPDATE books SET title=$1, subtitle=$2, description=$3, language=$4, page_count=$5, publish_date=$6, authors=$7, image_links=$8, genres=$9, notes=$10, formats=$11, tags=$12, last_updated=$13, isbn_10=$14, isbn_13=$15 WHERE id=$16`
-
-	_, err := b.DB.ExecContext(ctx, statement,
-		book.Title,
-		book.Subtitle,
-		book.Description,
-		book.Language,
-		book.PageCount,
-		book.PublishDate,
-		pq.Array(book.Authors),
-		pq.Array(book.ImageLinks),
-		pq.Array(book.Genres),
-		book.Notes,
-		pq.Array(book.Formats),
-		pq.Array(book.Tags),
-		time.Now(),
-		book.ISBN10,
-		book.ISBN13,
-		book.ID,
-  )
+	authorsJSON, err := json.Marshal(book.Authors)
 	if err != nil {
-		b.Logger.Error("Book Model - Error updating book", "error", err)
-		return err
+			b.Logger.Error("Error marshalling authors to JSON", "error", err)
+			return err
+	}
+	imageLinksJSON, err := json.Marshal(book.ImageLinks)
+	if err != nil {
+			b.Logger.Error("Error marshalling image links to JSON", "error", err)
+			return err
+	}
+	genresJSON, err := json.Marshal(book.Genres)
+	if err != nil {
+			b.Logger.Error("Error marshalling genres to JSON", "error", err)
+			return err
+	}
+	formatsJSON, err := json.Marshal(book.Formats)
+	if err != nil {
+			b.Logger.Error("Error marshalling formats to JSON", "error", err)
+			return err
+	}
+	tagsJSON, err := json.Marshal(book.Tags)
+	if err != nil {
+			b.Logger.Error("Error marshalling tags to JSON", "error", err)
+			return err
+	}
+
+	statement := `UPDATE books SET title=$1, subtitle=$2, description=$3, language=$4, page_count=$5, publish_date=$6, authors=$7, image_links=$8, genres=$9, notes=$10, formats=$11, tags=$12, last_updated=$13, isbn_10=$14, isbn_13=$15 WHERE id=$16`
+	_, err = b.DB.ExecContext(ctx, statement,
+			book.Title,
+			book.Subtitle,
+			book.Description,
+			book.Language,
+			book.PageCount,
+			book.PublishDate,
+			authorsJSON,
+			imageLinksJSON,
+			genresJSON,
+			book.Notes,
+			formatsJSON,
+			tagsJSON,
+			time.Now(),
+			book.ISBN10,
+			book.ISBN13,
+			book.ID,
+	)
+	if err != nil {
+			b.Logger.Error("Book Model - Error updating book", "error", err)
+			return err
 	}
 
 	return nil

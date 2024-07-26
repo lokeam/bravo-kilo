@@ -3,6 +3,8 @@ import { Route, Routes } from 'react-router-dom';
 import { AuthProvider } from './components/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import Home from './pages/home';
+import EditBook from './pages/editBook';
+import AddBook from './pages/addBook';
 import Login from './pages/login';
 import Library from './pages/library';
 import BookDetail from './pages/bookDetail';
@@ -27,6 +29,11 @@ function App() {
           <Route path="/library/books/:bookID" element={
             <ProtectedRoute>
               <BookDetail />
+            </ProtectedRoute>
+          } />
+          <Route path="library/books/:bookID/edit" element={
+            <ProtectedRoute>
+              <EditBook />
             </ProtectedRoute>
           } />
           <Route path="*" element={<NotFound />}/>

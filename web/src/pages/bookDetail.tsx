@@ -20,6 +20,7 @@ interface Book {
   authors: string[];
   imageLinks: string[];
   genres: string[];
+  tags: string[];
   notes: string;
   formats: ('physical' | 'eBook' | 'audioBook')[];
   createdAt: string;
@@ -104,7 +105,7 @@ const BookDetail = () => {
       </div>
 
       <div className="bk_book_cta flex flex-col w-full my-3">
-        <button className="flex items-center justify-center rounded bg-hepatica font-bold">
+        <button onClick={() => navigate(`/library/books/${bookID}/edit`, { state: { book } })} className="flex items-center justify-center rounded bg-hepatica font-bold">
           <TbEdit className="h-8 w-8 mr-4"/>Edit Information
         </button>
       </div>
@@ -128,11 +129,11 @@ const BookDetail = () => {
         </div>
         <div className="bk_description text-left mb-4">
           <h3 className="text-2xl font-bold mb-2">Personal Notes</h3>
-          <p className="text-cadet-gray">TBI - Etiam eget erat pulvinar, aliquam enim a, feugiat lorem. Nulla congue purus quis suscipit suscipit. In auctor magna in tempor lacinia. Vivamus leo ligula, commodo sit amet porttitor id, placerat ac justo. Curabitur non ultrices tellus, a porttitor felis. Maecenas quis interdum urna. Pellentesque sed urna quis tortor feugiat semper. Etiam laoreet ut ex in pellentesque. Phasellus eu lectus porttitor, scelerisque justo vitae, euismod ligula.</p>
+          <p className="text-cadet-gray">{book.notes}</p>
         </div>
         <div className="bk_description text-left mb-4">
           <h3 className="text-2xl font-bold pb-2">Book Description</h3>
-          <p className="text-cadet-gray">TBI - Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo. Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt. Neque porro quisquam est, qui dolorem ipsum quia dolor sit amet, consectetur, adipisci velit, sed quia non numquam eius modi tempora incidunt ut labore et dolore magnam aliquam quaerat voluptatem. Ut enim ad minima veniam, quis nostrum exercitationem ullam corporis suscipit laboriosam, nisi ut aliquid ex ea commodi consequatur? Quis autem vel eum iure reprehenderit qui in ea voluptate velit esse quam nihil molestiae consequatur, vel illum qui dolorem eum fugiat quo voluptas nulla pariatur.</p>
+          <p className="text-cadet-gray">{book.description}</p>
         </div>
       </div>
     </div>
