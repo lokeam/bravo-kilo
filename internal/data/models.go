@@ -253,7 +253,6 @@ func (b *BookModel) Insert(book Book) (int, error) {
 	return newId, nil
 }
 
-
 func (b *BookModel) GetByID(id int) (*Book, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
@@ -381,6 +380,37 @@ func (b *BookModel) GetAllBooksByUserID(userID int) ([]Book, error) {
 	return books, nil
 }
 
+func (b *BookModel) Update(book Book) error {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	statement := `UPDATE books SET title=$1, subtitle=$2, description=$3, language=$4, page_count=$5, publish_date=$6, authors=$7, image_links=$8, genres=$9, notes=$10, formats=$11, tags=$12, last_updated=$13, isbn_10=$14, isbn_13=$15 WHERE id=$16`
+
+	_, err := b.DB.ExecContext(ctx, statement,
+		book.Title,
+		book.Subtitle,
+		book.Description,
+		book.Language,
+		book.PageCount,
+		book.PublishDate,
+		pq.Array(book.Authors),
+		pq.Array(book.ImageLinks),
+		pq.Array(book.Genres),
+		book.Notes,
+		pq.Array(book.Formats),
+		pq.Array(book.Tags),
+		time.Now(),
+		book.ISBN10,
+		book.ISBN13,
+		book.ID,
+  )
+	if err != nil {
+		b.Logger.Error("Book Model - Error updating book", "error", err)
+		return err
+	}
+
+	return nil
+}
 
 // Category
 func (c *CategoryModel) Insert(category Category) (int, error) {

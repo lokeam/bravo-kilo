@@ -544,3 +544,35 @@ func (h *Handlers) InsertBook(response http.ResponseWriter, request *http.Reques
 	response.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(response).Encode(map[string]int{"book_id": bookID})
 }
+
+// Update Book
+func (h *Handlers) UpdateBook(response http.ResponseWriter, request *http.Request) {
+	var book data.Book
+	err := json.NewDecoder(request.Body).Decode(&book)
+	if err != nil {
+			h.logger.Error("Error decoding book data", "error", err)
+			http.Error(response, "Error decoding book data - invalid input", http.StatusBadRequest)
+			return
+	}
+
+	// Ensure book ID is provided in the URL and parse it
+	bookIDStr := chi.URLParam(request, "bookID")
+	bookID, err := strconv.Atoi(bookIDStr)
+	if err != nil {
+			h.logger.Error("Invalid book ID", "error", err)
+			http.Error(response, "Invalid book ID", http.StatusBadRequest)
+			return
+	}
+	book.ID = bookID
+
+	err = h.models.Book.Update(book)
+	if err != nil {
+			h.logger.Error("Error updating book", "error", err)
+			http.Error(response, "Error updating book", http.StatusInternalServerError)
+			return
+	}
+
+	response.WriteHeader(http.StatusOK)
+	json.NewEncoder(response).Encode(map[string]string{"message": "Book updated successfully"})
+}
+
