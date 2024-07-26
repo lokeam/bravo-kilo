@@ -10,21 +10,26 @@ import CardList from "../components/CardList/CardList";
 import Modal from '../components/Modal/Modal';
 import '../components/Modal/Modal.css';
 
-
 import { PiArrowsDownUp } from "react-icons/pi";
+import { BiSolidGrid } from "react-icons/bi";
 
 export interface Book {
-  authors: string[];
-  createdAt: string;
-  description: string;
-  genres: string[];
   id: number;
-  imageLinks: string[];
+  title: string;
+  subtitle?: string;
+  description: string;
   language: string;
   pageCount: number;
   publishDate: string;
-  subtitle?: string;
-  title: string;
+  authors: string[];
+  imageLinks: string[];
+  genres: string[];
+  notes: string;
+  formats: ('physical' | 'eBook' | 'audioBook')[];
+  createdAt: string;
+  lastUpdated: string;
+  isbn10: string;
+  isbn13: string;
 }
 
 const fetchUserBooks = async (): Promise<Book[]> => {
@@ -114,8 +119,12 @@ const Library = () => {
         <div className="mt-1">{sortedBooks.length} volumes</div>
 
         <div className="flex flex-row">
+        <button className="flex flex-row justify-between items-center  bg-transparent border border-gray-600 mr-2">
+            <BiSolidGrid size={18} className="mr-2" />
+            <span>Grid View</span>
+          </button>
           <button className="flex flex-row justify-between bg-transparent border border-gray-600" onClick={openModal}>
-            <PiArrowsDownUp className="w-5 h-5 pt-1 mr-2" color="white"/>
+            <PiArrowsDownUp size={22} className="pt-1 mr-2" color="white"/>
             <span>{sortButtonTitle[sortCriteria]}</span>
           </button>
         </div>

@@ -12,7 +12,7 @@ import axios from 'axios';
 interface Book {
   id: number;
   title: string;
-  subtitle: string;
+  subtitle?: string;
   description: string;
   language: string;
   pageCount: number;
@@ -20,7 +20,10 @@ interface Book {
   authors: string[];
   imageLinks: string[];
   genres: string[];
+  notes: string;
+  formats: ('physical' | 'eBook' | 'audioBook')[];
   createdAt: string;
+  lastUpdated: string;
   isbn10: string;
   isbn13: string;
 }
