@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useForm, SubmitHandler } from 'react-hook-form';
+import { Controller, useForm, useFieldArray, SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -56,8 +56,23 @@ const EditBook = () => {
     return data;
   };
 
-  const { register, handleSubmit, reset, formState: { errors } } = useForm<BookFormData>({
+  const { register, handleSubmit, control, reset, formState: { errors } } = useForm<BookFormData>({
     resolver: zodResolver(bookSchema),
+  });
+
+  const { fields: authorFields, append: appendAuthor, remove: removeAuthor } = useFieldArray({
+    control,
+    name: 'authors' as const,
+  });
+
+  const { fields: genreFields, append: appendGenre, remove: removeGenre } = useFieldArray({
+    control,
+    name: 'genres' as const,
+  });
+
+  const { fields: tagFields, append: appendTag, remove: removeTag } = useFieldArray({
+    control,
+    name: 'tags' as const,
   });
 
   const mutation = useMutation({
@@ -109,10 +124,99 @@ const EditBook = () => {
             <label htmlFor="subtitle">Subtitle</label>
             <input id="subtitle" {...register('subtitle')} />
           </div>
+
+          {/* Authors Field Array */}
           <div>
-            <label htmlFor="description">Description</label>
-            <textarea id="description" {...register('description')} />
+            <label>Authors</label>
+            {authorFields.map((item, index) => (
+              <div key={item.id}>
+                <Controller
+                  render={({ field }) => <input {...field} />}
+                  name={`authors.${index}`}
+                  control={control}
+                />
+                <button type="button" onClick={() => authorFields.length > 1 && removeAuthor(index)}>
+                  Delete
+                </button>
+              </div>
+            ))}
+            <button type="button" onClick={() => appendAuthor('')}>
+              Add Author
+            </button>
           </div>
+
+          {/* Genres Field Array */}
+          <div>
+            <label>Genres</label>
+              {genreFields.map((item, index) => (
+                <div key={item.id}>
+                  <Controller
+                    render={({ field }) => <input {...field} />}
+                    name={`genres.${index}`}
+                    control={control}
+                  />
+                  <button type="button" onClick={() => genreFields.length > 1 && removeGenre(index)}>
+                    Delete
+                  </button>
+                </div>
+              ))}
+              <button type="button" onClick={() => appendGenre('')}>
+                Add Genre
+              </button>
+          </div>
+
+          {/* Tags Field Array */}
+          <div>
+          {tagFields.map((item, index) => (
+              <div key={item.id}>
+                <Controller
+                  render={({ field }) => <input {...field} />}
+                  name={`tags.${index}`}
+                  control={control}
+                />
+                <button type="button" onClick={() => tagFields.length > 1 && removeTag(index)}>
+                  Delete
+                </button>
+              </div>
+            ))}
+            <button type="button" onClick={() => appendTag('')}>
+              Add Tag
+            </button>
+          </div>
+
+          <div>
+            <label htmlFor="publishDate">Publish Date</label>
+            <input id="publishDate" {...register('publishDate')} />
+          </div>
+
+          <div>
+            <label htmlFor="isbn10">ISBN-10</label>
+            <input id="isbn10" {...register('isbn10')} />
+          </div>
+
+          <div>
+            <label htmlFor="isbn13">ISBN-13</label>
+            <input id="isbn13" {...register('isbn13')} />
+          </div>
+
+          {/* Formats */}
+          <div>
+            <label>Formats</label>
+            {['physical', 'eBook', 'audioBook'].map((format) => (
+              <div key={format}>
+                <label htmlFor={`formats_${format}`}>
+                  <input
+                    type="checkbox"
+                    id={`formats_${format}`}
+                    {...register('formats')}
+                    value={format}
+                  />
+                  {format}
+                </label>
+              </div>
+            ))}
+          </div>
+
           <div>
             <label htmlFor="language">Language</label>
             <input id="language" {...register('language')} />
@@ -121,46 +225,22 @@ const EditBook = () => {
             <label htmlFor="pageCount">Page Count</label>
             <input id="pageCount" type="number" {...register('pageCount')} />
           </div>
-          <div>
-            <label htmlFor="publishDate">Publish Date</label>
-            <input id="publishDate" {...register('publishDate')} />
-          </div>
-          <div>
-            <label htmlFor="authors">Authors</label>
-            <input id="authors" {...register('authors')} />
-          </div>
+
           <div>
             <label htmlFor="imageLinks">Image Links</label>
             <input id="imageLinks" {...register('imageLinks')} />
           </div>
+
           <div>
-            <label htmlFor="genres">Genres</label>
-            <input id="genres" {...register('genres')} />
+            <label htmlFor="description">Description</label>
+            <textarea id="description" {...register('description')} />
           </div>
-          <div>
-            <label htmlFor="tags">Tags</label>
-            <input id="tags" {...register('tags')} />
-          </div>
+
           <div>
             <label htmlFor="notes">Notes</label>
             <textarea id="notes" {...register('notes')} />
           </div>
-          <div>
-            <label htmlFor="formats">Formats</label>
-            <select id="formats" {...register('formats')} multiple>
-              <option value="physical">Physical</option>
-              <option value="eBook">eBook</option>
-              <option value="audioBook">AudioBook</option>
-            </select>
-          </div>
-          <div>
-            <label htmlFor="isbn10">ISBN-10</label>
-            <input id="isbn10" {...register('isbn10')} />
-          </div>
-          <div>
-            <label htmlFor="isbn13">ISBN-13</label>
-            <input id="isbn13" {...register('isbn13')} />
-          </div>
+
           <button type="submit">Update Book</button>
         </form>
       </div>
