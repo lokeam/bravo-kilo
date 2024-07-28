@@ -7,6 +7,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Book } from './library';
 import axios from 'axios';
 
+import { IoArrowBackCircle } from "react-icons/io5";
+import { BsThreeDotsVertical } from "react-icons/bs";
+import { IoClose } from 'react-icons/io5';
+import { IoAddOutline } from 'react-icons/io5';
+
 const fetchBook = async (bookID: string) => {
   console.log('-------');
   console.log(`Fetching book with ID: ${bookID}`);
@@ -112,133 +117,154 @@ const EditBook = () => {
   };
 
   return (
-    <section>
-      <div>
-        <h2>Edit Book</h2>
-        <form onSubmit={handleSubmit(onSubmit)}>
-          <div>
-            <label htmlFor="title">Title</label>
-            <input id="title" {...register('title')} />
+    <section className="bg-white dark:bg-gray-900">
+      <div className="bk_book_page__top_nav flex flex-row sticky top-0 justify-between w-full">
+        <button onClick={() => navigate('/library')} className="bg-transparent h-auto w-auto">
+          <IoArrowBackCircle color="white" className="h-12 w-12" />
+        </button>
+        <button className="bg-transparent">
+          <BsThreeDotsVertical className="h-12 w-12" />
+        </button>
+      </div>
+
+
+      <div className="text-left py-8 px-4 mx-auto max-w-2xl lg:py-16">
+        <h2 className="mb-4 text-xl font-bold text-gray-900 dark:text-white">Edit Book</h2>
+        <form className="grid gap-4 sm:grid-cols-2 sm:gap-6" onSubmit={handleSubmit(onSubmit)}>
+          <div className="sm:col-span-2">
+            <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white" htmlFor="title">Title</label>
+            <input className="bg-gray-50 border border-gray-00 text-gray-900 text-sm rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500" id="title" {...register('title')} />
           </div>
-          <div>
-            <label htmlFor="subtitle">Subtitle</label>
-            <input id="subtitle" {...register('subtitle')} />
+          <div className="block sm:col-span-2">
+            <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white" htmlFor="subtitle">Subtitle</label>
+            <input className="bg-gray-50 border border-gray-00 text-gray-900 text-sm rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500" id="subtitle" {...register('subtitle')} />
           </div>
 
           {/* Authors Field Array */}
-          <div>
-            <label>Authors</label>
-            {authorFields.map((item, index) => (
-              <div key={item.id}>
-                <Controller
-                  render={({ field }) => <input {...field} />}
-                  name={`authors.${index}`}
-                  control={control}
-                />
-                <button type="button" onClick={() => authorFields.length > 1 && removeAuthor(index)}>
-                  Delete
-                </button>
-              </div>
-            ))}
-            <button type="button" onClick={() => appendAuthor('')}>
-              Add Author
-            </button>
-          </div>
-
-          {/* Genres Field Array */}
-          <div>
-            <label>Genres</label>
-              {genreFields.map((item, index) => (
-                <div key={item.id}>
+          <div className="block sm:col-span-2">
+            <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">Authors</label>
+            <div className="border border-gray-300 rounded">
+              {authorFields.map((item, index) => (
+                <div className="flex items-center p-4" key={item.id}>
                   <Controller
-                    render={({ field }) => <input {...field} />}
-                    name={`genres.${index}`}
+                    render={({ field }) => <input {...field} className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500" />}
+                    name={`authors.${index}`}
                     control={control}
                   />
-                  <button type="button" onClick={() => genreFields.length > 1 && removeGenre(index)}>
-                    Delete
+                  <button type="button" onClick={() => authorFields.length > 1 && removeAuthor(index)}  className="ml-5 rounded bg-transparent">
+                    <IoClose size={20}/>
                   </button>
                 </div>
               ))}
-              <button type="button" onClick={() => appendGenre('')}>
+              <button type="button" onClick={() => appendAuthor('')} className="flex flex-row justify-between items-center bg-transparent m-4">
+                <IoAddOutline size={20} className="mr-1"/>
+                Add Author
+              </button>
+            </div>
+          </div>
+
+          {/* Genres Field Array */}
+          <div className="block sm:col-span-2">
+            <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">Genres</label>
+            <div className="border border-gray-300 rounded">
+              {genreFields.map((item, index) => (
+                  <div key={item.id} className="flex items-center p-4">
+                    <Controller
+                      render={({ field }) => <input {...field} className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"/>}
+                      name={`genres.${index}`}
+                      control={control}
+                    />
+                    <button type="button" onClick={() => genreFields.length > 1 && removeGenre(index)} className="ml-5">
+                      <IoClose size={20}/>
+                    </button>
+                  </div>
+                ))}
+              <button type="button" onClick={() => appendGenre('')} className="flex flex-row justify-between items-center bg-transparent m-4">
+                <IoAddOutline size={20} className="mr-1"/>
                 Add Genre
               </button>
+            </div>
           </div>
 
           {/* Tags Field Array */}
-          <div>
-          {tagFields.map((item, index) => (
-              <div key={item.id}>
-                <Controller
-                  render={({ field }) => <input {...field} />}
-                  name={`tags.${index}`}
-                  control={control}
-                />
-                <button type="button" onClick={() => tagFields.length > 1 && removeTag(index)}>
-                  Delete
-                </button>
-              </div>
-            ))}
-            <button type="button" onClick={() => appendTag('')}>
-              Add Tag
-            </button>
+          <div className="block sm:col-span-2">
+            <label htmlFor="tags" className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">Personal Tags</label>
+            <div className="border border-gray-300 rounded">
+              {tagFields.map((item, index) => (
+                  <div key={item.id} className="flex items-center p-4">
+                    <Controller
+                      render={({ field }) => <input {...field} className="bg-gray-50 text-gray-900 text-sm focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500" />}
+                      name={`tags.${index}`}
+                      control={control}
+                    />
+                    <button type="button" onClick={() => tagFields.length > 1 && removeTag(index)} className="flex flex-row justify-between items-center bg-transparent mt-2 ml-5">
+                      <IoClose size={20}/>
+                    </button>
+                  </div>
+                ))}
+                <button type="button" onClick={() => appendTag('')} className="flex flex-row justify-between items-center bg-transparent mt-2">
+                  <IoAddOutline size={20} className="mr-1"/>
+                  Add Tag
+              </button>
+            </div>
           </div>
 
-          <div>
-            <label htmlFor="publishDate">Publish Date</label>
-            <input id="publishDate" {...register('publishDate')} />
+          <div className="sm:col-span-2">
+            <label htmlFor="publishDate" className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">Publish Date</label>
+            <input id="publishDate" {...register('publishDate')} className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"/>
           </div>
 
-          <div>
-            <label htmlFor="isbn10">ISBN-10</label>
-            <input id="isbn10" {...register('isbn10')} />
+          <div className="w-full">
+            <label htmlFor="isbn10" className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">ISBN-10</label>
+            <input id="isbn10" {...register('isbn10')} className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500" />
           </div>
 
-          <div>
-            <label htmlFor="isbn13">ISBN-13</label>
-            <input id="isbn13" {...register('isbn13')} />
+          <div className="w-full">
+            <label htmlFor="isbn13" className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">ISBN-13</label>
+            <input id="isbn13" {...register('isbn13')} className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500" />
           </div>
 
           {/* Formats */}
-          <div>
-            <label>Formats</label>
-            {['physical', 'eBook', 'audioBook'].map((format) => (
-              <div key={format}>
-                <label htmlFor={`formats_${format}`}>
-                  <input
-                    type="checkbox"
-                    id={`formats_${format}`}
-                    {...register('formats')}
-                    value={format}
-                  />
-                  {format}
-                </label>
-              </div>
-            ))}
+          <div className="sm:col-span-2">
+            <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">Formats</label>
+              <ul className="grid w-full gap-6 md:grid-cols-3">
+                {['physical', 'eBook', 'audioBook'].map((format) => (
+                  <li key={format}>
+                    <input
+                      type="checkbox"
+                      id={`formats_${format}`}
+                      {...register('formats')}
+                      value={format}
+                      className="hidden peer"
+                    />
+                    <label htmlFor={`formats_${format}`} className="inline-flex text-center items-center justify-center w-full p-2 text-gray-500 bg-white border-2 border-gray-200 rounded cursor-pointer dark:hover:text-gray-300 dark:border-gray-700 peer-checked:border-blue-600 hover:text-gray-600 dark:peer-checked:text-gray-300 peer-checked:text-gray-600 hover:bg-gray-50 dark:text-gray-400 dark:bg-gray-800 dark:hover:bg-gray-700">{format}</label>
+                  </li>
+                ))}
+              </ul>
           </div>
 
-          <div>
-            <label htmlFor="language">Language</label>
-            <input id="language" {...register('language')} />
+          <div className="w-full">
+            <label htmlFor="language" className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">Language</label>
+            <input id="language" {...register('language')} className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500" />
           </div>
-          <div>
-            <label htmlFor="pageCount">Page Count</label>
-            <input id="pageCount" type="number" {...register('pageCount')} />
-          </div>
-
-          <div>
-            <label htmlFor="imageLinks">Image Links</label>
-            <input id="imageLinks" {...register('imageLinks')} />
+          <div className="w-full">
+            <label htmlFor="pageCount" className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">Page Count</label>
+            <input id="pageCount" type="number" {...register('pageCount')} className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500" />
           </div>
 
-          <div>
-            <label htmlFor="description">Description</label>
-            <textarea id="description" {...register('description')} />
+          <div className="sm:col-span-2">
+            <label htmlFor="imageLinks" className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">Image Links</label>
+            <input id="imageLinks" {...register('imageLinks')} className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500" />
           </div>
 
-          <div>
-            <label htmlFor="notes">Notes</label>
-            <textarea id="notes" {...register('notes')} />
+          <div className="sm:col-span-2">
+            <label htmlFor="description" className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">Description</label>
+            <textarea id="description" rows={4} {...register('description')} className="block p-2.5 w-full text-sm text-gray-900 bg-gray-50 rounded border border-gray-300 focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500" />
+          </div>
+
+          <div className="sm:col-span-2">
+            <label htmlFor="notes" className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">Notes</label>
+            <textarea id="notes" rows={4} {...register('notes')} className="block p-2.5 w-full text-sm text-gray-900 bg-gray-50 rounded border border-gray-300 focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500" />
           </div>
 
           <button type="submit">Update Book</button>
