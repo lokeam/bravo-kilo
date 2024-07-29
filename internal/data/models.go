@@ -461,6 +461,20 @@ func (b *BookModel) Update(book Book) error {
 	return nil
 }
 
+func (b *BookModel) Delete(id int) error {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	statement := `DELETE FROM books WHERE id = $1`
+	_, err := b.DB.ExecContext(ctx, statement, id)
+	if err != nil {
+		b.Logger.Error("Book Model - Error deleting book", "error", err)
+		return err
+	}
+
+	return nil
+}
+
 // Category
 func (c *CategoryModel) Insert(category Category) (int, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)

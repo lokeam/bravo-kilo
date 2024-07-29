@@ -30,6 +30,7 @@ func (app *application) routes(h *handlers.Handlers) http.Handler {
 	mux.Get("/api/v1/books/{bookID}", h.GetBookByID)
 
 	mux.Put("/api/v1/books/{bookID}", h.UpdateBook)
+	mux.Delete("/api/vi/books/{bookID}", h.DeleteBook)
 
 	return mux
 }

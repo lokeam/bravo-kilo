@@ -576,3 +576,23 @@ func (h *Handlers) UpdateBook(response http.ResponseWriter, request *http.Reques
 	json.NewEncoder(response).Encode(map[string]string{"message": "Book updated successfully"})
 }
 
+// Delete Book
+func (h *Handlers) DeleteBook(response http.ResponseWriter, request *http.Request) {
+	bookIDStr := chi.URLParam(request, "bookID")
+	bookID, err := strconv.Atoi(bookIDStr)
+	if err != nil {
+		h.logger.Error("Invalid book ID", "error", err)
+		http.Error(response, "Invalid book ID", http.StatusBadRequest)
+		return
+	}
+
+	err = h.models.Book.Delete(bookID)
+	if err != nil {
+		h.logger.Error("Error deleting book", "error", err)
+		http.Error(response, "Error deleting book", http.StatusInternalServerError)
+		return
+	}
+
+	response.WriteHeader(http.StatusOK)
+	json.NewEncoder(response).Encode(map[string]string{"message": "Book deleted successfully"})
+}
