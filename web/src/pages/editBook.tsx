@@ -1,9 +1,10 @@
-import { useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Controller, useForm, useFieldArray, SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import Modal from '../components/Modal/ModalRoot';
 import { Book } from './library';
 import axios from 'axios';
 
@@ -11,6 +12,8 @@ import { IoArrowBackCircle } from "react-icons/io5";
 import { BsThreeDotsVertical } from "react-icons/bs";
 import { IoClose } from 'react-icons/io5';
 import { IoAddOutline } from 'react-icons/io5';
+import { IoIosWarning } from "react-icons/io";
+import { MdDeleteForever } from "react-icons/md";
 
 const fetchBook = async (bookID: string) => {
   console.log('-------');
@@ -42,6 +45,8 @@ const bookSchema = z.object({
 type BookFormData = z.infer<typeof bookSchema>;
 
 const EditBook = () => {
+  const [opened, setOpened] = useState(false);
+
   const { bookID } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -115,6 +120,9 @@ const EditBook = () => {
 
     mutation.mutate(book);
   };
+
+  const openModal = () => setOpened(true);
+  const closeModal = () => setOpened(false);
 
   return (
     <section className="bg-white dark:bg-gray-900">
@@ -268,6 +276,21 @@ const EditBook = () => {
           </div>
 
           <button type="submit">Update Book</button>
+          <button type="button" onClick={openModal} className="border-red-500 text-red-500 hover:text-white hover:bg-red-600 focus:ring-red-900">Delete Book</button>
+          <Modal opened={opened} onClose={closeModal} title="Danger zone">
+              <div className="flex items-center justify-center">
+                <IoIosWarning size={30} />
+              </div>
+              <h3 className="flex items-center justify-center text-lg">Are you sure that you want to delete this book?</h3>
+              <p className="flex items-center justify-center mb-5">This action cannot be undone.</p>
+              <button onClick={closeModal} className="flex flex-row justify-between items-center bg-transparent mr-1 w-full mb-3 lg:mb-0">
+                <span>Cancel</span>
+              </button>
+              <button className="flex flex-row justify-between items-center bg-transparent mr-1 w-full text-white bg-red-600 hover:bg-red-800 focus:ring-red-800 mb-3 lg:mb-0">
+                <span>Yes, I want to delete this book</span>
+                <MdDeleteForever size={30}/>
+              </button>
+            </Modal>
         </form>
       </div>
     </section>

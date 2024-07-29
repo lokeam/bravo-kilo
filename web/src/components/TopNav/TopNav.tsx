@@ -8,13 +8,9 @@ import { IoSearchOutline } from 'react-icons/io5';
 import { IoMdSettings } from "react-icons/io";
 import { MdLogout } from "react-icons/md";
 
-import bkLogo from '../../assets/tk_icon.webp';
-
 export default function TopNavigation() {
   const [opened, setOpened] = useState(false);
   const { logout } = useAuth();
-
-  console.log('Top nav')
 
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
@@ -62,13 +58,13 @@ export default function TopNavigation() {
             </div>
 
             <Modal opened={opened} onClose={closeModal} title="">
-              <button className="flex flex-row justify-between items-center bg-transparent mr-1">
+              <button className="flex flex-row justify-items-start items-center bg-transparent mr-1">
+                <IoMdSettings className="mr-8" size={22} />
                 <span>Settings</span>
-                <IoMdSettings size={22} />
               </button>
-              <button className="flex flex-row justify-between items-center bg-transparent mr-1" onClick={logout}>
+              <button className="flex flex-row justify-items-start items-center bg-transparent mr-1" onClick={logout}>
+                <MdLogout className="mr-8" size={25}/>
                 <span>Log out</span>
-                <MdLogout size={25}/>
               </button>
             </Modal>
 

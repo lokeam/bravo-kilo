@@ -7,11 +7,12 @@ import './Modal.css';
 interface ModalProps {
   opened: boolean;
   onClose: () => void;
-  title: string;
+  title?: string;
   children: React.ReactNode;
 }
 
 const Modal: React.FC<ModalProps> = ({ opened, onClose, title, children }) => {
+  console.log('**** Modal fired --- ');
   return (
     <ModalRoot opened={opened} onClose={onClose}>
       <div className="modal-container flex flex-col-reverse h-auto">

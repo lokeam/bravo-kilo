@@ -2,7 +2,7 @@ import React from 'react';
 import './Modal.css';
 
 interface ModalHeaderProps {
-  title: string;
+  title?: string;
   onClose: () => void;
 }
 
