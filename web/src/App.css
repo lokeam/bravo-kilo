@@ -1,5 +1,35 @@
 :root {
   --scroll: 0;
+
+  --min-column-width-sm: 160px;
+  /* 1630px wide and above */
+  --min-column-width-lg: 210px;
+  --encore-spacing-tighter: 8px;
+  --hover-transition-1: .25s;
+
+  /* refactor styles */
+  --grid-small: 4;
+  --grid-medium: 5;
+  --grid-large: 6;
+  --grid-xlarge: 6;
+
+  --grid-rows: 1;
+  --grid-max-content-xsmall: 144px;
+
+  --grid-column-gap-xsmall: 10px;
+  --grid-row-gap-xsmall: 24px;
+
+  --grid-column-gap-small: 20px;
+  --grid-row-gap-small: 24px;
+
+  --grid-column-gap-medium: 20px;
+  --grid-row-gap-medium: 24px;
+
+  --grid-column-gap-large: 20px;
+  --grid-row-gap-large: 24px;
+
+  --grid-column-gap-xlarge: 20px;
+  --grid-row-gap-xlarge: 24px;
 }
 
 #root {
