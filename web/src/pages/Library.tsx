@@ -4,8 +4,6 @@ import { useQuery } from "@tanstack/react-query";
 import useStore from '../store/useStore';
 import axios from "axios";
 
-import TopNavigation from "../components/TopNav/TopNav";
-import SideNavigation from "../components/SideNav/SideNavigation";
 import CardList from "../components/CardList/CardList";
 import Modal from '../components/Modal/Modal';
 import '../components/Modal/Modal.css';
@@ -97,8 +95,6 @@ const Library = () => {
 
   return (
     <div className="bk_lib flex flex-col items-center place-content-around px-5 antialiased md:px-1 md:ml-24 h-screen pt-40">
-      <TopNavigation />
-      <SideNavigation />
 
       <Modal opened={opened} onClose={closeModal} title="">
         <button onClick={() => handleSort("publishDate")} className="flex flex-row bg-transparent mr-1">

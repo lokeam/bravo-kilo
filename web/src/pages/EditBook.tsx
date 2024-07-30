@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Modal from '../components/Modal/ModalRoot';
-import { Book } from './library';
+import { Book } from './Library';
 import axios from 'axios';
 
 import { IoArrowBackCircle } from "react-icons/io5";
@@ -134,7 +134,6 @@ const EditBook = () => {
           <BsThreeDotsVertical className="h-12 w-12" />
         </button>
       </div>
-
 
       <div className="text-left py-8 px-4 mx-auto max-w-2xl lg:py-16">
         <h2 className="mb-4 text-xl font-bold text-gray-900 dark:text-white">Edit Book</h2>

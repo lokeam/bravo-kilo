@@ -2,16 +2,17 @@ import { Suspense } from 'react';
 import { Route, Routes } from 'react-router-dom';
 import { AuthProvider } from './components/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
-import Home from './pages/home';
-import EditBook from './pages/editBook';
-import AddBook from './pages/addBook';
-import Login from './pages/login';
-import Library from './pages/library';
-import BookDetail from './pages/bookDetail';
+import Home from './pages/Home';
+import EditBook from './pages/EditBook';
+import AddBook from './pages/AddBook';
+import Login from './pages/Login';
+import Library from './pages/Library';
+import BookDetail from './pages/BookDetail';
 
-import NotFound from './pages/notFound';
+import NotFound from './pages/NotFound';
 
 import './App.css'
+import AuthenticatedLayout from './pages/AuthLayout';
 
 
 function App() {
@@ -21,21 +22,13 @@ function App() {
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login />}/>
-          <Route path="/library" element={
-            <ProtectedRoute>
-              <Library />
-            </ProtectedRoute>
-          } />
-          <Route path="/library/books/:bookID" element={
-            <ProtectedRoute>
-              <BookDetail />
-            </ProtectedRoute>
-          } />
-          <Route path="library/books/:bookID/edit" element={
-            <ProtectedRoute>
-              <EditBook />
-            </ProtectedRoute>
-          } />
+          <Route element={<ProtectedRoute><AuthenticatedLayout /></ProtectedRoute>}>
+            <Route path="/home" element={<Home />} />
+            <Route path="/library" element={<Library />} />
+            <Route path="/library/books/add" element={<AddBook />} />
+            <Route path="/library/books/:bookID" element={<BookDetail />} />
+            <Route path="library/books/:bookID/edit" element={<EditBook />} />
+          </Route>
           <Route path="*" element={<NotFound />}/>
         </Routes>
       </Suspense>
