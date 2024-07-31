@@ -1,11 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
 
-type FetchFunction<T> = (userID: number) => Promise<T>;
+type FetchFunction<T, Q> = (query: Q) => Promise<T>;
 
-const useFetchData = <T>(queryKey: string, fetchFunction: FetchFunction<T>, userID: number) => {
+const useFetchData = <T, Q>(queryKey: string, fetchFunction: FetchFunction<T, Q>, query: Q) => {
   return useQuery({
-    queryKey: [queryKey, userID],
-    queryFn: () => fetchFunction(userID),
+    queryKey: [queryKey, query],
+    queryFn: () => fetchFunction(query),
     staleTime: 1000 * 60 * 5,
     gcTime: 1000 * 60 * 5,
   });

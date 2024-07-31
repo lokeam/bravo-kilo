@@ -1,13 +1,10 @@
 import { useState } from "react";
 import { useLocation } from "react-router-dom";
-
 import useStore from '../store/useStore';
 import useFetchBooks from "../hooks/useFetchBooks";
-
 import CardList from "../components/CardList/CardList";
 import Modal from '../components/Modal/Modal';
 import '../components/Modal/Modal.css';
-
 import { PiArrowsDownUp } from "react-icons/pi";
 
 export interface Book {
@@ -45,7 +42,6 @@ const Library = () => {
     return <div>Error loading books</div>;
   }
 
-
   const handleSort = (criteria: "title" | "publishDate" | "author" | "pageCount") => {
     const order = sortOrder === 'asc' ? 'desc' : 'asc';
     setSort(criteria, order);
@@ -82,7 +78,6 @@ const Library = () => {
 
   return (
     <div className="bk_lib flex flex-col items-center place-content-around px-5 antialiased md:px-1 md:ml-24 h-screen pt-40">
-
       <Modal opened={opened} onClose={closeModal} title="">
         <button onClick={() => handleSort("publishDate")} className="flex flex-row bg-transparent mr-1">
           Release date: New to Old
@@ -109,8 +104,7 @@ const Library = () => {
         </div>
 
       </div>
-      {sortedBooks && <CardList books={sortedBooks} />}
-
+      {sortedBooks && sortedBooks.length > 0 && <CardList books={sortedBooks} />}
     </div>
   )
 }
