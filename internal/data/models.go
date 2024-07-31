@@ -475,6 +475,40 @@ func (b *BookModel) Delete(id int) error {
 	return nil
 }
 
+func (b *BookModel) CountBooksByFormat(userID int) (map[string]int, error) {
+	counts := make(map[string]int)
+
+	query := `
+	SELECT format, COUNT(*)
+	FROM (
+		SELECT jsonb_array_elements_text(formats) AS format
+		FROM books b
+		JOIN user_books ub ON b.id = ub.book_id
+		WHERE ub.user_id = $1
+	) AS format_counts
+	GROUP BY format`
+
+	rows, err := b.DB.Query(query, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var format string
+		var count int
+		if err := rows.Scan(&format, &count); err != nil {
+			return nil, err
+		}
+		counts[format] = count
+	}
+
+	return counts, nil
+}
+
+
+
+
 // Category
 func (c *CategoryModel) Insert(category Category) (int, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)

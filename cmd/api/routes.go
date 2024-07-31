@@ -23,14 +23,17 @@ func (app *application) routes(h *handlers.Handlers) http.Handler {
 	mux.Get("/auth/google/signin", h.GoogleSignIn)
 	mux.Get("/auth/google/callback", h.GoogleCallback)
 	mux.Get("/auth/token/verify", h.VerifyToken)
+	mux.Post("/auth/token/refresh", h.RefreshToken)
 	mux.Post("/auth/signout", h.SignOut)
 
-	mux.Get("/api/v1/books/search", h.SearchBooks)
 	mux.Get("/api/v1/user/books", h.GetAllUserBooks)
-	mux.Get("/api/v1/books/{bookID}", h.GetBookByID)
 
+	mux.Get("/api/v1/books/search", h.SearchBooks)
+	mux.Get("/api/v1/books/{bookID}", h.GetBookByID)
 	mux.Put("/api/v1/books/{bookID}", h.UpdateBook)
-	mux.Delete("/api/vi/books/{bookID}", h.DeleteBook)
+	mux.Delete("/api/v1/books/{bookID}", h.DeleteBook)
+	mux.Get("/api/v1/user/books/count", h.GetBooksCountByFormat)
+
 
 	return mux
 }

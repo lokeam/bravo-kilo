@@ -596,3 +596,43 @@ func (h *Handlers) DeleteBook(response http.ResponseWriter, request *http.Reques
 	response.WriteHeader(http.StatusOK)
 	json.NewEncoder(response).Encode(map[string]string{"message": "Book deleted successfully"})
 }
+
+func (h *Handlers) GetBooksCountByFormat(response http.ResponseWriter, request *http.Request) {
+	h.logger.Info("Entering GetBooksCountByFormat handler")
+
+	// Grab token from cookie
+	cookie, err := request.Cookie("token")
+	if err != nil {
+			h.logger.Error("No token cookie", "error", err)
+			http.Error(response, "No token cookie", http.StatusUnauthorized)
+			return
+	}
+
+	tokenStr := cookie.Value
+	claims := &Claims{}
+
+	// Parse JWT token to get userID
+	token, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (interface{}, error) {
+			return jwtKey, nil
+	})
+	if err != nil || !token.Valid {
+			h.logger.Error("Invalid token", "error", err)
+			http.Error(response, "Invalid token", http.StatusUnauthorized)
+			return
+	}
+
+	userID := claims.UserID
+	h.logger.Info("Valid user ID received from token", "userID", userID)
+
+	counts, err := h.models.Book.CountBooksByFormat(userID)
+	if err != nil {
+			h.logger.Error("Error counting books by format", "error", err)
+			http.Error(response, "Error counting books by format", http.StatusInternalServerError)
+			return
+	}
+
+	h.logger.Info("Books counted successfully", "counts", counts)
+
+	response.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(response).Encode(counts)
+}
