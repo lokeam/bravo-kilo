@@ -1,13 +1,12 @@
 import { SideNavWrapper } from './SideNavWrapper';
-import { SideNavLogo } from './SideNavLogo';
 import { SideNavList } from './SideNavList';
 import { SideNavListItem } from './SideNavListItem';
 
 // Icons and Logos
 import { GoHomeFill } from "react-icons/go";
 import { BiLibrary } from "react-icons/bi";
-import { MdCategory } from "react-icons/md";
 import { TbEdit } from "react-icons/tb";
+import { IoSearchOutline } from 'react-icons/io5';
 
 export default function SideNavigation() {
 
@@ -16,7 +15,7 @@ export default function SideNavigation() {
       <SideNavList>
         <SideNavListItem pageRoute="/home" icon={GoHomeFill}>Home</SideNavListItem>
         <SideNavListItem pageRoute="/library" icon={BiLibrary}>Library</SideNavListItem>
-        <SideNavListItem pageRoute="/library/categories" icon={MdCategory}>Categories</SideNavListItem>
+        <SideNavListItem pageRoute="/library/categories" icon={IoSearchOutline}>Search</SideNavListItem>
         <SideNavListItem pageRoute="/library/books/add" icon={TbEdit}>Add</SideNavListItem>
       </SideNavList>
     </SideNavWrapper>

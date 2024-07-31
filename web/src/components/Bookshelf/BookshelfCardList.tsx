@@ -21,12 +21,9 @@ const BookshelfCardList = ({ cardData = [], isLoading }: BookshelfListProps) => 
                 <div>Loading data...</div>
               ) : cardData.length > 0 ? (
                 cardData.map((book) => (
-                  <li key={book.id}>
+                  <li key={`${book.id}-${book.title}`}>
                     <BookshelfCard
-                      alt={book.title}
-                      author={book.authors[0]}
-                      img={book.imageLinks[0]}
-                      title={book.title}
+                      book={book}
                     />
                   </li>
                 ))
