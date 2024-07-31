@@ -44,6 +44,16 @@ export const searchBookAPI = async (query: string) => {
 export const fetchBookByID = async (bookID: string) => {
   const { data } = await apiClient.get(`/api/v1/books/${bookID}`);
   return data.book;
-}
+};
+
+export const verifyUserToken = async () => {
+  const { data } = await apiClient.get('/auth/token/verify');
+  return data.user;
+};
+
+export const signOutUser = async () => {
+  await apiClient.post('/auth/signout');
+};
+
 
 export default apiClient;

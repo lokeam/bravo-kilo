@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import { useQuery, QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import axios from 'axios';
+import { verifyUserToken, signOutUser } from '../service/apiClient.service';
 
 export interface User {
   id?: number;
@@ -22,12 +22,6 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const fetchUser = async () => {
-  const { data } = await axios.get(`${import.meta.env.VITE_API_ENDPOINT}/auth/token/verify`, { withCredentials: true });
-  console.log('Fetch user data:', data);
-  return data.user;
-};
-
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
@@ -35,7 +29,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['user'],
-    queryFn: fetchUser,
+    queryFn: verifyUserToken,
     retry: false,
   });
 
@@ -63,7 +57,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const logout = async () => {
-    await axios.post(`${import.meta.env.VITE_API_ENDPOINT}/auth/signout`, {}, { withCredentials: true });
+    await signOutUser();
     setUser(null);
     setIsAuthenticated(false);
     window.location.href = "/login";
