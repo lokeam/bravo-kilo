@@ -14,10 +14,19 @@ apiClient.interceptors.response.use(
     if (error.response.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
 
+      const refreshToken = document.cookie.split('; ').find(row => row.startsWith('refresh_token='));
+      if (!refreshToken) {
+        console.log('No refresh token present, redirecting to login.');
+        window.location.href = '/login';
+        return Promise.reject(error);
+      }
+
       try {
+        console.log('apiClient, trying token refresh');
         await apiClient.post('/auth/token/refresh');
         return apiClient(originalRequest);
       } catch (refreshError) {
+        console.error('Token refresh failed', refreshError);
         window.location.href = '/login';
       }
     }
@@ -52,13 +61,13 @@ export const verifyUserToken = async () => {
   return data.user;
 };
 
-export const signOutUser = async() => {
+export const signOutUser = async () => {
   await apiClient.post('/auth/signout');
-}
+};
 
 export const updateBook = async (book: Book, bookID: string) => {
   const { data } = await apiClient.put(`/api/v1/books/${bookID}`, book);
   return data;
-}
+};
 
 export default apiClient;

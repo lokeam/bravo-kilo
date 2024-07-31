@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import { useQuery, QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { verifyUserToken, signOutUser } from '../service/apiClient.service';
+import axios from 'axios';
+
 
 export interface User {
   id?: number;
@@ -22,6 +23,14 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+/* Temporary solution while debugging TanstackQuery infinite loop on login page JWT validation */
+const fetchUser = async() => {
+  const { data } = await axios.get(`${import.meta.env.VITE_API_ENDPOINT}/auth/token/verify`, { withCredentials: true });
+  console.log('AuthContext - fetch user data: ', data);
+
+  return data.user;
+}
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
@@ -29,8 +38,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['user'],
-    queryFn: verifyUserToken,
+    queryFn: fetchUser,
     retry: false,
+    enabled: loading,
   });
 
   useEffect(() => {
@@ -57,7 +67,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const logout = async () => {
-    await signOutUser();
+    await axios.post(`${import.meta.env.VITE_API_ENDPOINT}/auth/signout`, {}, { withCredentials: true });
     setUser(null);
     setIsAuthenticated(false);
     window.location.href = "/login";
