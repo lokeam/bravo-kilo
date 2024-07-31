@@ -2,16 +2,17 @@ package main
 
 import (
 	"bravo-kilo/cmd/handlers"
+	"bravo-kilo/cmd/middleware"
 	"net/http"
 
-	"github.com/go-chi/chi/middleware"
+	chimiddleware "github.com/go-chi/chi/middleware"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
 )
 
 func (app *application) routes(h *handlers.Handlers) http.Handler {
 	mux := chi.NewRouter()
-	mux.Use(middleware.Recoverer)
+	mux.Use(chimiddleware.Recoverer)
 	mux.Use(cors.Handler(cors.Options{
     AllowedOrigins:   []string{"https://*", "http://*"},
     AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
@@ -26,14 +27,19 @@ func (app *application) routes(h *handlers.Handlers) http.Handler {
 	mux.Post("/auth/token/refresh", h.RefreshToken)
 	mux.Post("/auth/signout", h.SignOut)
 
-	mux.Get("/api/v1/user/books", h.GetAllUserBooks)
+	mux.Route("/api/v1/user", func(r chi.Router) {
+		r.Use(middleware.VerifyJWT)
+		r.Get("/books", h.GetAllUserBooks)
+		r.Get("/books/count", h.GetBooksCountByFormat)
+	})
 
-	mux.Get("/api/v1/books/search", h.SearchBooks)
-	mux.Get("/api/v1/books/{bookID}", h.GetBookByID)
-	mux.Put("/api/v1/books/{bookID}", h.UpdateBook)
-	mux.Delete("/api/v1/books/{bookID}", h.DeleteBook)
-	mux.Get("/api/v1/user/books/count", h.GetBooksCountByFormat)
-
+	mux.Route("/api/v1/books", func(r chi.Router) {
+		r.Use(middleware.VerifyJWT)
+		r.Get("/search", h.SearchBooks)
+		r.Get("/{bookID}", h.GetBookByID)
+		r.Put("/{bookID}", h.UpdateBook)
+		r.Delete("/{bookID}", h.DeleteBook)
+	})
 
 	return mux
 }
