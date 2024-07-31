@@ -1,62 +1,22 @@
 import { useLocation, useParams, useNavigate } from 'react-router-dom';
-import { useEffect, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import useScrollShrink from "../hooks/useScrollShrink";
+import useFetchBookById from '../hooks/useFetchBookById';
+import { Book } from './Library';
 
 import { IoArrowBackCircle } from "react-icons/io5";
 import { BsThreeDotsVertical } from "react-icons/bs";
 import { TbEdit } from "react-icons/tb";
-import useScrollShrink from "../hooks/useScrollShrink";
 
-import axios from 'axios';
-
-interface Book {
-  id: number;
-  title: string;
-  subtitle?: string;
-  description: string;
-  language: string;
-  pageCount: number;
-  publishDate: string;
-  authors: string[];
-  imageLinks: string[];
-  genres: string[];
-  tags: string[];
-  notes: string;
-  formats: ('physical' | 'eBook' | 'audioBook')[];
-  createdAt: string;
-  lastUpdated: string;
-  isbn10: string;
-  isbn13: string;
-}
-
-const fetchBook = async (bookID: string) => {
-  const { data } = await axios.get(`${import.meta.env.VITE_API_ENDPOINT}/api/v1/books/${bookID}`, {
-    withCredentials: true
-  });
-  return data.book;
-};
 
 const BookDetail = () => {
   const { bookID } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
   const imageRef = useScrollShrink();
+  const enabled = !location.state?.book;
 
-  const [book, setBook] = useState<Book | null>(null);
-
-  const { data, isLoading, isError } = useQuery({
-    queryKey: ['book', bookID],
-    queryFn: () => fetchBook(bookID as string),
-    enabled: !location.state?.book,
-  });
-
-  useEffect(() => {
-    if (location.state?.book) {
-      setBook(location.state.book);
-    } else if (data) {
-      setBook(data);
-    }
-  }, [data, location.state?.book]);
+  const { data: bookData, isLoading, isError } = useFetchBookById(bookID as string, enabled);
+  const book: Book = bookData || location.state?.book;
 
   if (isLoading) {
     return <div>Loading...</div>;

@@ -1,8 +1,8 @@
 import useFetchData from './useFetchData';
 import { fetchBooksCount } from '../service/apiClient.service';
 
-const useFetchBooksCount = (userID: number) => {
-  return useFetchData('booksCount', fetchBooksCount, userID);
+const useFetchBooksCount = (userID: number, enabled: boolean = true) => {
+  return useFetchData<Record<string, number>, number>('booksCount', fetchBooksCount, userID, enabled);
 };
 
 export default useFetchBooksCount;

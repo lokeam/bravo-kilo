@@ -41,4 +41,9 @@ export const searchBookAPI = async (query: string) => {
   return data.items || [];
 };
 
+export const fetchBookByID = async (bookID: string) => {
+  const { data } = await apiClient.get(`/api/v1/books/${bookID}`);
+  return data.book;
+}
+
 export default apiClient;
