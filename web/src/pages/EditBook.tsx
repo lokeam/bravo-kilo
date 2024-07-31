@@ -3,10 +3,11 @@ import { Controller, useForm, useFieldArray, SubmitHandler } from 'react-hook-fo
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import useUpdateBook from '../hooks/useUpdateBook';
+import useFetchBookById from '../hooks/useFetchBookById';
+
 import Modal from '../components/Modal/ModalRoot';
 import { Book } from './Library';
-import axios from 'axios';
 
 import { IoArrowBackCircle } from "react-icons/io5";
 import { BsThreeDotsVertical } from "react-icons/bs";
@@ -15,14 +16,6 @@ import { IoAddOutline } from 'react-icons/io5';
 import { IoIosWarning } from "react-icons/io";
 import { MdDeleteForever } from "react-icons/md";
 
-const fetchBook = async (bookID: string) => {
-  console.log('-------');
-  console.log(`Fetching book with ID: ${bookID}`);
-  const { data } = await axios.get(`${import.meta.env.VITE_API_ENDPOINT}/api/v1/books/${bookID}`, {
-    withCredentials: true,
-  });
-  return data.book;
-};
 
 const bookSchema = z.object({
   id: z.number(),
@@ -48,24 +41,11 @@ const EditBook = () => {
   const [opened, setOpened] = useState(false);
 
   const { bookID } = useParams();
+  const {data: book, isLoading, isError } = useFetchBookById(bookID as string, !!bookID);
+  const { mutate: updateBook } = useUpdateBook(bookID as string);
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
 
-  const { data: book, isLoading, isError } = useQuery({
-    queryKey: ['book', bookID],
-    queryFn: () => fetchBook(bookID as string),
-    enabled: !!bookID,
-  });
-
-  const updateBook = async (book: Book) => {
-    console.log(`Updating book with data: ${book}`);
-    const { data } = await axios.put(`${import.meta.env.VITE_API_ENDPOINT}/api/v1/books/${bookID}`, book, {
-      withCredentials: true,
-    });
-    console.log(`Update response data: ${data}`);
-    return data;
-  };
-
+  /* React hook form handlers */
   const { register, handleSubmit, control, reset, formState: { errors } } = useForm<BookFormData>({
     resolver: zodResolver(bookSchema),
   });
@@ -83,18 +63,6 @@ const EditBook = () => {
   const { fields: tagFields, append: appendTag, remove: removeTag } = useFieldArray({
     control,
     name: 'tags' as const,
-  });
-
-  const mutation = useMutation({
-    mutationFn: updateBook,
-    onSuccess: () => {
-      console.log('Book updated successfully');
-      queryClient.invalidateQueries({ queryKey: ['book', bookID] });
-      navigate(`/library/books/${bookID}`);
-    },
-    onError: (error) => {
-      console.error(`Error updating book: ${error}`);
-    }
   });
 
   useEffect(() => {
@@ -118,7 +86,7 @@ const EditBook = () => {
       lastUpdated: defaultDate,
     };
 
-    mutation.mutate(book);
+    updateBook(book);
   };
 
   const openModal = () => setOpened(true);

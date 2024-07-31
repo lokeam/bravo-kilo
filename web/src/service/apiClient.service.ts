@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { Book } from '../pages/Library';
 
 const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_ENDPOINT,
@@ -51,9 +52,13 @@ export const verifyUserToken = async () => {
   return data.user;
 };
 
-export const signOutUser = async () => {
+export const signOutUser = async() => {
   await apiClient.post('/auth/signout');
-};
+}
 
+export const updateBook = async (book: Book, bookID: string) => {
+  const { data } = await apiClient.put(`/api/v1/books/${bookID}`, book);
+  return data;
+}
 
 export default apiClient;
