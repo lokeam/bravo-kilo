@@ -5,6 +5,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import Home from './pages/Home';
 import EditBook from './pages/EditBook';
 import AddBook from './pages/AddBook';
+import ManualAdd from './pages/ManualAdd';
 import Login from './pages/Login';
 import Library from './pages/Library';
 import BookDetail from './pages/BookDetail';
@@ -26,6 +27,7 @@ function App() {
             <Route path="/home" element={<Home />} />
             <Route path="/library" element={<Library />} />
             <Route path="/library/books/add" element={<AddBook />} />
+            <Route path="/library/books/add/manual" element={<ManualAdd /> }/>
             <Route path="/library/books/:bookID" element={<BookDetail />} />
             <Route path="library/books/:bookID/edit" element={<EditBook />} />
           </Route>

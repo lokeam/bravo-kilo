@@ -70,4 +70,11 @@ export const updateBook = async (book: Book, bookID: string) => {
   return data;
 };
 
+export const addBook = async (book: Book) => {
+  console.log('apiClient.service, about to post book from addBook:', book);
+  const { data } = await apiClient.post('/api/v1/books/add', book);
+  console.log('apiClient.service, received response from addBook:', data);
+  return data;
+}
+
 export default apiClient;

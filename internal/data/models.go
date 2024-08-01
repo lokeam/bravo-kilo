@@ -6,8 +6,6 @@ import (
 	"encoding/json"
 	"log/slog"
 	"time"
-
-	"github.com/lib/pq"
 )
 
 const dbTimeout = time.Second * 3
@@ -218,36 +216,64 @@ func (t *TokenModel) DeleteByUserID(userID int) error {
 	return nil
 }
 
-// Book
 func (b *BookModel) Insert(book Book) (int, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
 
 	var newId int
-	statement := `INSERT INTO books (title, subtitle, description, language, page_count, publish_date, authors, image_links, genres, notes, formats, tags, created_at, last_updated, isbn_10, isbn_13)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING id`
 
-	err := b.DB.QueryRowContext(ctx, statement,
-		book.Title,
-		book.Subtitle,
-		book.Description,
-		book.Language,
-		book.PageCount,
-		book.PublishDate,
-		pq.Array(book.Authors),
-		pq.Array(book.ImageLinks),
-		pq.Array(book.Genres),
-		book.Notes,
-		pq.Array(book.Formats),
-		pq.Array(book.Tags),
-		time.Now(),
-		time.Now(),
-		book.ISBN10,
-		book.ISBN13,
-	).Scan(&newId)
+	// Marshal arrays to JSON strings
+	authorsJSON, err := json.Marshal(book.Authors)
 	if err != nil {
-		b.Logger.Error("Book Model - Error inserting book", "error", err)
-		return 0, err
+			b.Logger.Error("Error marshalling authors to JSON", "error", err)
+			return 0, err
+	}
+	imageLinksJSON, err := json.Marshal(book.ImageLinks)
+	if err != nil {
+			b.Logger.Error("Error marshalling image links to JSON", "error", err)
+			return 0, err
+	}
+	genresJSON, err := json.Marshal(book.Genres)
+	if err != nil {
+			b.Logger.Error("Error marshalling genres to JSON", "error", err)
+			return 0, err
+	}
+	formatsJSON, err := json.Marshal(book.Formats)
+	if err != nil {
+			b.Logger.Error("Error marshalling formats to JSON", "error", err)
+			return 0, err
+	}
+	tagsJSON, err := json.Marshal(book.Tags)
+	if err != nil {
+			b.Logger.Error("Error marshalling tags to JSON", "error", err)
+			return 0, err
+	}
+
+	statement := `INSERT INTO books (title, subtitle, description, language, page_count, publish_date, authors, image_links, genres, notes, formats, tags, created_at, last_updated, isbn_10, isbn_13)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) RETURNING id`
+
+	err = b.DB.QueryRowContext(ctx, statement,
+			book.Title,
+			book.Subtitle,
+			book.Description,
+			book.Language,
+			book.PageCount,
+			book.PublishDate,
+			authorsJSON,      // Insert JSON string
+			imageLinksJSON,   // Insert JSON string
+			genresJSON,       // Insert JSON string
+			book.Notes,
+			formatsJSON,      // Insert JSON string
+			tagsJSON,         // Insert JSON string
+			time.Now(),
+			time.Now(),
+			book.ISBN10,
+			book.ISBN13,
+	).Scan(&newId)
+
+	if err != nil {
+			b.Logger.Error("Book Model - Error inserting book", "error", err)
+			return 0, err
 	}
 
 	return newId, nil

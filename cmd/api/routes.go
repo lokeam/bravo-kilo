@@ -38,6 +38,7 @@ func (app *application) routes(h *handlers.Handlers) http.Handler {
 		r.Get("/search", h.SearchBooks)
 		r.Get("/{bookID}", h.GetBookByID)
 		r.Put("/{bookID}", h.UpdateBook)
+		r.Post("/add", h.InsertBook)
 		r.Delete("/{bookID}", h.DeleteBook)
 	})
 

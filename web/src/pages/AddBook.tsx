@@ -1,12 +1,12 @@
-import { useState } from "react";
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { IoSearchOutline } from 'react-icons/io5';
 import useBookSearch from '../hooks/useBookSearch';
 
 const AddBook = () => {
   const [searchQuery, setSearchQuery] = useState('');
-  const [submittedQuery, setSubmittedQuery] = useState('');
-
-  const { data: searchResults = [], isLoading, isError } = useBookSearch(submittedQuery);
+  const { data: searchResults = [], isLoading, isError } = useBookSearch(searchQuery);
+  const navigate = useNavigate();
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(e.target.value);
@@ -14,8 +14,14 @@ const AddBook = () => {
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setSubmittedQuery(searchQuery);
+    // Triggering the useBookSearch hook
   };
+
+  console.log('Search results state:', searchResults);
+
+  const handleManualAddClick = () => {
+    navigate('/library/books/add/manual');
+  }
 
   return (
     <section className="bg-gray-50 dark:bg-gray-900 h-full">
@@ -47,17 +53,8 @@ const AddBook = () => {
                   <div className="h-0.5 w-full bg-gray-600"></div>
                 </div>
                 <button type="submit" className="w-full text-white bg-primary-600 hover:bg-primary-700 focus:ring-4 focus:outline-none focus:ring-primary-300 font-medium rounded-lg text-sm px-5 py-2.5 text-center dark:bg-primary-600 dark:hover:bg-primary-700 dark:focus:ring-primary-800">Import a List of Books (.csv)</button>
-                <button type="submit" className="w-full text-white bg-primary-600 hover:bg-primary-700 focus:ring-4 focus:outline-none focus:ring-primary-300 font-medium rounded-lg text-sm px-5 py-2.5 text-center dark:bg-primary-600 dark:hover:bg-primary-700 dark:focus:ring-primary-800">Manually Add a Book</button>
+                <button type="submit" onClick={handleManualAddClick} className="w-full text-white bg-primary-600 hover:bg-primary-700 focus:ring-4 focus:outline-none focus:ring-primary-300 font-medium rounded-lg text-sm px-5 py-2.5 text-center dark:bg-primary-600 dark:hover:bg-primary-700 dark:focus:ring-primary-800">Manually Add a Book</button>
             </form>
-            {isLoading && <p>Loading...</p>}
-            {isError && <p>Error loading search results</p>}
-            {searchResults.length > 0 && (
-              <ul>
-                {searchResults.map((book, index) => (
-                  <li key={index}>{book.title}</li>
-                ))}
-              </ul>
-            )}
           </div>
         </div>
       </div>

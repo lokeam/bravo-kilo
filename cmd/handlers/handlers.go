@@ -529,21 +529,22 @@ func (h *Handlers) InsertBook(response http.ResponseWriter, request *http.Reques
 	var book data.Book
 	err := json.NewDecoder(request.Body).Decode(&book)
 	if err != nil {
-		h.logger.Error("Error decoding book data", "error", err)
-		http.Error(response, "Error decoding book data - invalid input", http.StatusBadRequest)
-		return
+			h.logger.Error("Error decoding book data", "error", err)
+			http.Error(response, "Error decoding book data - invalid input", http.StatusBadRequest)
+			return
 	}
 
 	bookID, err := h.models.Book.Insert(book)
 	if err != nil {
-		h.logger.Error("Error inserting book", "error", err)
-		http.Error(response, "Error inserting book", http.StatusInternalServerError)
-		return
+			h.logger.Error("Error inserting book", "error", err)
+			http.Error(response, "Error inserting book", http.StatusInternalServerError)
+			return
 	}
 
 	response.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(response).Encode(map[string]int{"book_id": bookID})
 }
+
 
 // Update Book
 func (h *Handlers) UpdateBook(response http.ResponseWriter, request *http.Request) {

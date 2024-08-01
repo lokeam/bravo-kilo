@@ -21,18 +21,18 @@ const bookSchema = z.object({
   id: z.number(),
   title: z.string().min(1, 'Please enter a title'),
   subtitle: z.string().optional(),
-  description: z.string().min(1, 'Please enter a description'),
-  language: z.string().min(1, 'Please enter a language'),
-  pageCount: z.number().min(1, 'Please enter a total page count'),
-  publishDate: z.string().min(1, 'Please enter a date of publication'),
   authors: z.array(z.string()).min(1, 'Please enter at least one author'),
-  imageLinks: z.array(z.string()).min(1, 'At least one image link is required'),
   genres: z.array(z.string()).min(1, 'Please enter at least one genre'),
   tags: z.array(z.string()).min(1, 'At least one tag is required'),
-  notes: z.string().optional(),
-  formats: z.array(z.enum(['physical', 'eBook', 'audioBook'])),
+  publishDate: z.string().min(1, 'Please enter a date of publication'),
   isbn10: z.string().min(10).max(10),
   isbn13: z.string().min(13).max(13),
+  formats: z.array(z.enum(['physical', 'eBook', 'audioBook'])),
+  language: z.string().min(1, 'Please enter a language'),
+  pageCount: z.number().min(1, 'Please enter a total page count'),
+  imageLinks: z.array(z.string()).min(1, 'At least one image link is required'),
+  description: z.string().min(1, 'Please enter a description'),
+  notes: z.string().optional(),
 });
 
 type BookFormData = z.infer<typeof bookSchema>;
@@ -180,7 +180,7 @@ const EditBook = () => {
                 <button type="button" onClick={() => appendTag('')} className="flex flex-row justify-between items-center bg-transparent mt-2">
                   <IoAddOutline size={20} className="mr-1"/>
                   Add Tag
-              </button>
+                </button>
             </div>
           </div>
 
