@@ -32,7 +32,7 @@ const Library = () => {
   const query = new URLSearchParams(search);
   const userID = parseInt(query.get('userID') || '0', 10);
   const { sortCriteria, sortOrder, setSort } = useStore();
-  const { data: books, isLoading, isError } = useFetchBooks(userID);
+  const { data: books, isLoading, isError } = useFetchBooks(userID, !!userID);
 
   if (isLoading) {
     return <div>Loading...</div>;
