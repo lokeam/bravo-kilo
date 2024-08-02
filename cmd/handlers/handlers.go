@@ -518,6 +518,14 @@ func (h *Handlers) GetBookByID(response http.ResponseWriter, request *http.Reque
 		return
 	}
 
+	formats, err := h.models.Format.GetByBookID(bookID)
+	if err != nil {
+		h.logger.Error("Error fetching formats", "error", err)
+		http.Error(response, "Error fetching formats", http.StatusInternalServerError)
+		return
+	}
+	book.Formats = formats
+
 	response.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(response).Encode(map[string]interface{}{"book": book}); err != nil {
 		http.Error(response, "Error encoding response", http.StatusInternalServerError)
@@ -534,11 +542,21 @@ func (h *Handlers) InsertBook(response http.ResponseWriter, request *http.Reques
 			return
 	}
 
+	// Insert book and get ID
 	bookID, err := h.models.Book.Insert(book)
 	if err != nil {
 			h.logger.Error("Error inserting book", "error", err)
 			http.Error(response, "Error inserting book", http.StatusInternalServerError)
 			return
+	}
+
+	// Insert formats
+	for _, format := range book.Formats {
+		if err := h.models.Format.Insert(bookID, format); err != nil {
+			h.logger.Error("Error inserting format", "error", err)
+			http.Error(response, "Error inserting format", http.StatusInternalServerError)
+			return
+		}
 	}
 
 	response.Header().Set("Content-Type", "application/json")
@@ -566,11 +584,28 @@ func (h *Handlers) UpdateBook(response http.ResponseWriter, request *http.Reques
 	}
 	book.ID = bookID
 
+	// Update book
 	err = h.models.Book.Update(book)
 	if err != nil {
 			h.logger.Error("Error updating book", "error", err)
 			http.Error(response, "Error updating book", http.StatusInternalServerError)
 			return
+	}
+
+	// Update formats
+	err = h.models.Format.DeleteByBookID(book.ID)
+	if err != nil {
+		h.logger.Error("Error deleting old formats", "error", err)
+		http.Error(response, "Error deleting old formats", http.StatusInternalServerError)
+		return
+	}
+
+	for _, format := range book.Formats {
+		if err := h.models.Format.Insert(book.ID, format); err != nil {
+			h.logger.Error("Error inserting new formats", "error", err)
+			http.Error(response, "Error inserting new formats", http.StatusInternalServerError)
+			return
+		}
 	}
 
 	response.WriteHeader(http.StatusOK)

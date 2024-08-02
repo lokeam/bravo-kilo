@@ -16,6 +16,7 @@ func New(db *sql.DB, logger *slog.Logger) Models {
 		Token:     TokenModel{DB: db, Logger: logger},
 		Book:      BookModel{DB: db, Logger: logger},
 		Category:  CategoryModel{DB: db, Logger: logger},
+		Format:    FormatModel{DB: db, Logger: logger},
 	}
 }
 
@@ -24,6 +25,7 @@ type Models struct {
 	Token     TokenModel
 	Book      BookModel
   Category  CategoryModel
+	Format    FormatModel
 }
 
 type UserModel struct {
@@ -42,6 +44,11 @@ type BookModel struct {
 }
 
 type CategoryModel struct {
+	DB     *sql.DB
+	Logger *slog.Logger
+}
+
+type FormatModel struct {
 	DB     *sql.DB
 	Logger *slog.Logger
 }
@@ -82,6 +89,12 @@ type Book struct {
 	LastUpdated time.Time  `json:"lastUpdated"`
 	ISBN10      string     `json:"isbn10"`
 	ISBN13      string     `json:"isbn13"`
+}
+
+type Format struct {
+	ID         int    `json:"id"`
+	BookID     int    `json:"book_id"`
+	FormatType string `json:"format_type"`
 }
 
 type Category struct {
@@ -216,6 +229,7 @@ func (t *TokenModel) DeleteByUserID(userID int) error {
 	return nil
 }
 
+// Book
 func (b *BookModel) Insert(book Book) (int, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
@@ -533,6 +547,59 @@ func (b *BookModel) CountBooksByFormat(userID int) (map[string]int, error) {
 }
 
 
+// Format
+func (f *FormatModel) Insert(bookID int, formatType string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	statement := `INSERT INTO formats (book_id, format_type) VALUES ($1, $2)`
+	_, err := f.DB.ExecContext(ctx, statement, bookID, formatType)
+	if err != nil {
+		f.Logger.Error("Format Model - Error inserting format", "error", err)
+		return err
+	}
+
+	return nil
+}
+
+func (f *FormatModel) GetByBookID(bookID int) ([]string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	query := `SELECT format_type FROM formats WHERE book_id = $1`
+	rows, err := f.DB.QueryContext(ctx, query, bookID)
+	if err != nil {
+		f.Logger.Error("Format Model - Error fetching formats by book ID", "error", err)
+		return nil, err
+	}
+	defer rows.Close()
+
+	var formats []string
+	for rows.Next() {
+		var format string
+		if err := rows.Scan(&format); err != nil {
+			f.Logger.Error("Error scanning format", "error", err)
+			return nil, err
+		}
+		formats = append(formats, format)
+	}
+
+	return formats, nil
+}
+
+func (f *FormatModel) DeleteByBookID(bookID int) error {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	statement := `DELETE FROM formats WHERE book_id = $1`
+	_, err := f.DB.ExecContext(ctx, statement, bookID)
+	if err != nil {
+		f.Logger.Error("Format Model - Error deleting formats by book ID", "error", err)
+		return err
+	}
+
+	return nil
+}
 
 
 // Category
