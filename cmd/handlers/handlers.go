@@ -518,7 +518,8 @@ func (h *Handlers) GetBookByID(response http.ResponseWriter, request *http.Reque
 		return
 	}
 
-	formats, err := h.models.Format.GetByBookID(bookID)
+	// Get formats
+	formats, err := h.models.Book.GetFormats(bookID)
 	if err != nil {
 		h.logger.Error("Error fetching formats", "error", err)
 		http.Error(response, "Error fetching formats", http.StatusInternalServerError)
@@ -537,24 +538,31 @@ func (h *Handlers) InsertBook(response http.ResponseWriter, request *http.Reques
 	var book data.Book
 	err := json.NewDecoder(request.Body).Decode(&book)
 	if err != nil {
-			h.logger.Error("Error decoding book data", "error", err)
-			http.Error(response, "Error decoding book data - invalid input", http.StatusBadRequest)
-			return
+		h.logger.Error("Error decoding book data", "error", err)
+		http.Error(response, "Error decoding book data - invalid input", http.StatusBadRequest)
+		return
 	}
 
-	// Insert book and get ID
+	// Insert the book and get the ID
 	bookID, err := h.models.Book.Insert(book)
 	if err != nil {
-			h.logger.Error("Error inserting book", "error", err)
-			http.Error(response, "Error inserting book", http.StatusInternalServerError)
-			return
+		h.logger.Error("Error inserting book", "error", err)
+		http.Error(response, "Error inserting book", http.StatusInternalServerError)
+		return
 	}
 
-	// Insert formats
-	for _, format := range book.Formats {
-		if err := h.models.Format.Insert(bookID, format); err != nil {
+	// Insert formats and their associations
+	for _, formatType := range book.Formats {
+		formatID, err := h.models.Format.Insert(bookID, formatType)
+		if err != nil {
 			h.logger.Error("Error inserting format", "error", err)
 			http.Error(response, "Error inserting format", http.StatusInternalServerError)
+			return
+		}
+
+		if err := h.models.Book.AddFormat(bookID, formatID); err != nil {
+			h.logger.Error("Error adding format association", "error", err)
+			http.Error(response, "Error adding format association", http.StatusInternalServerError)
 			return
 		}
 	}
@@ -569,41 +577,49 @@ func (h *Handlers) UpdateBook(response http.ResponseWriter, request *http.Reques
 	var book data.Book
 	err := json.NewDecoder(request.Body).Decode(&book)
 	if err != nil {
-			h.logger.Error("Error decoding book data", "error", err)
-			http.Error(response, "Error decoding book data - invalid input", http.StatusBadRequest)
-			return
+		h.logger.Error("Error decoding book data", "error", err)
+		http.Error(response, "Error decoding book data - invalid input", http.StatusBadRequest)
+		return
 	}
 
 	// Ensure book ID is provided in the URL and parse it
 	bookIDStr := chi.URLParam(request, "bookID")
 	bookID, err := strconv.Atoi(bookIDStr)
 	if err != nil {
-			h.logger.Error("Invalid book ID", "error", err)
-			http.Error(response, "Invalid book ID", http.StatusBadRequest)
-			return
+		h.logger.Error("Invalid book ID", "error", err)
+		http.Error(response, "Invalid book ID", http.StatusBadRequest)
+		return
 	}
 	book.ID = bookID
 
-	// Update book
+	// Update the book
 	err = h.models.Book.Update(book)
 	if err != nil {
-			h.logger.Error("Error updating book", "error", err)
-			http.Error(response, "Error updating book", http.StatusInternalServerError)
-			return
-	}
-
-	// Update formats
-	err = h.models.Format.DeleteByBookID(book.ID)
-	if err != nil {
-		h.logger.Error("Error deleting old formats", "error", err)
-		http.Error(response, "Error deleting old formats", http.StatusInternalServerError)
+		h.logger.Error("Error updating book", "error", err)
+		http.Error(response, "Error updating book", http.StatusInternalServerError)
 		return
 	}
 
-	for _, format := range book.Formats {
-		if err := h.models.Format.Insert(book.ID, format); err != nil {
-			h.logger.Error("Error inserting new formats", "error", err)
-			http.Error(response, "Error inserting new formats", http.StatusInternalServerError)
+	// Remove old format associations
+	err = h.models.Book.RemoveFormats(book.ID)
+	if err != nil {
+		h.logger.Error("Error removing old formats", "error", err)
+		http.Error(response, "Error removing old formats", http.StatusInternalServerError)
+		return
+	}
+
+	// Insert new formats and their associations
+	for _, formatType := range book.Formats {
+		formatID, err := h.models.Format.Insert(bookID, formatType)
+		if err != nil {
+			h.logger.Error("Error inserting format", "error", err)
+			http.Error(response, "Error inserting format", http.StatusInternalServerError)
+			return
+		}
+
+		if err := h.models.Book.AddFormat(book.ID, formatID); err != nil {
+			h.logger.Error("Error adding format association", "error", err)
+			http.Error(response, "Error adding format association", http.StatusInternalServerError)
 			return
 		}
 	}
@@ -633,15 +649,13 @@ func (h *Handlers) DeleteBook(response http.ResponseWriter, request *http.Reques
 	json.NewEncoder(response).Encode(map[string]string{"message": "Book deleted successfully"})
 }
 
-func (h *Handlers) GetBooksCountByFormat(response http.ResponseWriter, request *http.Request) {
-	h.logger.Info("Entering GetBooksCountByFormat handler")
-
+func (h *Handlers) GetBooksByFormat(response http.ResponseWriter, request *http.Request) {
 	// Grab token from cookie
 	cookie, err := request.Cookie("token")
 	if err != nil {
-			h.logger.Error("No token cookie", "error", err)
-			http.Error(response, "No token cookie", http.StatusUnauthorized)
-			return
+		h.logger.Error("No token cookie", "error", err)
+		http.Error(response, "No token cookie", http.StatusUnauthorized)
+		return
 	}
 
 	tokenStr := cookie.Value
@@ -649,26 +663,27 @@ func (h *Handlers) GetBooksCountByFormat(response http.ResponseWriter, request *
 
 	// Parse JWT token to get userID
 	token, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (interface{}, error) {
-			return jwtKey, nil
+		return jwtKey, nil
 	})
 	if err != nil || !token.Valid {
-			h.logger.Error("Invalid token", "error", err)
-			http.Error(response, "Invalid token", http.StatusUnauthorized)
-			return
+		h.logger.Error("Invalid token", "error", err)
+		http.Error(response, "Invalid token", http.StatusUnauthorized)
+		return
 	}
 
 	userID := claims.UserID
 	h.logger.Info("Valid user ID received from token", "userID", userID)
 
-	counts, err := h.models.Book.CountBooksByFormat(userID)
+	// Get books by format
+	booksByFormat, err := h.models.Book.GetAllBooksByFormat(userID)
 	if err != nil {
-			h.logger.Error("Error counting books by format", "error", err)
-			http.Error(response, "Error counting books by format", http.StatusInternalServerError)
-			return
+		h.logger.Error("Error fetching books by format", "error", err)
+		http.Error(response, "Error fetching books by format", http.StatusInternalServerError)
+		return
 	}
 
-	h.logger.Info("Books counted successfully", "counts", counts)
+	h.logger.Info("Books fetched successfully", "booksByFormat", booksByFormat)
 
 	response.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(response).Encode(counts)
+	json.NewEncoder(response).Encode(booksByFormat)
 }

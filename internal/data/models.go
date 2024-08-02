@@ -359,7 +359,7 @@ func (b *BookModel) GetAllBooksByUserID(userID int) ([]Book, error) {
 	defer cancel()
 
 	query := `
-	SELECT b.id, b.title, b.subtitle, b.description, b.language, b.page_count, b.publish_date, b.authors, b.genres, b.formats, b.tags, b.image_links, b.created_at, b.last_updated, b.isbn_10, b.isbn_13
+	SELECT b.id, b.title, b.subtitle, b.description, b.language, b.page_count, b.publish_date, b.authors, b.image_links, b.created_at, b.last_updated, b.isbn_10, b.isbn_13
 	FROM books b
 	INNER JOIN user_books ub ON b.id = ub.book_id
 	WHERE ub.user_id = $1`
@@ -374,7 +374,7 @@ func (b *BookModel) GetAllBooksByUserID(userID int) ([]Book, error) {
 	var books []Book
 	for rows.Next() {
 		var book Book
-		var authorsJSON, genresJSON, formatsJSON, tagsJSON, imageLinksJSON []byte
+		var authorsJSON, imageLinksJSON []byte
 		if err := rows.Scan(
 			&book.ID,
 			&book.Title,
@@ -384,9 +384,6 @@ func (b *BookModel) GetAllBooksByUserID(userID int) ([]Book, error) {
 			&book.PageCount,
 			&book.PublishDate,
 			&authorsJSON,
-			&genresJSON,
-			&formatsJSON,
-			&tagsJSON,
 			&imageLinksJSON,
 			&book.CreatedAt,
 			&book.LastUpdated,
@@ -403,28 +400,6 @@ func (b *BookModel) GetAllBooksByUserID(userID int) ([]Book, error) {
 				b.Logger.Error("Error unmarshalling authors JSON", "error", err, "data", string(authorsJSON))
 				return nil, err
 			}
-		}
-		if len(genresJSON) > 0 {
-			if err := json.Unmarshal(genresJSON, &book.Genres); err != nil {
-				b.Logger.Error("Error unmarshalling genres JSON", "error", err, "data", string(genresJSON))
-				return nil, err
-			}
-		}
-		if len(formatsJSON) > 0 {
-			if err := json.Unmarshal(formatsJSON, &book.Formats); err != nil {
-				b.Logger.Error("Error unmarshalling formats JSON", "error", err, "data", string(formatsJSON))
-				return nil, err
-			}
-		} else {
-			book.Formats = []string{}
-		}
-		if len(tagsJSON) > 0 {
-			if err := json.Unmarshal(tagsJSON, &book.Tags); err != nil {
-				b.Logger.Error("Error unmarshalling tags JSON", "error", err, "data", string(tagsJSON))
-				return nil, err
-			}
-		} else {
-			book.Tags = []string{}
 		}
 		if len(imageLinksJSON) > 0 {
 			if err := json.Unmarshal(imageLinksJSON, &book.ImageLinks); err != nil {
@@ -515,51 +490,181 @@ func (b *BookModel) Delete(id int) error {
 	return nil
 }
 
-func (b *BookModel) CountBooksByFormat(userID int) (map[string]int, error) {
-	counts := make(map[string]int)
+// Method to fetch all books grouped by format type for a specific user
+func (b *BookModel) GetAllBooksByFormat(userID int) (map[string][]Book, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	b.Logger.Info("GetAllBooksByFormat, about to run query ","userID", userID)
 
 	query := `
-	SELECT format, COUNT(*)
-	FROM (
-		SELECT jsonb_array_elements_text(formats) AS format
-		FROM books b
-		JOIN user_books ub ON b.id = ub.book_id
-		WHERE ub.user_id = $1
-	) AS format_counts
-	GROUP BY format`
+	SELECT b.id, b.title, b.subtitle, b.description, b.language, b.page_count, b.publish_date, b.authors, b.image_links, b.genres, b.notes, b.created_at, b.last_updated, b.isbn_10, b.isbn_13, f.format_type
+	FROM books b
+	INNER JOIN book_formats bf ON b.id = bf.book_id
+	INNER JOIN formats f ON bf.format_id = f.id
+	INNER JOIN user_books ub ON b.id = ub.book_id
+	WHERE ub.user_id = $1`
 
-	rows, err := b.DB.Query(query, userID)
+	rows, err := b.DB.QueryContext(ctx, query, userID)
 	if err != nil {
+		b.Logger.Error("Error retrieving books by format", "error", err)
 		return nil, err
 	}
 	defer rows.Close()
 
-	for rows.Next() {
-		var format string
-		var count int
-		if err := rows.Scan(&format, &count); err != nil {
-			return nil, err
-		}
-		counts[format] = count
+	booksByFormat := map[string][]Book{
+		"audioBooks":   {},
+		"eBooks":       {},
+		"physicalBooks": {},
 	}
 
-	return counts, nil
+	for rows.Next() {
+		var book Book
+		var authorsJSON, imageLinksJSON, genresJSON []byte
+		var formatTypeJSON string
+
+		if err := rows.Scan(
+			&book.ID,
+			&book.Title,
+			&book.Subtitle,
+			&book.Description,
+			&book.Language,
+			&book.PageCount,
+			&book.PublishDate,
+			&authorsJSON,
+			&imageLinksJSON,
+			&genresJSON,
+			&book.Notes,
+			&book.CreatedAt,
+			&book.LastUpdated,
+			&book.ISBN10,
+			&book.ISBN13,
+			&formatTypeJSON,
+		); err != nil {
+			b.Logger.Error("Error scanning book", "error", err)
+			return nil, err
+		}
+
+		// Unmarshal JSONB fields
+		var formatType string
+		if err := json.Unmarshal([]byte(formatTypeJSON), &formatType); err != nil {
+				b.Logger.Error("Error unmarshalling formatType JSON", "error", err)
+				continue
+		}
+
+		if err := json.Unmarshal(authorsJSON, &book.Authors); err != nil {
+			b.Logger.Error("Error unmarshalling authors JSON", "error", err)
+			return nil, err
+		}
+		if err := json.Unmarshal(imageLinksJSON, &book.ImageLinks); err != nil {
+			b.Logger.Error("Error unmarshalling image links JSON", "error", err)
+			return nil, err
+		}
+		if err := json.Unmarshal(genresJSON, &book.Genres); err != nil {
+			b.Logger.Error("Error unmarshalling genres JSON", "error", err)
+			return nil, err
+		}
+
+		b.Logger.Info("updated GetAllBooksByFormat DB scan loop ","formatType", formatType)
+		// Add book to the appropriate format list
+
+		switch formatType {
+		case "audioBook":
+			booksByFormat["audioBooks"] = append(booksByFormat["audioBooks"], book)
+		case "eBook":
+			booksByFormat["eBooks"] = append(booksByFormat["eBooks"], book)
+		case "physical":
+			booksByFormat["physicalBooks"] = append(booksByFormat["physicalBooks"], book)
+		}
+	}
+
+	if len(booksByFormat["audioBooks"]) == 0 && len(booksByFormat["eBooks"]) == 0 && len(booksByFormat["physicalBooks"]) == 0 {
+			b.Logger.Warn("No books found for user", "userID", userID)
+	} else {
+			b.Logger.Info("Books found for user", "userID", userID, "audioBooks", len(booksByFormat["audioBooks"]), "eBooks", len(booksByFormat["eBooks"]), "physicalBooks", len(booksByFormat["physicalBooks"]))
+	}
+
+
+	if err := rows.Err(); err != nil {
+		b.Logger.Error("Error with rows", "error", err)
+		return nil, err
+	}
+
+	return booksByFormat, nil
 }
 
-
-// Format
-func (f *FormatModel) Insert(bookID int, formatType string) error {
+func (b *BookModel) AddFormat(bookID, formatID int) error {
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
 
-	statement := `INSERT INTO formats (book_id, format_type) VALUES ($1, $2)`
-	_, err := f.DB.ExecContext(ctx, statement, bookID, formatType)
+	statement := `INSERT INTO book_formats (book_id, format_id) VALUES ($1, $2)`
+	_, err := b.DB.ExecContext(ctx, statement, bookID, formatID)
 	if err != nil {
-		f.Logger.Error("Format Model - Error inserting format", "error", err)
+		b.Logger.Error("Book Model - Error adding format", "error", err)
 		return err
 	}
 
 	return nil
+}
+
+func (b *BookModel) RemoveFormats(bookID int) error {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	statement := `DELETE FROM book_formats WHERE book_id = $1`
+	_, err := b.DB.ExecContext(ctx, statement, bookID)
+	if err != nil {
+		b.Logger.Error("Book Model - Error removing formats", "error", err)
+		return err
+	}
+
+	return nil
+}
+
+func (b *BookModel) GetFormats(bookID int) ([]string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	query := `
+	SELECT f.format_type
+	FROM formats f
+	JOIN book_formats bf ON f.id = bf.format_id
+	WHERE bf.book_id = $1`
+	rows, err := b.DB.QueryContext(ctx, query, bookID)
+	if err != nil {
+		b.Logger.Error("Book Model - Error fetching formats", "error", err)
+		return nil, err
+	}
+	defer rows.Close()
+
+	var formats []string
+	for rows.Next() {
+		var format string
+		if err := rows.Scan(&format); err != nil {
+			b.Logger.Error("Error scanning format", "error", err)
+			return nil, err
+		}
+		formats = append(formats, format)
+	}
+
+	return formats, nil
+}
+
+
+// Format
+func (f *FormatModel) Insert(bookID int, formatType string) (int, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	var formatID int
+	statement := `INSERT INTO formats (book_id, format_type) VALUES ($1, $2) RETURNING id`
+	err := f.DB.QueryRowContext(ctx, statement, bookID, formatType).Scan(&formatID)
+	if err != nil {
+			f.Logger.Error("Format Model - Error inserting format", "error", err)
+			return 0, err
+	}
+
+	return formatID, nil
 }
 
 func (f *FormatModel) GetByBookID(bookID int) ([]string, error) {

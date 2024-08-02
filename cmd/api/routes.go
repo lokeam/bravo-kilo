@@ -30,7 +30,7 @@ func (app *application) routes(h *handlers.Handlers) http.Handler {
 	mux.Route("/api/v1/user", func(r chi.Router) {
 		r.Use(middleware.VerifyJWT)
 		r.Get("/books", h.GetAllUserBooks)
-		r.Get("/books/count", h.GetBooksCountByFormat)
+		r.Get("/books/format", h.GetBooksByFormat)
 	})
 
 	mux.Route("/api/v1/books", func(r chi.Router) {
