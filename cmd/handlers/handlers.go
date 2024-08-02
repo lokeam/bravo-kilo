@@ -481,6 +481,28 @@ func (h *Handlers) GetAllUserBooks(response http.ResponseWriter, request *http.R
 	}
 }
 
+// Retrieve books by a specific author
+func (h *Handlers) GetBooksByAuthor(response http.ResponseWriter, request *http.Request) {
+	authorName := chi.URLParam(request, "authorName")
+	if authorName == "" {
+			h.logger.Error("Missing author name", "error", "missing author name")
+			http.Error(response, "Author name is required", http.StatusBadRequest)
+			return
+	}
+
+	books, err := h.models.Book.GetBooksByAuthor(authorName)
+	if err != nil {
+			h.logger.Error("Error fetching books by author", "error", err)
+			http.Error(response, "Error fetching books by author", http.StatusInternalServerError)
+			return
+	}
+
+	response.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(response).Encode(map[string]interface{}{"books": books}); err != nil {
+			http.Error(response, "Error encoding response", http.StatusInternalServerError)
+	}
+}
+
 // Get Single Book by ID
 func (h *Handlers) GetBookByID(response http.ResponseWriter, request *http.Request) {
 	// Grab token from cookie
@@ -571,7 +593,6 @@ func (h *Handlers) InsertBook(response http.ResponseWriter, request *http.Reques
 	json.NewEncoder(response).Encode(map[string]int{"book_id": bookID})
 }
 
-
 // Update Book
 func (h *Handlers) UpdateBook(response http.ResponseWriter, request *http.Request) {
 	var book data.Book
@@ -649,6 +670,7 @@ func (h *Handlers) DeleteBook(response http.ResponseWriter, request *http.Reques
 	json.NewEncoder(response).Encode(map[string]string{"message": "Book deleted successfully"})
 }
 
+// Sorting - Get Books by Format
 func (h *Handlers) GetBooksByFormat(response http.ResponseWriter, request *http.Request) {
 	// Grab token from cookie
 	cookie, err := request.Cookie("token")

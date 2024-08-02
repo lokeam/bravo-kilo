@@ -35,6 +35,7 @@ func (app *application) routes(h *handlers.Handlers) http.Handler {
 
 	mux.Route("/api/v1/books", func(r chi.Router) {
 		r.Use(middleware.VerifyJWT)
+		r.Get("/author/{authorName}", h.GetBooksByAuthor)
 		r.Get("/search", h.SearchBooks)
 		r.Get("/{bookID}", h.GetBookByID)
 		r.Put("/{bookID}", h.UpdateBook)
