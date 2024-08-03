@@ -32,7 +32,7 @@ const Library = () => {
   const query = new URLSearchParams(search);
   const userID = parseInt(query.get('userID') || '0', 10);
   const { sortCriteria, sortOrder, setSort } = useStore();
-  const { data: books, isLoading, isError } = useFetchBooks(userID, !!userID);
+  const { data: books, isLoading, isError } = useFetchBooks(userID, true);
 
   if (isLoading) {
     return <div>Loading...</div>;
@@ -59,6 +59,7 @@ const Library = () => {
       const aSurname = a.authors[0].split(" ").pop() || "";
       const bSurname = b.authors[0].split(" ").pop() || "";
       return sortOrder === "asc" ? aSurname.localeCompare(bSurname) : bSurname.localeCompare(aSurname);
+      return;
     } else {
       return sortOrder === "asc" ? a.pageCount - b.pageCount : b.pageCount - a.pageCount;
     }

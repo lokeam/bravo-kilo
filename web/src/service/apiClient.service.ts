@@ -39,8 +39,8 @@ export const fetchUserBooks = async (userID: number) => {
   return data.books || [];
 };
 
-export const fetchBooksCount = async (userID: number) => {
-  const { data } = await apiClient.get(`/api/v1/user/books/count?userID=${userID}`);
+export const fetchBooksFormat = async (userID: number) => {
+  const { data } = await apiClient.get(`/api/v1/user/books/format?userID=${userID}`);
   return data || {};
 };
 

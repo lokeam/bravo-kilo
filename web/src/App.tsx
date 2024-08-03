@@ -1,11 +1,12 @@
 import { Suspense } from 'react';
 import { Route, Routes } from 'react-router-dom';
-import { AuthProvider } from './components/AuthContext';
+import { AppProvider } from './components/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import Home from './pages/Home';
 import EditBook from './pages/EditBook';
 import AddBook from './pages/AddBook';
 import ManualAdd from './pages/ManualAdd';
+import SearchAdd from './pages/SearchAdd';
 import Login from './pages/Login';
 import Library from './pages/Library';
 import BookDetail from './pages/BookDetail';
@@ -18,7 +19,7 @@ import AuthenticatedLayout from './pages/AuthLayout';
 
 function App() {
   return (
-    <AuthProvider>
+    <AppProvider>
       <Suspense fallback={<h1>Loading...</h1>}>
         <Routes>
           <Route path="/" element={<Home />} />
@@ -28,13 +29,14 @@ function App() {
             <Route path="/library" element={<Library />} />
             <Route path="/library/books/add" element={<AddBook />} />
             <Route path="/library/books/add/manual" element={<ManualAdd /> }/>
+            <Route path="/library/books/add/search" element={<SearchAdd />} />
             <Route path="/library/books/:bookID" element={<BookDetail />} />
             <Route path="library/books/:bookID/edit" element={<EditBook />} />
           </Route>
           <Route path="*" element={<NotFound />}/>
         </Routes>
       </Suspense>
-    </AuthProvider>
+    </AppProvider>
   );
 }
 

@@ -3,9 +3,10 @@ import { QueryClient } from '@tanstack/react-query';
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      refetchOnWindowFocus: true,
-      refetchInterval: 1000 * 60 * 5,
-      staleTime: 1000 * 60 * 5.
+      staleTime: 1000 * 60 * 5, // 5 minutes
+      gcTime: 1000 * 60 * 10, // 10 minutes
+      retry: false,
+      refetchOnWindowFocus: false,
     },
   },
 });

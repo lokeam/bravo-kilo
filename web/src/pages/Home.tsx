@@ -1,28 +1,28 @@
 import useFetchBooks from "../hooks/useFetchBooks";
-import useFetchBooksCount from "../hooks/useFetchBooksCount";
-import { useLocation } from "react-router-dom";
+import useFetchBooksFormat from "../hooks/useFetchBooksFormat";
+import { useAuth } from "../components/AuthContext";
 
 import Bookshelf from "../components/Bookshelf/Bookshelf";
 
 import { BsBookHalf } from "react-icons/bs";
-import { LuFile } from "react-icons/lu";
-import { LuFileAudio } from "react-icons/lu";
+import { LuFile, LuFileAudio } from "react-icons/lu";
+
 
 const Home = () => {
-  const { search } = useLocation();
-  const query = new URLSearchParams(search);
-  const userID = parseInt(query.get('userID') || '0', 10);
+  const { user } = useAuth();
+  const userID = user?.id || 0;
 
   console.log('Home component - userID: ', userID);
 
-  const { data: books, isLoading: isLoadingBooks, isError: isErrorBooks } = useFetchBooks(userID);
-  const { data: booksCount, isLoading: isLoadingCount, isError: isErrorCount} = useFetchBooksCount(userID);
+  const { data: books, isLoading: isLoadingBooks, isError: isErrorBooks } = useFetchBooks(userID, true);
+  const { data: booksFormat, isLoading: isLoadingFormat, isError: isErrorFormat} = useFetchBooksFormat(userID, true)
+  const { audioBooks = [], physicalBooks = [], eBooks = [] } = booksFormat || {};
 
   console.log('dashboard home - books: ', books);
-  console.log('dashboard home == booksCount: ', booksCount);
+  console.log('dashboard home == booksCount: ', booksFormat);
 
-  if (isLoadingBooks || isLoadingCount) return <div>Loading...</div>;
-  if (isErrorBooks || isErrorCount) return <div>Error loading data</div>;
+  if (isLoadingBooks || isLoadingFormat) return <div>Loading...</div>;
+  if (isErrorBooks || isErrorFormat) return <div>Error loading data</div>;
 
   return (
     <div className="bk_home flex flex-col items-center px-5 antialiased md:px-1 md:ml-24 h-screen pt-40">
@@ -42,7 +42,7 @@ const Home = () => {
           <div className="stat_1 flex flex-col h-40 text-center justify-center items-center rounded bg-ebony-clay w-full p-12">
             <div className="flex flex-row items-baseline text-5xl font-bold leading-9 whitespace-nowrap mb-2">
               <BsBookHalf color={"#6366F1"} size={32} className="mr-4" />
-              <span>{booksCount?.physical || 0}</span>
+              <span>{physicalBooks.length || 0}</span>
             </div>
             <div className="col-start-1 whitespace-nowrap text-xl leading-7 font-semibold mb-2">Total Physical Books</div>
           </div>
@@ -50,7 +50,7 @@ const Home = () => {
           <div className="stat_2 flex flex-col h-40 text-center justify-center items-center rounded bg-ebony-clay w-full p-12 mt-4 min-[817px]:mt-0">
             <div className="flex flex-row items-baseline text-5xl font-bold leading-9 whitespace-nowrap mb-2">
               <LuFile color={"#6366F1"} size={32} className="mr-4" />
-              <span>{booksCount?.eBook || 0}</span>
+              <span>{eBooks.length || 0}</span>
             </div>
             <div className="col-start-1 whitespace-nowrap text-xl leading-7 font-semibold mb-2">Total eBooks</div>
 
@@ -59,7 +59,7 @@ const Home = () => {
           <div className="stat_3 flex flex-col h-40 text-center justify-center items-center rounded bg-ebony-clay w-full p-12 mt-4 min-[817px]:mt-0">
             <div className="flex flex-row items-baseline text-5xl font-bold leading-9 whitespace-nowrap mb-2">
               <LuFileAudio color={"#6366F1"} size={32} className="mr-4" />
-              <span>{booksCount?.audioBook || 0}</span>
+              <span>{audioBooks.length || 0}</span>
             </div>
             <div className="col-start-1 whitespace-nowrap text-xl leading-7 font-semibold mb-2">Total Audio Books</div>
           </div>
