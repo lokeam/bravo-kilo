@@ -8,7 +8,8 @@ const useFetchData = <T, Q>(queryKey: string, fetchFunction: FetchFunction<T, Q>
     queryFn: () => fetchFunction(query),
     enabled,
     staleTime: 1000 * 60 * 5,
-    gcTime: 1000 * 60 * 5,
+    gcTime: 1000 * 60 * 15,
+    retry: 3,
   });
 };
 

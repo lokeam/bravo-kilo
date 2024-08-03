@@ -1,11 +1,13 @@
-import { useState } from "react";
-import { useLocation } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useLocation } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import useStore from '../store/useStore';
-import useFetchBooks from "../hooks/useFetchBooks";
-import CardList from "../components/CardList/CardList";
+import useFetchBooks from '../hooks/useFetchBooks';
+import CardList from '../components/CardList/CardList';
 import Modal from '../components/Modal/Modal';
 import '../components/Modal/Modal.css';
-import { PiArrowsDownUp } from "react-icons/pi";
+import { PiArrowsDownUp } from 'react-icons/pi';
+import { fetchBooksFormat } from '../service/apiClient.service';
 
 export interface Book {
   id: number;
@@ -31,8 +33,96 @@ const Library = () => {
   const { search } = useLocation();
   const query = new URLSearchParams(search);
   const userID = parseInt(query.get('userID') || '0', 10);
-  const { sortCriteria, sortOrder, setSort } = useStore();
+  const { sortCriteria, sortOrder, setSort, activeTab, setActiveTab } = useStore();
   const { data: books, isLoading, isError } = useFetchBooks(userID, true);
+  const queryClient = useQueryClient();
+
+  // Prefetch data for book formats
+  useEffect(() => {
+    queryClient.prefetchQuery({
+      queryKey: ['booksFormat', userID],
+      queryFn: () => fetchBooksFormat(userID)
+    }).then(() => {
+      console.log('Prefetched data is stored in cache:', queryClient.getQueryData(['booksFormat', userID]));
+    });
+  }, [userID, queryClient]);
+
+  // Retrieve cached books formats
+  const bookFormats = queryClient.getQueryData<{
+    audioBooks: Book[],
+    eBooks: Book[],
+    physicalBooks: Book[]
+  }>(['booksFormat', userID]);
+
+  // Memoize book sorting
+  const getSortedBooks = useCallback(
+    (
+      books: Book[],
+      criteria: 'title' | 'publishDate' | 'author' | 'pageCount',
+      order: 'asc' | 'desc'
+    ) => {
+      return books.slice().sort((a, b) => {
+        switch (criteria) {
+          case "title":
+            return order === "asc" ? a.title.localeCompare(b.title) : b.title.localeCompare(a.title);
+
+          case "publishDate":
+            return order === "asc"
+              ? new Date(a.publishDate).getTime() - new Date(b.publishDate).getTime()
+              : new Date(b.publishDate).getTime() - new Date(a.publishDate).getTime();
+
+          case "author": {
+            const aSurname = a.authors[0].split(" ").pop() || "";
+            const bSurname = b.authors[0].split(" ").pop() || "";
+            return order === "asc" ? aSurname.localeCompare(bSurname) : bSurname.localeCompare(aSurname);
+          }
+
+          default:
+            return order === "asc" ? a.pageCount - b.pageCount : b.pageCount - a.pageCount;
+        }
+      });
+    },
+    []
+  );
+
+  const sortedBooks = useMemo(() => {
+    let booksToSort = [];
+    if (activeTab === 'Audiobooks' && bookFormats) {
+      console.log('Using audiobooks format');
+      booksToSort = bookFormats.audioBooks;
+    } else if (activeTab === 'eBooks' && bookFormats) {
+      console.log('Using eBooks format');
+      booksToSort = bookFormats.eBooks;
+    } else if (activeTab === 'Printed Books' && bookFormats) {
+      console.log('Using printed books format');
+      booksToSort = bookFormats.physicalBooks;
+    } else {
+      // Default to all books
+      console.log('Using all books');
+      booksToSort = books || [];
+    }
+    return getSortedBooks(booksToSort, sortCriteria, sortOrder);
+  }, [activeTab, books, bookFormats, sortCriteria, sortOrder, getSortedBooks]);
+
+
+
+  // Memoized Handlers
+  const handleSort = useCallback(
+    (criteria: "title" | "publishDate" | "author" | "pageCount") => {
+      const order = sortOrder === 'asc' ? 'desc' : 'asc';
+      setSort(criteria, order);
+      setOpened(false);
+    },
+    [sortOrder, setSort]
+  );
+
+  const handleTabClick = useCallback(
+    (tab: string) => {
+      console.log(`Switching to tab: ${tab}`);
+      setActiveTab(tab);
+    },
+    [setActiveTab]
+  );
 
   if (isLoading) {
     return <div>Loading...</div>;
@@ -42,29 +132,6 @@ const Library = () => {
     return <div>Error loading books</div>;
   }
 
-  const handleSort = (criteria: "title" | "publishDate" | "author" | "pageCount") => {
-    const order = sortOrder === 'asc' ? 'desc' : 'asc';
-    setSort(criteria, order);
-    setOpened(false);
-  };
-
-  const sortedBooks = books?.slice().sort((a, b) => {
-    if (sortCriteria === "title") {
-      return sortOrder === "asc" ? a.title.localeCompare(b.title) : b.title.localeCompare(a.title);
-    } else if (sortCriteria === "publishDate") {
-      return sortOrder === "asc"
-        ? new Date(a.publishDate).getTime() - new Date(b.publishDate).getTime()
-        : new Date(b.publishDate).getTime() - new Date(a.publishDate).getTime();
-    } else if (sortCriteria === "author") {
-      const aSurname = a.authors[0].split(" ").pop() || "";
-      const bSurname = b.authors[0].split(" ").pop() || "";
-      return sortOrder === "asc" ? aSurname.localeCompare(bSurname) : bSurname.localeCompare(aSurname);
-      return;
-    } else {
-      return sortOrder === "asc" ? a.pageCount - b.pageCount : b.pageCount - a.pageCount;
-    }
-  });
-
   const sortButtonTitle = {
     'title': 'Title: A to Z',
     'author': 'Author: A to Z',
@@ -72,13 +139,33 @@ const Library = () => {
     'pageCount': 'Page count: Short to Long',
   };
 
-  console.log('books: ', sortedBooks)
-
   const openModal = () => setOpened(true);
   const closeModal = () => setOpened(false);
 
   return (
-    <div className="bk_lib flex flex-col items-center place-content-around px-5 antialiased md:px-1 md:ml-24 h-screen pt-40">
+    <div className="bk_lib flex flex-col items-center place-content-around px-5 antialiased md:px-1 md:ml-24 h-screen pt-28">
+      {/* Library Nav */}
+      <div className="bookshelf_body relative w-full z-10 pb-8">
+        <div className="bookshelf_grid_wrapper box-border ">
+          <div className="bookshelf_grid_body box-content overflow-visible w-full">
+            <ul className="bookshelf_grid_library text-left box-border grid grid-flow-col auto-cols-auto items-stretch gap-x-2.5 overflow-x-auto overflow-y-auto overscroll-x-none scroll-smooth snap-start snap-x snap-mandatory list-none m-0 pb-5">
+              {['All', 'Audiobooks', 'eBooks', 'Printed Books', 'Authors', 'Genres'].map((tab) => (
+                <li
+                  key={tab}
+                  className={`flex items-center text-nowrap cursor-pointer ${
+                    activeTab === tab ? 'text-3xl font-bold text-white' : 'text-lg font-semibold text-cadet-gray'
+                  }`}
+                  onClick={() => handleTabClick(tab)}
+                >
+                  <span>{tab}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      {/* Libary Sort Modal  */}
       <Modal opened={opened} onClose={closeModal} title="">
         <button onClick={() => handleSort("publishDate")} className="flex flex-row bg-transparent mr-1">
           Release date: New to Old
@@ -94,17 +181,21 @@ const Library = () => {
         </button>
       </Modal>
 
+      {/* Library Card List Header */}
       <div className="flex flex-row relative w-full max-w-7xl justify-between items-center text-left text-white border-b-2 border-solid border-zinc-700 pb-6 mb-2">
+        {/* Number of total items in view  */}
         <div className="mt-1">{sortedBooks?.length || 0} volumes</div>
 
+        {/* Sort Button  */}
         <div className="flex flex-row">
           <button className="flex flex-row justify-between bg-transparent border border-gray-600" onClick={openModal}>
             <PiArrowsDownUp size={22} className="pt-1 mr-2" color="white"/>
             <span>{sortButtonTitle[sortCriteria]}</span>
           </button>
         </div>
-
       </div>
+
+      {/* Libary Card List View  */}
       {sortedBooks && sortedBooks.length > 0 && <CardList books={sortedBooks} />}
     </div>
   )

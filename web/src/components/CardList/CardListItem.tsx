@@ -28,7 +28,7 @@ export default function CardListItem({ book }: CardListItemProps) {
   const closeModal = () => setOpened(false);
 
   return (
-      <li key={`${id}-${title}-${pageCount}`} className="py-3 flex items-start justify-between">
+      <li key={`${title}-${id}`} className="py-3 flex items-start justify-between">
         <div className="flex gap-3 cursor-pointer" onClick={handleBookClick}>
           <img loading="lazy" src={imageLinks[0]} alt={`Book cover thumbnail for ${title}`} className="flex-none rounded w-16 h-16" />
           <div className="card_list__item_copy text-left pt-1">

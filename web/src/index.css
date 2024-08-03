@@ -177,6 +177,13 @@ button:focus-visible {
     scrollbar-color: red;
   }
 
+  .bookshelf_grid_library {
+      -moz-column-gap: var(--grid-column-gap-small);
+      column-gap: var(--grid-column-gap-small);
+      grid-template-rows: repeat(var(--grid-rows), max-content);
+      row-gap: var(--grid-row-gap-small);
+  }
+
   .bookshelf_grid_item {
     contain: content;
     scroll-snap-align: start

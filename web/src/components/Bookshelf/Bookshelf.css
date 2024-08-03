@@ -93,7 +93,21 @@
     grid-auto-columns: var(--grid-max-content-xsmall,calc((100% - (var(--grid-xsmall) - 1)*var(--grid-column-gap-xsmall))/var(--grid-xsmall)));
     grid-template-rows: repeat(var(--grid-rows),max-content);
     row-gap: var(--grid-row-gap-xsmall);
-    scrollbar-color: red;
+
+  }
+
+  .bookshelf_grid_library {
+      -moz-column-gap: var(--grid-column-gap-small);
+      column-gap: var(--grid-column-gap-small);
+      grid-auto-columns: var(
+        --grid-max-content-small,
+        calc(
+          (100% - (var(--grid-small) - 1) * var(--grid-column-gap-small)) /
+            var(--grid-small)
+        )
+      );
+      grid-template-rows: repeat(var(--grid-rows), max-content);
+      row-gap: var(--grid-row-gap-small);
   }
 
   .bookshelf_grid_item {
