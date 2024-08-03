@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"log/slog"
+	"sort"
+	"strings"
 	"time"
 )
 
@@ -433,6 +435,59 @@ func (b *BookModel) GetByID(id int) (*Book, error) {
 	return &book, nil
 }
 
+func (b *BookModel) GetAllAuthors(userID int) (map[string][]string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	// SQL query to get distinct author names for a user's books
+	query := `
+	SELECT DISTINCT a.name
+	FROM authors a
+	JOIN book_authors ba ON a.id = ba.author_id
+	JOIN user_books ub ON ba.book_id = ub.book_id
+	WHERE ub.user_id = $1
+	`
+
+	rows, err := b.DB.QueryContext(ctx, query, userID)
+	if err != nil {
+		b.Logger.Error("Error retrieving authors for user", "error", err)
+		return nil, err
+	}
+	defer rows.Close()
+
+	var authors []string
+	for rows.Next() {
+		var authorName string
+		if err := rows.Scan(&authorName); err != nil {
+			b.Logger.Error("Error scanning author name", "error", err)
+			return nil, err
+		}
+		authors = append(authors, authorName)
+	}
+
+	if err = rows.Err(); err != nil {
+		b.Logger.Error("Error with rows", "error", err)
+		return nil, err
+	}
+
+	// Sort authors by last name
+	sort.Slice(authors, func(i, j int) bool {
+		return getLastName(authors[i]) < getLastName(authors[j])
+	})
+
+	return map[string][]string{"allAuthors": authors}, nil
+}
+
+// Helper function to get the last name from a full name
+func getLastName(fullName string) string {
+	parts := strings.Fields(fullName)
+	if len(parts) > 0 {
+		return parts[len(parts)-1]
+	}
+	return ""
+}
+
+
 func (b *BookModel) GetAllBooksByUserID(userID int) ([]Book, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
@@ -780,10 +835,15 @@ func (b *BookModel) GetAllBooksByFormat(userID int) (map[string][]Book, error) {
 		"physicalBooks": {},
 	}
 
+	// Track unique book ids for each format
+	uniqueAudioBooks := make(map[int]bool)
+	uniqueEBooks := make(map[int]bool)
+	uniquePhysicalBooks := make(map[int]bool)
+
 	for rows.Next() {
 		var book Book
 		var imageLinksJSON []byte
-		var formatTypeJSON string
+		var formatType string
 
 		if err := rows.Scan(
 			&book.ID,
@@ -799,18 +859,14 @@ func (b *BookModel) GetAllBooksByFormat(userID int) (map[string][]Book, error) {
 			&book.LastUpdated,
 			&book.ISBN10,
 			&book.ISBN13,
-			&formatTypeJSON,
+			&formatType,
 		); err != nil {
 			b.Logger.Error("Error scanning book", "error", err)
 			return nil, err
 		}
+		b.Logger.Info("--------------")
+		b.Logger.Info("Retrieved format type from DB", "formatType", formatType)
 
-		// Unmarshal JSONB fields
-		var formatType string
-		if err := json.Unmarshal([]byte(formatTypeJSON), &formatType); err != nil {
-				b.Logger.Error("Error unmarshalling formatType JSON", "error", err)
-				continue
-		}
 		if err := json.Unmarshal(imageLinksJSON, &book.ImageLinks); err != nil {
 			b.Logger.Error("Error unmarshalling image links JSON", "error", err)
 			return nil, err
@@ -848,25 +904,38 @@ func (b *BookModel) GetAllBooksByFormat(userID int) (map[string][]Book, error) {
 		}
 		book.Authors = authors
 
-		b.Logger.Info("updated GetAllBooksByFormat DB scan loop ","formatType", formatType)
-		// Add book to the appropriate format list
+		b.Logger.Info("Processing book in format", "formatType", formatType, "bookID", book.ID)
 
+		// Add book to the appropriate format list
 		switch formatType {
 		case "audioBook":
-			booksByFormat["audioBooks"] = append(booksByFormat["audioBooks"], book)
+			if !uniqueAudioBooks[book.ID] {
+				booksByFormat["audioBooks"] = append(booksByFormat["audioBooks"], book)
+				uniqueAudioBooks[book.ID] = true
+			}
+
 		case "eBook":
-			booksByFormat["eBooks"] = append(booksByFormat["eBooks"], book)
+			if !uniqueEBooks[book.ID] {
+				booksByFormat["eBooks"] = append(booksByFormat["eBooks"], book)
+				uniqueEBooks[book.ID] = true
+			}
+
 		case "physical":
-			booksByFormat["physicalBooks"] = append(booksByFormat["physicalBooks"], book)
+			if !uniquePhysicalBooks[book.ID] {
+				booksByFormat["physicalBooks"] = append(booksByFormat["physicalBooks"], book)
+				uniquePhysicalBooks[book.ID] = true
+			}
+
+		default:
+			b.Logger.Warn("Unknown format type encountered", "formatType", formatType, "bookID", book.ID)
 		}
 	}
 
 	if len(booksByFormat["audioBooks"]) == 0 && len(booksByFormat["eBooks"]) == 0 && len(booksByFormat["physicalBooks"]) == 0 {
-			b.Logger.Warn("No books found for user", "userID", userID)
+		b.Logger.Warn("No books found for user", "userID", userID)
 	} else {
-			b.Logger.Info("Books found for user", "userID", userID, "audioBooks", len(booksByFormat["audioBooks"]), "eBooks", len(booksByFormat["eBooks"]), "physicalBooks", len(booksByFormat["physicalBooks"]))
+		b.Logger.Info("Books found for user", "userID", userID, "audioBooks", len(booksByFormat["audioBooks"]), "eBooks", len(booksByFormat["eBooks"]), "physicalBooks", len(booksByFormat["physicalBooks"]))
 	}
-
 
 	if err := rows.Err(); err != nil {
 		b.Logger.Error("Error with rows", "error", err)
@@ -1104,7 +1173,6 @@ func (a *AuthorModel) GetByID(id int) (*Author, error) {
 
 	return &author, nil
 }
-
 
 // Genre
 // Insert a new genre
