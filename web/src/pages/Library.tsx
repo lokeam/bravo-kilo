@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useLocation } from 'react-router-dom';
-import { useQueryClient } from '@tanstack/react-query';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import useStore from '../store/useStore';
 import useFetchBooks from '../hooks/useFetchBooks';
 import CardList from '../components/CardList/CardList';
 import Modal from '../components/Modal/Modal';
 import '../components/Modal/Modal.css';
 import { PiArrowsDownUp } from 'react-icons/pi';
-import { fetchBooksFormat } from '../service/apiClient.service';
+import { fetchBooksAuthors, fetchBooksFormat } from '../service/apiClient.service';
 
 export interface Book {
   id: number;
@@ -28,6 +28,13 @@ export interface Book {
   isbn13: string;
 }
 
+// Create intersection type that combines both obj types, expect both types
+type BookAuthorsData = {
+  allAuthors: string[]
+} & {
+  [index: string]: Book[];
+}
+
 const Library = () => {
   const [opened, setOpened] = useState(false);
   const { search } = useLocation();
@@ -36,6 +43,7 @@ const Library = () => {
   const { sortCriteria, sortOrder, setSort, activeTab, setActiveTab } = useStore();
   const { data: books, isLoading, isError } = useFetchBooks(userID, true);
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
   // Prefetch data for book formats
   useEffect(() => {
@@ -43,9 +51,21 @@ const Library = () => {
       queryKey: ['booksFormat', userID],
       queryFn: () => fetchBooksFormat(userID)
     }).then(() => {
-      console.log('Prefetched data is stored in cache:', queryClient.getQueryData(['booksFormat', userID]));
+      console.log('Prefetched formats data is stored in cache:', queryClient.getQueryData(['booksFormat', userID]));
     });
   }, [userID, queryClient]);
+
+  // Use useQuery to retrieve cached books authors
+  const {
+    data: bookAuthors,
+    isLoading: isAuthorsLoading,
+    isError: isAuthorsError,
+  } = useQuery<BookAuthorsData>({
+    queryKey: ['userBookAuthors', userID],
+    queryFn: () => fetchBooksAuthors(userID),
+    staleTime: Infinity,
+    gcTime: 1000 * 60 * 60 * 24,
+  });
 
   // Retrieve cached books formats
   const bookFormats = queryClient.getQueryData<{
@@ -53,6 +73,9 @@ const Library = () => {
     eBooks: Book[],
     physicalBooks: Book[]
   }>(['booksFormat', userID]);
+
+
+  console.log('bookAuthors: ', bookAuthors);
 
   // Memoize book sorting
   const getSortedBooks = useCallback(
@@ -96,7 +119,7 @@ const Library = () => {
     } else if (activeTab === 'Printed Books' && bookFormats) {
       console.log('Using printed books format');
       booksToSort = bookFormats.physicalBooks;
-    } else {
+    } else  {
       // Default to all books
       console.log('Using all books');
       booksToSort = books || [];
@@ -120,15 +143,20 @@ const Library = () => {
     (tab: string) => {
       console.log(`Switching to tab: ${tab}`);
       setActiveTab(tab);
+
+      // Navigate to Author page when Authors tab clicked
+      // if (tab === 'Authors') {
+      //   navigate('/library/author');
+      // }
     },
     [setActiveTab]
   );
 
-  if (isLoading) {
+  if (isLoading || isAuthorsLoading) {
     return <div>Loading...</div>;
   }
 
-  if (isError) {
+  if (isError || isAuthorsError) {
     return <div>Error loading books</div>;
   }
 
@@ -184,7 +212,7 @@ const Library = () => {
       {/* Library Card List Header */}
       <div className="flex flex-row relative w-full max-w-7xl justify-between items-center text-left text-white border-b-2 border-solid border-zinc-700 pb-6 mb-2">
         {/* Number of total items in view  */}
-        <div className="mt-1">{sortedBooks?.length || 0} volumes</div>
+        <div className="mt-1">{activeTab === 'Authors' ? bookAuthors?.allAuthors.length :sortedBooks?.length || 0} {activeTab === 'Authors' ? 'authors' : ' volumes'}</div>
 
         {/* Sort Button  */}
         <div className="flex flex-row">
@@ -196,7 +224,12 @@ const Library = () => {
       </div>
 
       {/* Libary Card List View  */}
-      {sortedBooks && sortedBooks.length > 0 && <CardList books={sortedBooks} />}
+      {
+        activeTab === 'Authors' && bookAuthors?.allAuthors ? (
+          <CardList allAuthors={bookAuthors?.allAuthors} authorBooks={bookAuthors || []}/>
+        ) :
+        sortedBooks && sortedBooks.length > 0 && <CardList books={sortedBooks} />
+      }
     </div>
   )
 }

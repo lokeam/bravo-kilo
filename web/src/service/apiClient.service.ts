@@ -44,6 +44,12 @@ export const fetchBooksFormat = async (userID: number) => {
   return data || {};
 };
 
+export const fetchBooksAuthors = async (userID: number) => {
+  const { data } = await apiClient.get(`/api/v1/user/books/authors?userID=${userID}`);
+  return data || {};
+};
+
+
 export const searchBookAPI = async (query: string) => {
   const { data } = await apiClient.get(`/api/v1/books/search`, {
     params: { query },
