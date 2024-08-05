@@ -1024,28 +1024,28 @@ func (b *BookModel) GetAllBooksByFormat(userID int) (map[string][]Book, error) {
 		book.Genres = genres
 
 		// Fetch authors for the book
-		authorsQuery := `
-		SELECT a.name
-		FROM authors a
-		JOIN book_authors ba ON a.id = ba.author_id
-		WHERE ba.book_id = $1`
-		authorRows, err := b.DB.QueryContext(ctx, authorsQuery, book.ID)
+		authors, err := b.GetAuthorsForBook(book.ID)
 		if err != nil {
-			b.Logger.Error("Error fetching authors for book", "error", err)
-			return nil, err
-		}
-		defer authorRows.Close()
-
-		var authors []string
-		for authorRows.Next() {
-			var authorName string
-			if err := authorRows.Scan(&authorName); err != nil {
-				b.Logger.Error("Error scanning author name", "error", err)
+				b.Logger.Error("Error fetching authors for book", "error", err)
 				return nil, err
-			}
-			authors = append(authors, authorName)
 		}
 		book.Authors = authors
+
+		// Fetch formats for the book
+		formats, err := b.GetFormats(book.ID)
+		if err != nil {
+				b.Logger.Error("Error fetching formats for book", "error", err)
+				return nil, err
+		}
+		book.Formats = formats
+
+		// Fetch tags for the book
+		tags, err := b.GetTagsForBook(book.ID)
+		if err != nil {
+				b.Logger.Error("Error fetching tags for book", "error", err)
+				return nil, err
+		}
+		book.Tags = tags
 
 		b.Logger.Info("Processing book in format", "formatType", formatType, "bookID", book.ID)
 
