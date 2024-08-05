@@ -12,6 +12,7 @@ import (
 
 func (app *application) routes(h *handlers.Handlers) http.Handler {
 	mux := chi.NewRouter()
+
 	mux.Use(chimiddleware.Recoverer)
 	mux.Use(cors.Handler(cors.Options{
     AllowedOrigins:   []string{"https://*", "http://*"},
@@ -30,12 +31,12 @@ func (app *application) routes(h *handlers.Handlers) http.Handler {
 	mux.Route("/api/v1/user", func(r chi.Router) {
 		r.Use(middleware.VerifyJWT)
 		r.Get("/books", h.GetAllUserBooks)
+		r.Get("/books/authors", h.GetBooksByAuthors)
 		r.Get("/books/format", h.GetBooksByFormat)
 	})
 
 	mux.Route("/api/v1/books", func(r chi.Router) {
 		r.Use(middleware.VerifyJWT)
-		r.Get("/author/{authorName}", h.GetBooksByAuthor)
 		r.Get("/search", h.SearchBooks)
 		r.Get("/{bookID}", h.GetBookByID)
 		r.Put("/{bookID}", h.UpdateBook)

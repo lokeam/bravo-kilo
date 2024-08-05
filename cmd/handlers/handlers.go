@@ -482,26 +482,34 @@ func (h *Handlers) GetAllUserBooks(response http.ResponseWriter, request *http.R
 }
 
 // Retrieve books by a specific author
-func (h *Handlers) GetBooksByAuthor(response http.ResponseWriter, request *http.Request) {
-	authorName := chi.URLParam(request, "authorName")
-	if authorName == "" {
-			h.logger.Error("Missing author name", "error", "missing author name")
-			http.Error(response, "Author name is required", http.StatusBadRequest)
+func (h *Handlers) GetBooksByAuthors(response http.ResponseWriter, request *http.Request) {
+	userIDStr := request.URL.Query().Get("userID")
+	if userIDStr == "" {
+			h.logger.Error("Missing user ID", "error", "missing user ID")
+			http.Error(response, "User ID is required", http.StatusBadRequest)
 			return
 	}
 
-	books, err := h.models.Book.GetBooksByAuthor(authorName)
+	userID, err := strconv.Atoi(userIDStr)
 	if err != nil {
-			h.logger.Error("Error fetching books by author", "error", err)
-			http.Error(response, "Error fetching books by author", http.StatusInternalServerError)
+			h.logger.Error("Invalid user ID", "error", err)
+			http.Error(response, "Invalid user ID", http.StatusBadRequest)
+			return
+	}
+
+	booksByAuthors, err := h.models.Book.GetAllBooksByAuthors(userID)
+	if err != nil {
+			h.logger.Error("Error fetching books by authors", "error", err)
+			http.Error(response, "Error fetching books by authors", http.StatusInternalServerError)
 			return
 	}
 
 	response.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(response).Encode(map[string]interface{}{"books": books}); err != nil {
+	if err := json.NewEncoder(response).Encode(booksByAuthors); err != nil {
 			http.Error(response, "Error encoding response", http.StatusInternalServerError)
 	}
 }
+
 
 // Get Single Book by ID
 func (h *Handlers) GetBookByID(response http.ResponseWriter, request *http.Request) {
