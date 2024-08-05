@@ -627,7 +627,7 @@ func (b *BookModel) GetAllBooksByUserID(userID int) ([]Book, error) {
 	defer cancel()
 
 	query := `
-	SELECT b.id, b.title, b.subtitle, b.description, b.language, b.page_count, b.publish_date, b.image_links, b.created_at, b.last_updated, b.isbn_10, b.isbn_13
+	SELECT b.id, b.title, b.subtitle, b.description, b.language, b.page_count, b.publish_date, b.image_links, b.notes, b.created_at, b.last_updated, b.isbn_10, b.isbn_13
 	FROM books b
 	INNER JOIN user_books ub ON b.id = ub.book_id
 	WHERE ub.user_id = $1`
@@ -652,6 +652,7 @@ func (b *BookModel) GetAllBooksByUserID(userID int) ([]Book, error) {
 			&book.PageCount,
 			&book.PublishDate,
 			&imageLinksJSON,
+			&book.Notes,
 			&book.CreatedAt,
 			&book.LastUpdated,
 			&book.ISBN10,
@@ -670,28 +671,36 @@ func (b *BookModel) GetAllBooksByUserID(userID int) ([]Book, error) {
 		}
 
 		// Fetch authors for the book
-		authorsQuery := `
-		SELECT a.name
-		FROM authors a
-		JOIN book_authors ba ON a.id = ba.author_id
-		WHERE ba.book_id = $1`
-		authorRows, err := b.DB.QueryContext(ctx, authorsQuery, book.ID)
+		authors, err := b.GetAuthorsForBook(book.ID)
 		if err != nil {
-			b.Logger.Error("Error fetching authors for book", "error", err)
-			return nil, err
-		}
-		defer authorRows.Close()
-
-		var authors []string
-		for authorRows.Next() {
-			var authorName string
-			if err := authorRows.Scan(&authorName); err != nil {
-				b.Logger.Error("Error scanning author name", "error", err)
+				b.Logger.Error("Error fetching authors for book", "error", err)
 				return nil, err
-			}
-			authors = append(authors, authorName)
 		}
 		book.Authors = authors
+
+		// Fetch formats for the book
+		formats, err := b.GetFormats(book.ID)
+		if err != nil {
+				b.Logger.Error("Error fetching formats for book", "error", err)
+				return nil, err
+		}
+		book.Formats = formats
+
+		// Fetch genres for the book
+		genres, err := b.GetGenres(book.ID)
+		if err != nil {
+				b.Logger.Error("Error fetching genres", "error", err)
+				return nil, err
+		}
+		book.Genres = genres
+
+		// Fetch tags for the book
+		tags, err := b.GetTagsForBook(book.ID)
+		if err != nil {
+				b.Logger.Error("Error fetching tags for book", "error", err)
+				return nil, err
+		}
+		book.Tags = tags
 
 		books = append(books, book)
 	}
