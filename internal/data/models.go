@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -435,34 +436,157 @@ func (b *BookModel) GetByID(id int) (*Book, error) {
 	return &book, nil
 }
 
-func (b *BookModel) GetAllAuthors(userID int) (map[string][]string, error) {
+func (b *BookModel) GetAuthorsForBook(bookID int) ([]string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
 
-	// SQL query to get distinct author names for a user's books
-	query := `
-	SELECT DISTINCT a.name
+	authorsQuery := `
+	SELECT a.name
 	FROM authors a
 	JOIN book_authors ba ON a.id = ba.author_id
-	JOIN user_books ub ON ba.book_id = ub.book_id
-	WHERE ub.user_id = $1
-	`
-
-	rows, err := b.DB.QueryContext(ctx, query, userID)
+	WHERE ba.book_id = $1`
+	rows, err := b.DB.QueryContext(ctx, authorsQuery, bookID)
 	if err != nil {
-		b.Logger.Error("Error retrieving authors for user", "error", err)
-		return nil, err
+			b.Logger.Error("Error fetching authors for book", "error", err)
+			return nil, err
 	}
 	defer rows.Close()
 
 	var authors []string
 	for rows.Next() {
+			var authorName string
+			if err := rows.Scan(&authorName); err != nil {
+					b.Logger.Error("Error scanning author name", "error", err)
+					return nil, err
+			}
+			authors = append(authors, authorName)
+	}
+
+	return authors, nil
+}
+
+func (b *BookModel) GetTagsForBook(bookID int) ([]string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	// SQL query to fetch tags JSON array
+	query := `
+	SELECT tags
+	FROM books
+	WHERE id = $1`
+
+	var tagsJSON []byte
+	err := b.DB.QueryRowContext(ctx, query, bookID).Scan(&tagsJSON)
+	if err != nil {
+			b.Logger.Error("Error fetching tags for book", "error", err)
+			return nil, err
+	}
+
+	// Unmarshal the JSON array of tags
+	var tags []string
+	if err := json.Unmarshal(tagsJSON, &tags); err != nil {
+			b.Logger.Error("Error unmarshalling tags JSON", "error", err)
+			return nil, err
+	}
+
+	return tags, nil
+}
+
+func (b *BookModel) GetAllBooksByAuthors(userID int) (map[string]interface{}, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	// SQL query to get all books and their authors for a user's books
+	query := `
+	SELECT b.id, b.title, b.subtitle, b.description, b.language, b.page_count, b.publish_date, b.image_links, b.notes, b.created_at, b.last_updated, b.isbn_10, b.isbn_13, a.name
+	FROM books b
+	INNER JOIN book_authors ba ON b.id = ba.book_id
+	INNER JOIN authors a ON ba.author_id = a.id
+	INNER JOIN user_books ub ON b.id = ub.book_id
+	WHERE ub.user_id = $1
+	`
+
+	rows, err := b.DB.QueryContext(ctx, query, userID)
+	if err != nil {
+		b.Logger.Error("Error retrieving books by authors", "error", err)
+		return nil, err
+	}
+	defer rows.Close()
+
+	// Store authors and books
+	authors := []string{}
+	booksByAuthor := map[string][]Book{}
+
+	for rows.Next() {
+		var book Book
 		var authorName string
-		if err := rows.Scan(&authorName); err != nil {
-			b.Logger.Error("Error scanning author name", "error", err)
+		var imageLinksJSON []byte
+
+		if err := rows.Scan(
+			&book.ID,
+			&book.Title,
+			&book.Subtitle,
+			&book.Description,
+			&book.Language,
+			&book.PageCount,
+			&book.PublishDate,
+			&imageLinksJSON,
+			&book.Notes,
+			&book.CreatedAt,
+			&book.LastUpdated,
+			&book.ISBN10,
+			&book.ISBN13,
+			&authorName,
+		); err != nil {
+			b.Logger.Error("Error scanning book by author", "error", err)
 			return nil, err
 		}
-		authors = append(authors, authorName)
+
+		// Unmarshal image links
+		if err := json.Unmarshal(imageLinksJSON, &book.ImageLinks); err != nil {
+			b.Logger.Error("Error unmarshalling image links JSON", "error", err)
+			return nil, err
+		}
+
+		// Fetch authors for the book
+		bookArrAuthors, err := b.GetAuthorsForBook(book.ID)
+		if err != nil {
+				b.Logger.Error("Error fetching authors for book", "error", err)
+				return nil, err
+		}
+		book.Authors = bookArrAuthors
+
+		// Fetch formats for the book
+		formats, err := b.GetFormats(book.ID)
+		if err != nil {
+				b.Logger.Error("Error fetching formats for book", "error", err)
+				return nil, err
+		}
+		book.Formats = formats
+
+		// Fetch genres for the book
+		genres, err := b.GetGenres(book.ID)
+		if err != nil {
+			b.Logger.Error("Error fetching genres", "error", err)
+			return nil, err
+		}
+		book.Genres = genres
+
+		// Fetch tags for the book
+		tags, err := b.GetTagsForBook(book.ID)
+		if err != nil {
+				b.Logger.Error("Error fetching tags for book", "error", err)
+				return nil, err
+		}
+		book.Tags = tags
+
+		// Add author to the list if not already present
+		if _, found := booksByAuthor[authorName]; !found {
+			authors = append(authors, authorName)
+		}
+
+		// Add book to the author's list
+		booksByAuthor[authorName] = append(booksByAuthor[authorName], book)
 	}
 
 	if err = rows.Err(); err != nil {
@@ -475,7 +599,17 @@ func (b *BookModel) GetAllAuthors(userID int) (map[string][]string, error) {
 		return getLastName(authors[i]) < getLastName(authors[j])
 	})
 
-	return map[string][]string{"allAuthors": authors}, nil
+	// Create the result map with index keys for authors
+	result := map[string]interface{}{
+		"allAuthors": authors,
+	}
+
+	for i, author := range authors {
+		key := strconv.Itoa(i)
+		result[key] = booksByAuthor[author]
+	}
+
+	return result, nil
 }
 
 // Helper function to get the last name from a full name
