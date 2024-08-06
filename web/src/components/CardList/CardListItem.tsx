@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Book } from '../../pages/library';
+import { Book } from '../../pages/Library';
 import Modal from '../Modal/ModalRoot';
 import { useNavigate } from 'react-router-dom';
 

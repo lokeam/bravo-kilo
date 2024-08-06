@@ -7,7 +7,7 @@ import CardList from '../components/CardList/CardList';
 import Modal from '../components/Modal/Modal';
 import '../components/Modal/Modal.css';
 import { PiArrowsDownUp } from 'react-icons/pi';
-import { fetchBooksAuthors, fetchBooksFormat } from '../service/apiClient.service';
+import { fetchBooksAuthors, fetchBooksFormat, fetchBooksGenres } from '../service/apiClient.service';
 
 export interface Book {
   id: number;
@@ -28,12 +28,21 @@ export interface Book {
   isbn13: string;
 }
 
-// Create intersection type that combines both obj types, expect both types
+// Create Book Authors/Genres intersection types that combines both obj types, expect both types
 type BookAuthorsData = {
   allAuthors: string[]
 } & {
   [index: string]: Book[];
-}
+};
+
+type BookGenresData = {
+  allGenres: string[]
+} & {
+  [index: string]: {
+    bookList: Book[];
+    genreImgs: string[];
+  };
+};
 
 const Library = () => {
   const [opened, setOpened] = useState(false);
@@ -66,12 +75,29 @@ const Library = () => {
     gcTime: 1000 * 60 * 60 * 24,
   });
 
+  // Use useQuery to get cached book genres
+  const {
+    data: bookGenres,
+    isLoading: isGenresLoading,
+    isError: isGenresError,
+  } = useQuery<BookGenresData>({
+    queryKey: ['userBookGenres', userID],
+    queryFn: () => fetchBooksGenres(userID),
+    staleTime: Infinity,
+    gcTime: 1000 * 60 * 60 * 24,
+  });
+
   useEffect(() => {
     if (bookAuthors) {
-      console.log('Authors data:', bookAuthors); // Log to verify data
+      console.log('Authors data:', bookAuthors); // Log to verify authors data
     }
   }, [bookAuthors]);
 
+  useEffect(() => {
+    if (bookGenres) {
+      console.log('Genres data:', bookGenres); // Log to verify genres data
+    }
+  }, [bookGenres]);
 
   // Retrieve cached books formats
   const bookFormats = queryClient.getQueryData<{
@@ -82,6 +108,8 @@ const Library = () => {
 
 
   console.log('bookAuthors: ', bookAuthors);
+  console.log('****************************************');
+  console.log('bookGenres: ', bookGenres);
 
   // Memoize book sorting
   const getSortedBooks = useCallback(
@@ -158,11 +186,11 @@ const Library = () => {
     [setActiveTab]
   );
 
-  if (isLoading || isAuthorsLoading) {
+  if (isLoading || isAuthorsLoading || isGenresLoading) {
     return <div>Loading...</div>;
   }
 
-  if (isError || isAuthorsError) {
+  if (isError || isAuthorsError || isGenresError) {
     return <div>Error loading books</div>;
   }
 
@@ -231,10 +259,12 @@ const Library = () => {
 
       {/* Libary Card List View  */}
       {activeTab === 'Authors' && bookAuthors?.allAuthors ? (
-      <CardList allAuthors={bookAuthors.allAuthors} authorBooks={bookAuthors} />
-    ) : (
-      sortedBooks && sortedBooks.length > 0 && <CardList books={sortedBooks} />
-    )}
+        <CardList allAuthors={bookAuthors.allAuthors} authorBooks={bookAuthors} />
+      ) : activeTab === 'Genres' && bookGenres?.allGenres ? (
+        <CardList allGenres={bookGenres.allGenres} genreBooks={bookGenres} />
+      ) : (
+        sortedBooks && sortedBooks.length > 0 && <CardList books={sortedBooks} />
+      )}
     </div>
   )
 }
