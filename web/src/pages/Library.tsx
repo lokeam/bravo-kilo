@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import useStore from '../store/useStore';
 import useFetchBooks from '../hooks/useFetchBooks';
@@ -43,7 +43,6 @@ const Library = () => {
   const { sortCriteria, sortOrder, setSort, activeTab, setActiveTab } = useStore();
   const { data: books, isLoading, isError } = useFetchBooks(userID, true);
   const queryClient = useQueryClient();
-  const navigate = useNavigate();
 
   // Prefetch data for book formats
   useEffect(() => {
@@ -66,6 +65,13 @@ const Library = () => {
     staleTime: Infinity,
     gcTime: 1000 * 60 * 60 * 24,
   });
+
+  useEffect(() => {
+    if (bookAuthors) {
+      console.log('Authors data:', bookAuthors); // Log to verify data
+    }
+  }, [bookAuthors]);
+
 
   // Retrieve cached books formats
   const bookFormats = queryClient.getQueryData<{
@@ -224,12 +230,11 @@ const Library = () => {
       </div>
 
       {/* Libary Card List View  */}
-      {
-        activeTab === 'Authors' && bookAuthors?.allAuthors ? (
-          <CardList allAuthors={bookAuthors?.allAuthors} authorBooks={bookAuthors || []}/>
-        ) :
-        sortedBooks && sortedBooks.length > 0 && <CardList books={sortedBooks} />
-      }
+      {activeTab === 'Authors' && bookAuthors?.allAuthors ? (
+      <CardList allAuthors={bookAuthors.allAuthors} authorBooks={bookAuthors} />
+    ) : (
+      sortedBooks && sortedBooks.length > 0 && <CardList books={sortedBooks} />
+    )}
     </div>
   )
 }

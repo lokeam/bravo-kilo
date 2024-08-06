@@ -483,19 +483,29 @@ func (h *Handlers) GetAllUserBooks(response http.ResponseWriter, request *http.R
 
 // Retrieve books by a specific author
 func (h *Handlers) GetBooksByAuthors(response http.ResponseWriter, request *http.Request) {
-	userIDStr := request.URL.Query().Get("userID")
-	if userIDStr == "" {
-			h.logger.Error("Missing user ID", "error", "missing user ID")
-			http.Error(response, "User ID is required", http.StatusBadRequest)
-			return
+	// Grab token from cookie
+	cookie, err := request.Cookie("token")
+	if err != nil {
+		h.logger.Error("No token cookie", "error", err)
+		http.Error(response, "No token cookie", http.StatusUnauthorized)
+		return
 	}
 
-	userID, err := strconv.Atoi(userIDStr)
-	if err != nil {
-			h.logger.Error("Invalid user ID", "error", err)
-			http.Error(response, "Invalid user ID", http.StatusBadRequest)
-			return
+	tokenStr := cookie.Value
+	claims := &Claims{}
+
+	// Parse JWT token to get userID
+	token, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (interface{}, error) {
+		return jwtKey, nil
+	})
+	if err != nil || !token.Valid {
+		h.logger.Error("Invalid token", "error", err)
+		http.Error(response, "Invalid token", http.StatusUnauthorized)
+		return
 	}
+
+	userID := claims.UserID
+	h.logger.Info("Valid user ID received from token", "userID", userID)
 
 	booksByAuthors, err := h.models.Book.GetAllBooksByAuthors(userID)
 	if err != nil {

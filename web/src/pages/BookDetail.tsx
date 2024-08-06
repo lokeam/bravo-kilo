@@ -32,6 +32,9 @@ const BookDetail = () => {
 
   console.log('book detail page, book data: ', book);
 
+  const authors = book.authors?.join(', ') || 'Unknown Author';
+  const genres = book.genres?.join(', ') || ['Unknown Genre'];
+
   return (
     <div className="bk_book_page mx-auto flex flex-col align-center max-w-screen-md h-screen p-5">
       <div className="bk_book_page__top_nav flex flex-row sticky top-0 justify-between w-full">
@@ -60,8 +63,8 @@ const BookDetail = () => {
 
       <div className="bk_book_metadata my-3">
         <div className="text-sm font-bold">BY</div>
-        <div className="">{book.authors.join(', ')}</div>
-        <div className="">{book.genres.join(', ')}</div>
+        <div className="">{authors}</div>
+        <div className="">{genres}</div>
       </div>
 
       <div className="bk_book_cta flex flex-col w-full my-3">

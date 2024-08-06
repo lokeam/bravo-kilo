@@ -20,7 +20,6 @@ function isCardListItemDefault(props: CardListItemProps): props is CardListItemD
   return Array.isArray((props as CardListItemDefault).books) && (props as CardListItemDefault).books.length > 0;
 }
 
-
 function isCardListItemAuthor(props: CardListItemAuthor): props is CardListItemAuthor {
   return 'allAuthors' in props;
 }
