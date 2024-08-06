@@ -1436,3 +1436,115 @@ func (b *BookModel) RemoveGenres(bookID int) error {
 
 	return nil
 }
+
+func (b *BookModel) GetAllBooksByGenres(userID int) (map[string]interface{}, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	// SQL query to get all books and their genres for a user's books
+	query := `
+	SELECT b.id, b.title, b.subtitle, b.description, b.language, b.page_count, b.publish_date, b.image_links, b.notes, b.created_at, b.last_updated, b.isbn_10, b.isbn_13, g.name
+	FROM books b
+	INNER JOIN book_genres bg ON b.id = bg.book_id
+	INNER JOIN genres g ON bg.genre_id = g.id
+	INNER JOIN user_books ub ON b.id = ub.book_id
+	WHERE ub.user_id = $1
+	`
+
+	rows, err := b.DB.QueryContext(ctx, query, userID)
+	if err != nil {
+			b.Logger.Error("Error retrieving books by genres", "error", err)
+			return nil, err
+	}
+	defer rows.Close()
+
+	// Store genres and books
+	genres := []string{}
+	booksByGenre := map[string][]Book{}
+
+	for rows.Next() {
+			var book Book
+			var genreName string
+			var imageLinksJSON []byte
+
+			if err := rows.Scan(
+					&book.ID,
+					&book.Title,
+					&book.Subtitle,
+					&book.Description,
+					&book.Language,
+					&book.PageCount,
+					&book.PublishDate,
+					&imageLinksJSON,
+					&book.Notes,
+					&book.CreatedAt,
+					&book.LastUpdated,
+					&book.ISBN10,
+					&book.ISBN13,
+					&genreName,
+			); err != nil {
+					b.Logger.Error("Error scanning book by genre", "error", err)
+					return nil, err
+			}
+
+			// Unmarshal image links
+			if err := json.Unmarshal(imageLinksJSON, &book.ImageLinks); err != nil {
+					b.Logger.Error("Error unmarshalling image links JSON", "error", err)
+					return nil, err
+			}
+
+			// Fetch authors for the book
+			bookArrAuthors, err := b.GetAuthorsForBook(book.ID)
+			if err != nil {
+					b.Logger.Error("Error fetching authors for book", "error", err)
+					return nil, err
+			}
+			book.Authors = bookArrAuthors
+
+			// Add genre to the list if not already present
+			if _, found := booksByGenre[genreName]; !found {
+					genres = append(genres, genreName)
+			}
+
+			// Add book to the genre's list
+			booksByGenre[genreName] = append(booksByGenre[genreName], book)
+	}
+
+	if err = rows.Err(); err != nil {
+			b.Logger.Error("Error with rows", "error", err)
+			return nil, err
+	}
+
+	// Sort genres alphabetically
+	sort.Strings(genres)
+
+	// Create the result map with index keys for genres
+	result := map[string]interface{}{
+			"allGenres": genres,
+	}
+
+	for i, genre := range genres {
+			key := strconv.Itoa(i)
+
+			// Sort the books for each genre by author's last name
+			sort.Slice(booksByGenre[genre], func(i, j int) bool {
+					return getLastName(booksByGenre[genre][i].Authors[0]) < getLastName(booksByGenre[genre][j].Authors[0])
+			})
+
+			// Prepare genreImgs array
+			genreImgs := make([]string, len(booksByGenre[genre]))
+			for j, book := range booksByGenre[genre] {
+					if len(book.ImageLinks) > 0 {
+							genreImgs[j] = book.ImageLinks[0]
+					}
+			}
+
+			result[key] = map[string]interface{}{
+					"genreImgs": genreImgs,
+					"bookList":  booksByGenre[genre],
+			}
+	}
+
+	return result, nil
+}
+

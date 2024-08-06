@@ -727,3 +727,45 @@ func (h *Handlers) GetBooksByFormat(response http.ResponseWriter, request *http.
 	response.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(response).Encode(booksByFormat)
 }
+
+// Sorting - Get Books by Genre
+func (h *Handlers) GetBooksByGenres(response http.ResponseWriter, request *http.Request) {
+	// Grab token from cookie
+	cookie, err := request.Cookie("token")
+	if err != nil {
+			h.logger.Error("No token cookie", "error", err)
+			http.Error(response, "No token cookie", http.StatusUnauthorized)
+			return
+	}
+
+	tokenStr := cookie.Value
+	claims := &Claims{}
+
+	// Parse JWT token to get userID
+	token, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (interface{}, error) {
+			return jwtKey, nil
+	})
+	if err != nil || !token.Valid {
+			h.logger.Error("Invalid token", "error", err)
+			http.Error(response, "Invalid token", http.StatusUnauthorized)
+			return
+	}
+
+	userID := claims.UserID
+	h.logger.Info("Valid user ID received from token", "userID", userID)
+
+	// Get books by genres
+	booksByGenres, err := h.models.Book.GetAllBooksByGenres(userID)
+	if err != nil {
+			h.logger.Error("Error fetching books by genres", "error", err)
+			http.Error(response, "Error fetching books by genres", http.StatusInternalServerError)
+			return
+	}
+
+	h.logger.Info("Books fetched successfully", "booksByGenres", booksByGenres)
+
+	response.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(response).Encode(booksByGenres); err != nil {
+			http.Error(response, "Error encoding response", http.StatusInternalServerError)
+	}
+}
