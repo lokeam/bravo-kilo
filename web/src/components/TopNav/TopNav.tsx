@@ -3,13 +3,14 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from "../AuthContext";
 import Avatar from '../Avatar/Avatar';
 import Modal from '../Modal/Modal';
+import AutoComplete from '../AutoComplete/AutoComplete';
+
+import useSearchStore from '../../store/useSearchStore';
+
 import { IoSearchOutline } from 'react-icons/io5';
 import { IoMdSettings } from "react-icons/io";
 import { MdLogout } from "react-icons/md";
 import { ImArrowLeft2 } from "react-icons/im";
-import { useDebounce } from '../../hooks/useDebounce';
-import useBookSearch from '../../hooks/useBookSearch';
-import useStore from '../../store/useStore';
 
 export default function TopNavigation() {
   const [opened, setOpened] = useState(false);
@@ -18,26 +19,21 @@ export default function TopNavigation() {
   const navigate = useNavigate();
   const isSearchPage = location.pathname.includes('library/books/search');
 
-  const [searchQuery, setSearchQuery] = useState('');
-  const debouncedSearchQuery = useDebounce(searchQuery, 1000); // 1-second debounce
-  const { data: searchResults } = useBookSearch(debouncedSearchQuery);
-  const { setSearchResults } = useStore();
+  const { addSearchHistory } = useSearchStore();
 
   const handleGoBack = () => {
     navigate(-1);
   };
 
-  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchQuery(e.target.value);
-  };
+  const handleSearchSubmit = (query: string) => {
 
-  useEffect(() => {
-    if (debouncedSearchQuery) {
-      console.log('Debounced Search Query:', debouncedSearchQuery);
-      console.log('Search Results:', searchResults);
-      setSearchResults(searchResults || []);
-    }
-  }, [debouncedSearchQuery, searchResults, setSearchResults]);
+    // Google Book Search api logic here
+    // Example: fetchGoogleBooks(query);
+
+    console.log('Search submitted: ', query)
+    // add searchHistory query here
+
+  };
 
   const openModal = () => setOpened(true);
   const closeModal = () => setOpened(false);
@@ -52,7 +48,7 @@ export default function TopNavigation() {
           >
             <ImArrowLeft2 size={20}/>
           </button>
-          <div className={`${isSearchPage ? 'pr-8' : ''} relative flex flex-row  justify-items-center items-center w-full`}>
+          <div className={`relative flex flex-row  justify-items-center items-center w-full`}>
 
             {/* ----- Logo / Nav Start ----- */}
             <div className={`${isSearchPage ? 'hidden' : 'block'} navLeft`}>
@@ -76,7 +72,10 @@ export default function TopNavigation() {
             </Modal>
 
             {/* ----- Search / Nav Center ----- */}
-            <form onSubmit={(e) => e.preventDefault()} className={`${isSearchPage ? 'visible' : 'invisible'} w-full`} action="#">
+            <div className={`${isSearchPage ? 'visible' : 'invisible'} w-full`}>
+              <AutoComplete onSubmit={handleSearchSubmit}/>
+            </div>
+            {/* <form onSubmit={(e) => e.preventDefault()} className={`${isSearchPage ? 'visible' : 'invisible'} w-full`} action="#">
               <label htmlFor="topbar-search" className="sr-only">Search</label>
               <div className="flex flex-row relative">
                 <div className="flex absolute inset-y-0 left-0 items-center pl-3 pointer-events-none dark:text-white">
@@ -92,9 +91,9 @@ export default function TopNavigation() {
                   value={searchQuery}
                 />
               </div>
-            </form>
+            </form> */}
             {/* ----- Mobile / Nav End ----- */}
-            <div className={`${isSearchPage ? 'invisible' : 'visible'} navEnd lg:invisible`}>
+            <div className={`${isSearchPage ? 'hidden' : 'visible'} navEnd lg:invisible`}>
               <div className="flex items-center">
                 <button type="button" data-dropdown-toggle="notification-dropdown" className="p-3 mr-1 text-gray-500 rounded hover:text-gray-900 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-white dark:hover:bg-gray-700 focus:ring-4 focus:ring-gray-300 dark:focus:ring-gray-600">
                   <span className="sr-only">View notifications</span>
