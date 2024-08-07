@@ -76,10 +76,12 @@ func (h *Handlers) GoogleSignIn(response http.ResponseWriter, request *http.Requ
 		ClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
 		ClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
 		Scopes: []string{
+			"https://www.googleapis.com/auth/books",
 			"https://www.googleapis.com/auth/userinfo.email",
 			"https://www.googleapis.com/auth/userinfo.profile",
 		},
 		Endpoint: google.Endpoint,
+
 	}
 
 	randomState := generateState()
@@ -93,7 +95,10 @@ func (h *Handlers) GoogleSignIn(response http.ResponseWriter, request *http.Requ
 		Secure:   true,
 	})
 
-	url := GoogleLoginConfig.AuthCodeURL(randomState)
+	url := GoogleLoginConfig.AuthCodeURL(
+		randomState,
+		oauth2.AccessTypeOffline,
+	)
 
 	http.Redirect(response, request, url, http.StatusSeeOther)
 }
@@ -113,7 +118,7 @@ func (h *Handlers) GoogleCallback(response http.ResponseWriter, request *http.Re
 	}
 
 	if state != cookie.Value {
-		h.logger.Error("Error: URL State and Cookie state don't match", "error", err)
+		h.logger.Error("Error: URL State and Cookie state don't match")
 		http.Error(response, "Error: States don't match", http.StatusBadRequest)
 		return
 	}
@@ -122,30 +127,30 @@ func (h *Handlers) GoogleCallback(response http.ResponseWriter, request *http.Re
 
 	googleCfg := config.AppConfig.GoogleLoginConfig
 
-	token, err := googleCfg.Exchange(context.Background(), code)
+	// Exchange the authorization code for an access token
+	token, err := googleCfg.Exchange(context.Background(), code, oauth2.AccessTypeOffline)
 	if err != nil {
 		h.logger.Error("Error exchanging code for token", "error", err)
 		http.Error(response, "Error exchanging code for token", http.StatusInternalServerError)
 		return
 	}
 
+	// Retrieve user info using the access token
 	oauthResponse, err := http.Get("https://www.googleapis.com/oauth2/v2/userinfo?access_token=" + token.AccessToken)
 	if err != nil {
 		h.logger.Error("Error getting user info", "error", err)
 		http.Error(response, "Error getting user info", http.StatusInternalServerError)
 		return
 	}
-
 	defer oauthResponse.Body.Close()
 
+	// Decode the user info response
 	var userInfo struct {
-		Id       string `json:"id"`
-		Email    string `json:"email"`
-		Name     string `json:"name"`
-		Picture  string `json:"picture"`
+		Id      string `json:"id"`
+		Email   string `json:"email"`
+		Name    string `json:"name"`
+		Picture string `json:"picture"`
 	}
-
-	// Decode response
 	if err := json.NewDecoder(oauthResponse.Body).Decode(&userInfo); err != nil {
 		h.logger.Error("Error decoding user info response:", "error", err)
 		http.Error(response, "Error decoding user info response", http.StatusInternalServerError)
@@ -156,7 +161,7 @@ func (h *Handlers) GoogleCallback(response http.ResponseWriter, request *http.Re
 
 	firstName, lastName := utils.SplitFullName(userInfo.Name)
 
-	// Check if user already exists in db
+	// Check if the user already exists in the database
 	existingUser, err := h.models.User.GetByEmail(userInfo.Email)
 	if err != nil && err != sql.ErrNoRows {
 		h.logger.Error("Error checking for existing user", "error", err)
@@ -168,12 +173,12 @@ func (h *Handlers) GoogleCallback(response http.ResponseWriter, request *http.Re
 	if existingUser != nil {
 		userId = existingUser.ID
 	} else {
-		// Save userInfo + access tokens
+		// Save user info in the database
 		user := data.User{
-			Email:      userInfo.Email,
-			FirstName:  firstName,
-			LastName:   lastName,
-			Picture:    userInfo.Picture,
+			Email:     userInfo.Email,
+			FirstName: firstName,
+			LastName:  lastName,
+			Picture:   userInfo.Picture,
 		}
 
 		userId, err = h.models.User.Insert(user)
@@ -184,22 +189,24 @@ func (h *Handlers) GoogleCallback(response http.ResponseWriter, request *http.Re
 		}
 	}
 
+	// Store refresh token if available
+	if token.RefreshToken != "" {
+		tokenRecord := data.Token{
+			UserID:       userId,
+			RefreshToken: token.RefreshToken,
+			TokenExpiry:  token.Expiry,
+		}
 
-	tokenRecord := data.Token{
-		UserID:        userId,
-		RefreshToken:  token.RefreshToken,
-		TokenExpiry:   token.Expiry,
-	}
-
-	if err := h.models.Token.Insert(tokenRecord); err != nil {
-		h.logger.Error("Error adding token to db", "error", err)
-		http.Error(response, "Error adding token to db", http.StatusInternalServerError)
+  if err := h.models.Token.Insert(tokenRecord); err != nil {
+    h.logger.Error("Error adding token to db", "error", err)
+    http.Error(response, "Error adding token to db", http.StatusInternalServerError)
 		return
 	}
+  } else {
+	  h.logger.Warn("No refresh token received, re-authentication needed for offline access")
+  }
 
-	h.logger.Info("User and tokens stored successfully")
-
-	// Create JWT
+	// Create a JWT for the session
 	expirationTime := time.Now().Add(60 * time.Minute)
 	claims := &Claims{
 		UserID: userId,
@@ -218,7 +225,7 @@ func (h *Handlers) GoogleCallback(response http.ResponseWriter, request *http.Re
 
 	h.logger.Info("Generated JWT")
 
-	// JWT as a cookie
+	// Send the JWT as a cookie
 	http.SetCookie(response, &http.Cookie{
 		Name:     "token",
 		Value:    jwtString,
@@ -229,20 +236,67 @@ func (h *Handlers) GoogleCallback(response http.ResponseWriter, request *http.Re
 		Path:     "/",
 	})
 
-	// Redirect to FE dashboard with userID as query parameter
+	// Redirect to the frontend dashboard with userID as a query parameter
 	dashboardURL := fmt.Sprintf("http://localhost:5173/library?userID=%d", userId)
 	http.Redirect(response, request, dashboardURL, http.StatusSeeOther)
 
 	h.logger.Info("JWT successfully sent to FE with status code: ", "info", http.StatusSeeOther)
 }
 
+
+// Retrieve Token
+func (h *Handlers) getUserAccessToken(request *http.Request) (*oauth2.Token, error) {
+	// Get userID from JWT
+	cookie, err := request.Cookie("token")
+	if err != nil {
+		h.logger.Error("Error: No token cookie", "error", err)
+		return nil, fmt.Errorf("no token cookie")
+	}
+
+	tokenStr := cookie.Value
+	claims := &Claims{}
+	token, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (interface{}, error) {
+		return jwtKey, nil
+	})
+	if err != nil || !token.Valid {
+		h.logger.Error("Error: Invalid token", "error", err)
+		return nil, fmt.Errorf("invalid token")
+	}
+
+	// Get the refresh token for the user from the database
+	refreshToken, err := h.models.Token.GetRefreshTokenByUserID(claims.UserID)
+	if err != nil {
+		h.logger.Error("Error retrieving refresh token from DB", "error", err)
+		return nil, fmt.Errorf("could not retrieve refresh token from DB")
+	}
+	if refreshToken == "" {
+		h.logger.Error("No refresh token found for user", "userID", claims.UserID)
+		return nil, fmt.Errorf("no refresh token found for user")
+	}
+
+	// Use the refresh token to obtain a new access token
+	tokenSource := config.AppConfig.GoogleLoginConfig.TokenSource(context.Background(), &oauth2.Token{
+		RefreshToken: refreshToken,
+	})
+
+	// Get a new access token
+	newToken, err := tokenSource.Token()
+	if err != nil {
+		h.logger.Error("Error refreshing access token", "error", err)
+		return nil, fmt.Errorf("could not refresh access token")
+	}
+
+	return newToken, nil
+}
+
+
 // Verify JWT Token
 func (h *Handlers) VerifyToken(response http.ResponseWriter, request *http.Request) {
 	cookie, err := request.Cookie("token")
 	if err != nil {
-			h.logger.Error("Error: No token cookie", "error", err)
-			http.Error(response, "Error: No token cookie", http.StatusUnauthorized)
-			return
+    h.logger.Error("Error: No token cookie", "error", err)
+    http.Error(response, "Error: No token cookie", http.StatusUnauthorized)
+    return
 	}
 
 	tokenStr := cookie.Value
@@ -252,16 +306,16 @@ func (h *Handlers) VerifyToken(response http.ResponseWriter, request *http.Reque
 			return jwtKey, nil
 	})
 	if err != nil || !token.Valid {
-			h.logger.Error("Error: Invalid token", "error", err)
-			http.Error(response, "Invalid token", http.StatusUnauthorized)
-			return
+    h.logger.Error("Error: Invalid token", "error", err)
+    http.Error(response, "Invalid token", http.StatusUnauthorized)
+    return
 	}
 
 	user, err := h.models.User.GetByID(claims.UserID)
 	if err != nil {
-			h.logger.Error("Error: User not found", "error", err)
-			http.Error(response, "User not found", http.StatusInternalServerError)
-			return
+    h.logger.Error("Error: User not found", "error", err)
+    http.Error(response, "User not found", http.StatusInternalServerError)
+    return
 	}
 
 	h.logger.Info("User info retrieved!", "user", user)
@@ -384,57 +438,54 @@ func (h *Handlers) SignOut(response http.ResponseWriter, request *http.Request) 
 func (h *Handlers) SearchBooks(response http.ResponseWriter, request *http.Request) {
 	query := request.URL.Query().Get("query")
 	if query == "" {
-		h.logger.Error("Search query is missing", "error", "missing query")
-		http.Error(response, "Query parameter is required", http.StatusBadRequest)
-		return
+			http.Error(response, "Query parameter required in request", http.StatusBadRequest)
+			return
 	}
 
-	googleBooksAPI := "https://www.googleapis.com/books/v1/volumes"
-	req, err := http.NewRequest("GET", googleBooksAPI, nil)
+	// Get user's access token
+	token, err := h.getUserAccessToken(request)
 	if err != nil {
-		h.logger.Error("Error creating request", "error", err)
-		http.Error(response, "Error creating request", http.StatusInternalServerError)
-		return
+			h.logger.Error("Error retrieving user access token", "error", err)
+			http.Error(response, "Error retrieving access token", http.StatusUnauthorized)
+			return
 	}
 
-	q := req.URL.Query()
-	q.Add("q", query)
-	req.URL.RawQuery = q.Encode()
+	// Use the access token to call the Google Books API
+	client := oauth2.NewClient(context.Background(), oauth2.StaticTokenSource(token))
+	googleBooksURL := fmt.Sprintf("https://www.googleapis.com/books/v1/volumes?q=%s", query)
 
-	client := &http.Client{}
-	resp, err := client.Do(req)
+	h.logger.Info("Using access token", "accessToken", token.AccessToken)
+
+	booksResponse, err := client.Get(googleBooksURL)
 	if err != nil {
-		h.logger.Error("Error making request to Google Books API", "error", err)
-		http.Error(response, "Error making request to Google Books API", http.StatusInternalServerError)
-		return
+    h.logger.Error("Error calling Google Books API", "error", err)
+    http.Error(response, "Error calling Google Books API", http.StatusInternalServerError)
+    return
 	}
-	defer resp.Body.Close()
+	defer booksResponse.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		h.logger.Error("Error response from Google Books API", "status", resp.Status)
-		http.Error(response, "Error response from Google Books API", resp.StatusCode)
-		return
-	}
-
-	var searchResult map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&searchResult); err != nil {
-		h.logger.Error("Error decoding Google Books API response", "error", err)
-		http.Error(response, "Error decoding Google Books API response", http.StatusInternalServerError)
-		return
+	// Log the response body for more details on the error
+	if booksResponse.StatusCode != http.StatusOK {
+    var errorResponse map[string]interface{}
+    json.NewDecoder(booksResponse.Body).Decode(&errorResponse)
+    h.logger.Error("Google Books API responded with non-OK status", "status", booksResponse.StatusCode, "body", errorResponse)
+    http.Error(response, "Google Books API error", booksResponse.StatusCode)
+    return
 	}
 
-	// Transform response for client
-	books, err := utils.TransformGoogleBooksResponse(searchResult)
-	if err != nil {
-		h.logger.Error("Error transforming Google Books API response", "error", err)
-		http.Error(response, "Error transforming Google Books API response", http.StatusInternalServerError)
-		return
+
+	// Decode the Google Books API response
+	var booksData interface{}
+	if err := json.NewDecoder(booksResponse.Body).Decode(&booksData); err != nil {
+    h.logger.Error("Error decoding Google Books API response", "error", err)
+    http.Error(response, "Error decoding response", http.StatusInternalServerError)
+    return
 	}
 
 	response.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(response).Encode(map[string]interface{}{"items": books}); err != nil {
-		h.logger.Error("Error encoding response", "error", err)
-		http.Error(response, "Error encoding response", http.StatusInternalServerError)
+	if err := json.NewEncoder(response).Encode(booksData); err != nil {
+    h.logger.Error("Error encoding response", "error", err)
+    http.Error(response, "Error encoding response", http.StatusInternalServerError)
 	}
 }
 
@@ -722,7 +773,7 @@ func (h *Handlers) GetBooksByFormat(response http.ResponseWriter, request *http.
 		return
 	}
 
-	h.logger.Info("Books fetched successfully", "booksByFormat", booksByFormat)
+	// h.logger.Info("Books fetched successfully", "booksByFormat", booksByFormat)
 
 	response.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(response).Encode(booksByFormat)
@@ -762,7 +813,7 @@ func (h *Handlers) GetBooksByGenres(response http.ResponseWriter, request *http.
 			return
 	}
 
-	h.logger.Info("Books fetched successfully", "booksByGenres", booksByGenres)
+	// h.logger.Info("Books fetched successfully", "booksByGenres", booksByGenres)
 
 	response.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(response).Encode(booksByGenres); err != nil {

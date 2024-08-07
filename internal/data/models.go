@@ -230,6 +230,27 @@ func (t *TokenModel) Insert(token Token) error {
 	return nil
 }
 
+// GetRefreshTokenByUserID retrieves the refresh token for a specific user
+func (t *TokenModel) GetRefreshTokenByUserID(userID int) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	var refreshToken string
+	statement := `SELECT refresh_token FROM tokens WHERE user_id = $1 LIMIT 1`
+	err := t.DB.QueryRowContext(ctx, statement, userID).Scan(&refreshToken)
+	if err != nil {
+    if err == sql.ErrNoRows {
+      t.Logger.Error("Token Model - No refresh token found for user", "userID", userID)
+      return "", nil
+    }
+    t.Logger.Error("Token Model - Error fetching refresh token", "error", err)
+    return "", err
+  }
+
+	return refreshToken, nil
+}
+
+
 func (t *TokenModel) Rotate(userID int, newToken, oldToken string, expiry time.Time) error {
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
@@ -955,7 +976,7 @@ func (b *BookModel) GetAllBooksByFormat(userID int) (map[string][]Book, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
 
-	b.Logger.Info("GetAllBooksByFormat, about to run query ","userID", userID)
+	// b.Logger.Info("GetAllBooksByFormat, about to run query ","userID", userID)
 
 	query := `
 	SELECT b.id, b.title, b.subtitle, b.description, b.language, b.page_count, b.publish_date, b.image_links, b.notes, b.created_at, b.last_updated, b.isbn_10, b.isbn_13, f.format_type
@@ -1007,8 +1028,8 @@ func (b *BookModel) GetAllBooksByFormat(userID int) (map[string][]Book, error) {
 			b.Logger.Error("Error scanning book", "error", err)
 			return nil, err
 		}
-		b.Logger.Info("--------------")
-		b.Logger.Info("Retrieved format type from DB", "formatType", formatType)
+		// b.Logger.Info("--------------")
+		// b.Logger.Info("Retrieved format type from DB", "formatType", formatType)
 
 		if err := json.Unmarshal(imageLinksJSON, &book.ImageLinks); err != nil {
 			b.Logger.Error("Error unmarshalling image links JSON", "error", err)
@@ -1047,7 +1068,7 @@ func (b *BookModel) GetAllBooksByFormat(userID int) (map[string][]Book, error) {
 		}
 		book.Tags = tags
 
-		b.Logger.Info("Processing book in format", "formatType", formatType, "bookID", book.ID)
+		// b.Logger.Info("Processing book in format", "formatType", formatType, "bookID", book.ID)
 
 		// Add book to the appropriate format list
 		switch formatType {
@@ -1077,7 +1098,7 @@ func (b *BookModel) GetAllBooksByFormat(userID int) (map[string][]Book, error) {
 	if len(booksByFormat["audioBooks"]) == 0 && len(booksByFormat["eBooks"]) == 0 && len(booksByFormat["physicalBooks"]) == 0 {
 		b.Logger.Warn("No books found for user", "userID", userID)
 	} else {
-		b.Logger.Info("Books found for user", "userID", userID, "audioBooks", len(booksByFormat["audioBooks"]), "eBooks", len(booksByFormat["eBooks"]), "physicalBooks", len(booksByFormat["physicalBooks"]))
+		// b.Logger.Info("Books found for user", "userID", userID, "audioBooks", len(booksByFormat["audioBooks"]), "eBooks", len(booksByFormat["eBooks"]), "physicalBooks", len(booksByFormat["physicalBooks"]))
 	}
 
 	if err := rows.Err(); err != nil {
