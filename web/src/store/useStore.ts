@@ -1,6 +1,6 @@
-// useStore.ts
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
+import { Book } from '../pages/Library';
 
 interface LibrarySortState {
   sortCriteria: 'title' | 'publishDate' | 'author' | 'pageCount';
@@ -8,6 +8,8 @@ interface LibrarySortState {
   setSort: (criteria: 'title' | 'publishDate' | 'author' | 'pageCount', order: 'asc' | 'desc') => void;
   activeTab: string;
   setActiveTab: (tab: string) => void;
+  searchResults: Book[];
+  setSearchResults: (results: Book[]) => void;
 }
 
 const useStore = create<LibrarySortState>()(
@@ -24,6 +26,11 @@ const useStore = create<LibrarySortState>()(
         console.log(`Changing active tab to: ${tab}`);
         set({ activeTab: tab });
       },
+      searchResults: [],
+      setSearchResults: (results) => {
+        console.log('Setting search results in Zustand global store');
+        set({ searchResults: results });
+      }
     }),
     {
       name: 'library-sort', // unique name for local storage
@@ -32,6 +39,7 @@ const useStore = create<LibrarySortState>()(
         sortCriteria: state.sortCriteria,
         sortOrder: state.sortOrder,
         activeTab: state.activeTab,
+        searchResults: state.searchResults,
       }), // persist only part of the state
     }
   )
