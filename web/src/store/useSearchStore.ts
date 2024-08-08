@@ -21,7 +21,7 @@ interface SearchStoreState {
   getFilteredSearchHistory: () => { [query: string]: SearchResult[] };
 }
 
-const FIVE_MINUTES_MS_EVECTION_LIMIT = 5 * 60 * 1000; // 5 minutes in milliseconds
+const FIVE_MINUTES_MS_EVECTION_LIMIT = 30 * 60 * 1000; // 30 minutes in milliseconds
 
 const useSearchStore = create<SearchStoreState>()(
   persist(

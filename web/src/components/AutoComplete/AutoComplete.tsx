@@ -2,6 +2,9 @@ import React, { useEffect, useState, useRef, useCallback } from 'react';
 import useSearchStore from '../../store/useSearchStore';
 import { SearchResult } from '../../store/useSearchStore';
 
+import { IoClose } from 'react-icons/io5';
+import { IoSearchOutline } from 'react-icons/io5';
+
 interface AutoCompleteProps {
   onSubmit: (query: string) => void;
 }
@@ -85,6 +88,14 @@ const AutoComplete: React.FC<AutoCompleteProps> = ({ onSubmit }) => {
     }
   };
 
+  // Handlers - Clear input
+  const handleClearInput = () => {
+    console.log('handle clear input');
+    setQuery('');
+    setHighlightedIndex(null);
+    inputRef.current?.focus();
+  }
+
   useEffect(() => {
     document.addEventListener('mousedown', handleClickOutside);
     return () => {
@@ -99,30 +110,46 @@ const AutoComplete: React.FC<AutoCompleteProps> = ({ onSubmit }) => {
       onFocus={handleFocus}
       onBlur={handleBlur}
     >
-      <form onSubmit={handleSubmit} className="w-full relative">
-        <input
+      <form onSubmit={handleSubmit} className="searchbox_container w-full flex relative">
+        <div className={`searchbox ${
+              highlightedIndex !== null ? 'border-t border-x rounded-b-none border-b-black' : 'border'
+            } w-full rounded border-gray-600 flex relative`}
+        >
+          <button
+            className="searchbox__clear_search_field inline-flex outline-none rounded-none flex-row items-center justify-center bg-maastricht"
+            type="submit"
+            >
+            <IoSearchOutline size={24}/>
+          </button>
+          <input
           ref={inputRef}
-          type="text"
-          value={query}
-          onChange={handleInputChange}
-          onKeyDown={handleKeyDown}
-          className={`autocomplete-input rounded ${
-            highlightedIndex !== null ? 'border-t border-x rounded-b-none' : 'border'
-          } bg-maastricht border-gray-600 text-az-white font-bold focus:ring-primary-500 focus:border-primary-500 block w-full pl-9 p-2.5 placeholder:polo-blue placeholder:font-bold`}
-          placeholder="Search for a book or author"
-        />
+            type="text"
+            value={query}
+            onChange={handleInputChange}
+            onKeyDown={handleKeyDown}
+            className={`autocomplete-input bg-maastricht text-az-white font-bold outline-none block w-full pl-4 p-2.5 placeholder:polo-blue placeholder:font-bold`}
+            placeholder="Search for a book or author"
+          />
+          <button
+            className="inline-flex outline-none rounded-none flex-row items-center justify-center bg-maastricht"
+            onClick={handleClearInput}
+            type="button"
+          >
+            <IoClose size={18}/>
+          </button>
+        </div>
       </form>
       {highlightedIndex !== null && (
         <ul
           className={`autocomplete-suggestions ${
-            highlightedIndex !== null ? 'rounded-t-none' : ''
-          } absolute bg-maastricht border border-gray-600 rounded w-full`}
+            highlightedIndex !== null ? 'rounded-t-none border-t-black' : ''
+          } absolute box-border bg-maastricht border border-gray-600 rounded w-full`}
         >
           {suggestions.map((suggestion, index) => (
             <li
               key={index}
               onClick={() => handleSuggestionClick(suggestion)}
-              className={`cursor-pointer text-az-white font-bold text-left pl-9 p-2.5 hover:bg-dark-ebony ${
+              className={`cursor-pointer text-az-white font-bold text-left  pl-20 p-2.5 hover:bg-dark-ebony ${
                 index === highlightedIndex ? 'bg-dark-ebony' : ''
               }`}
             >
