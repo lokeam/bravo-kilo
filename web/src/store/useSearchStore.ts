@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 
-interface SearchResult {
+export interface SearchResult {
   id: number;
   type: string;
   text: string;
@@ -55,7 +55,7 @@ const useSearchStore = create<SearchStoreState>()(
 
         for (const [query, entry] of Object.entries(get().searchHistory)) {
           if (currentTime - entry.timestamp <= FIVE_MINUTES_MS_EVECTION_LIMIT) {
-            validEntries[query] = entry.results; // Use the stored SearchResult[]
+            validEntries[query] = entry.results;
           }
         }
 
