@@ -1,6 +1,7 @@
 package data
 
 import (
+	"bravo-kilo/internal/data/collections"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -107,6 +108,7 @@ type Book struct {
 	LastUpdated time.Time  `json:"lastUpdated"`
 	ISBN10      string     `json:"isbn10"`
 	ISBN13      string     `json:"isbn13"`
+	IsInLibrary bool       `json:"isInLibrary"`
 }
 
 type Author struct {
@@ -1166,6 +1168,116 @@ func (b *BookModel) GetFormats(bookID int) ([]string, error) {
 	return formats, nil
 }
 
+// Get all ISBN10 numbers from user's books and returns them in a HashSet
+func (b *BookModel) GetAllBooksISBN10(userID int) (*collections.Set, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	query := `
+	SELECT b.isbn_10
+	FROM books b
+	INNER JOIN user_books ub ON b.id = ub.book_id
+	WHERE ub.user_id = $1`
+
+	rows, err := b.DB.QueryContext(ctx, query, userID)
+	if err != nil {
+		b.Logger.Error("Error retrieving ISBN10 numbers", "error", err)
+		return nil, err
+	}
+	defer rows.Close()
+
+	isbnSet := collections.NewSet()
+
+	for rows.Next() {
+		var isbn10 string
+		if err := rows.Scan(&isbn10); err != nil {
+			b.Logger.Error("Error scanning ISBN10", "error", err)
+			return nil, err
+		}
+		isbnSet.Add(isbn10)
+	}
+
+	if err = rows.Err(); err != nil {
+		b.Logger.Error("Error with rows", "error", err)
+		return nil, err
+	}
+
+	return isbnSet, nil
+}
+
+// Get all ISBN13 numbers from user's books and returns them in a HashSet
+func (b *BookModel) GetAllBooksISBN13(userID int) (*collections.Set, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	query := `
+	SELECT b.isbn_13
+	FROM books b
+	INNER JOIN user_books ub ON b.id = ub.book_id
+	WHERE ub.user_id = $1`
+
+	rows, err := b.DB.QueryContext(ctx, query, userID)
+	if err != nil {
+		b.Logger.Error("Error retrieving ISBN13 numbers", "error", err)
+		return nil, err
+	}
+	defer rows.Close()
+
+	isbnSet := collections.NewSet()
+
+	for rows.Next() {
+		var isbn13 string
+		if err := rows.Scan(&isbn13); err != nil {
+			b.Logger.Error("Error scanning ISBN13", "error", err)
+			return nil, err
+		}
+		isbnSet.Add(isbn13)
+	}
+
+	if err = rows.Err(); err != nil {
+		b.Logger.Error("Error with rows", "error", err)
+		return nil, err
+	}
+
+	return isbnSet, nil
+}
+
+// Get all book titles from user's books and returns them in a HashSet
+func (b *BookModel) GetAllBooksTitles(userID int) (*collections.Set, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	query := `
+	SELECT b.title
+	FROM books b
+	INNER JOIN user_books ub ON b.id = ub.book_id
+	WHERE ub.user_id = $1`
+
+	rows, err := b.DB.QueryContext(ctx, query, userID)
+	if err != nil {
+		b.Logger.Error("Error retrieving book titles", "error", err)
+		return nil, err
+	}
+	defer rows.Close()
+
+	isbnSet := collections.NewSet()
+
+	for rows.Next() {
+		var bookTitle string
+		if err := rows.Scan(&bookTitle); err != nil {
+			b.Logger.Error("Error scanning book title", "error", err)
+			return nil, err
+		}
+		isbnSet.Add(bookTitle)
+	}
+
+	if err = rows.Err(); err != nil {
+		b.Logger.Error("Error with rows", "error", err)
+		return nil, err
+	}
+
+	return isbnSet, nil
+}
 
 // Format
 func (b *BookModel) addOrGetFormatID(format string) (int, error) {

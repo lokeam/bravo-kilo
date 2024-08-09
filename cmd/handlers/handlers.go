@@ -443,7 +443,7 @@ func (h *Handlers) SearchBooks(response http.ResponseWriter, request *http.Reque
 	}
 
 	// Get user's access token
-	token, err := h.getUserAccessToken(request)
+	accessToken, err := h.getUserAccessToken(request)
 	if err != nil {
 			h.logger.Error("Error retrieving user access token", "error", err)
 			http.Error(response, "Error retrieving access token", http.StatusUnauthorized)
@@ -451,42 +451,164 @@ func (h *Handlers) SearchBooks(response http.ResponseWriter, request *http.Reque
 	}
 
 	// Use the access token to call the Google Books API
-	client := oauth2.NewClient(context.Background(), oauth2.StaticTokenSource(token))
+	client := oauth2.NewClient(context.Background(), oauth2.StaticTokenSource(accessToken))
 	googleBooksURL := fmt.Sprintf("https://www.googleapis.com/books/v1/volumes?q=%s", query)
 
-	h.logger.Info("Using access token", "accessToken", token.AccessToken)
+	h.logger.Info("Using access token", "accessToken", accessToken.AccessToken)
 
 	booksResponse, err := client.Get(googleBooksURL)
 	if err != nil {
-    h.logger.Error("Error calling Google Books API", "error", err)
-    http.Error(response, "Error calling Google Books API", http.StatusInternalServerError)
-    return
+			h.logger.Error("Error calling Google Books API", "error", err)
+			http.Error(response, "Error calling Google Books API", http.StatusInternalServerError)
+			return
 	}
 	defer booksResponse.Body.Close()
 
-	// Log the response body for more details on the error
 	if booksResponse.StatusCode != http.StatusOK {
-    var errorResponse map[string]interface{}
-    json.NewDecoder(booksResponse.Body).Decode(&errorResponse)
-    h.logger.Error("Google Books API responded with non-OK status", "status", booksResponse.StatusCode, "body", errorResponse)
-    http.Error(response, "Google Books API error", booksResponse.StatusCode)
-    return
+			var errorResponse map[string]interface{}
+			json.NewDecoder(booksResponse.Body).Decode(&errorResponse)
+			h.logger.Error("Google Books API responded with non-OK status", "status", booksResponse.StatusCode, "body", errorResponse)
+			http.Error(response, "Google Books API error", booksResponse.StatusCode)
+			return
 	}
-
 
 	// Decode the Google Books API response
 	var booksData interface{}
 	if err := json.NewDecoder(booksResponse.Body).Decode(&booksData); err != nil {
-    h.logger.Error("Error decoding Google Books API response", "error", err)
-    http.Error(response, "Error decoding response", http.StatusInternalServerError)
-    return
+			h.logger.Error("Error decoding Google Books API response", "error", err)
+			http.Error(response, "Error decoding response", http.StatusInternalServerError)
+			return
+	}
+
+	// Format the books response
+	formattedBooks := h.FormatGoogleBooksResponse(response, booksData)
+
+	// Get user ID from JWT
+	cookie, err := request.Cookie("token")
+	if err != nil {
+			h.logger.Error("No token cookie", "error", err)
+			http.Error(response, "No token cookie", http.StatusUnauthorized)
+			return
+	}
+
+	tokenStr := cookie.Value
+	claims := &Claims{}
+	jwtToken, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (interface{}, error) {
+			return jwtKey, nil
+	})
+	if err != nil || !jwtToken.Valid {
+			h.logger.Error("Invalid token", "error", err)
+			http.Error(response, "Invalid token", http.StatusUnauthorized)
+			return
+	}
+
+	userID := claims.UserID
+
+	// Create hash sets for user's existing library data
+	isbn10Set, err := h.models.Book.GetAllBooksISBN10(userID)
+	if err != nil {
+			h.logger.Error("Error retrieving user's ISBN10", "error", err)
+			http.Error(response, "Error retrieving user's ISBN10", http.StatusInternalServerError)
+			return
+	}
+
+	isbn13Set, err := h.models.Book.GetAllBooksISBN13(userID)
+	if err != nil {
+			h.logger.Error("Error retrieving user's ISBN13", "error", err)
+			http.Error(response, "Error retrieving user's ISBN13", http.StatusInternalServerError)
+			return
+	}
+
+	titleSet, err := h.models.Book.GetAllBooksTitles(userID)
+	if err != nil {
+			h.logger.Error("Error retrieving user's book titles", "error", err)
+			http.Error(response, "Error retrieving user's book titles", http.StatusInternalServerError)
+			return
+	}
+
+	// Check each book against the user's library
+	for i := range formattedBooks {
+			formattedBooks[i].IsInLibrary = isbn10Set.Has(formattedBooks[i].ISBN10) ||
+					isbn13Set.Has(formattedBooks[i].ISBN13) ||
+					titleSet.Has(formattedBooks[i].Title)
 	}
 
 	response.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(response).Encode(booksData); err != nil {
-    h.logger.Error("Error encoding response", "error", err)
-    http.Error(response, "Error encoding response", http.StatusInternalServerError)
+	if err := json.NewEncoder(response).Encode(formattedBooks); err != nil {
+			h.logger.Error("Error encoding response", "error", err)
+			http.Error(response, "Error encoding response", http.StatusInternalServerError)
 	}
+}
+
+// Format Google Books Response
+func (h *Handlers) FormatGoogleBooksResponse(response http.ResponseWriter, booksData interface{}) []data.Book {
+	var gBooksResponse []data.Book
+
+	// Ensure that the data is correctly cast to the expected format
+	dataMap, ok := booksData.(map[string]interface{})
+	if !ok {
+			h.logger.Error("Invalid books data format")
+			http.Error(response, "Invalid books data format", http.StatusInternalServerError)
+			return nil
+	}
+
+	items, ok := dataMap["items"].([]interface{})
+	if !ok {
+			h.logger.Error("No items in books data")
+			http.Error(response, "No items in books data", http.StatusInternalServerError)
+			return nil
+	}
+
+	for _, item := range items {
+			volumeInfo, ok := item.(map[string]interface{})["volumeInfo"].(map[string]interface{})
+			if !ok {
+					continue
+			}
+
+			formattedBook := data.Book{
+					Title:       utils.GetStringVal(volumeInfo, "title"),
+					Subtitle:    utils.GetStringVal(volumeInfo, "subtitle"),
+					Description: utils.GetStringVal(volumeInfo, "description"),
+					Language:    utils.GetStringVal(volumeInfo, "language"),
+					PageCount:   utils.GetIntVal(volumeInfo, "pageCount"),
+					PublishDate: utils.GetStringVal(volumeInfo, "publishedDate"),
+			}
+
+			// Handle image links
+			if imageLinks, ok := volumeInfo["imageLinks"].(map[string]interface{}); ok {
+					formattedBook.ImageLinks = append(formattedBook.ImageLinks,
+						utils.GetStringVal(imageLinks, "thumbnail"),
+						utils.GetStringVal(imageLinks, "smallThumbnail"),
+					)
+			}
+
+			// Handle ISBN numbers
+			if industryIdentifiers, ok := volumeInfo["industryIdentifiers"].([]interface{}); ok {
+					for _, id := range industryIdentifiers {
+							if identifier, ok := id.(map[string]interface{}); ok {
+									if utils.GetStringVal(identifier, "type") == "ISBN_13" {
+											formattedBook.ISBN13 = utils.GetStringVal(identifier, "identifier")
+									}
+									if utils.GetStringVal(identifier, "type") == "ISBN_10" {
+											formattedBook.ISBN10 = utils.GetStringVal(identifier, "identifier")
+									}
+							}
+					}
+			}
+
+			// Handle genres
+			if categories, ok := volumeInfo["categories"].([]interface{}); ok {
+					for _, category := range categories {
+							if categoryStr, ok := category.(string); ok {
+									formattedBook.Genres = append(formattedBook.Genres, categoryStr)
+							}
+					}
+			}
+
+			gBooksResponse = append(gBooksResponse, formattedBook)
+	}
+
+	return gBooksResponse
 }
 
 // Get all User Books

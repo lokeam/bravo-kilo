@@ -102,15 +102,15 @@ func TransformGoogleBooksResponse(searchResult map[string]interface{}) ([]Book, 
 			Authors:     authors,
 			ImageLinks:  imageLinks,
 			Title:       volumeInfo["title"].(string),
-			Subtitle:    getStringVal(volumeInfo, "subtitle"),
+			Subtitle:    GetStringVal(volumeInfo, "subtitle"),
 			Details:     BookDetails{
-				Genres:      getStringArrVal(volumeInfo, "categories"),
-				Description: getStringVal(volumeInfo, "description"),
+				Genres:      GetStringArrVal(volumeInfo, "categories"),
+				Description: GetStringVal(volumeInfo, "description"),
 				ISBN10:      isbn10,
 				ISBN13:      isbn13,
-				Language:    getStringVal(volumeInfo, "language"),
-				PageCount:   getIntVal(volumeInfo, "pageCount"),
-				PublishDate: getStringVal(volumeInfo, "publishedDate"),
+				Language:    GetStringVal(volumeInfo, "language"),
+				PageCount:   GetIntVal(volumeInfo, "pageCount"),
+				PublishDate: GetStringVal(volumeInfo, "publishedDate"),
 			},
 		}
 		books = append(books, book)
@@ -118,7 +118,7 @@ func TransformGoogleBooksResponse(searchResult map[string]interface{}) ([]Book, 
 	return books, nil
 }
 	// Helpers to simply accessing types from map[string]interface{}
-	func getStringVal(data map[string]interface{}, key string) string {
+	func GetStringVal(data map[string]interface{}, key string) string {
 		if value, exists := data[key]; exists {
 			return value.(string)
 		}
@@ -126,7 +126,7 @@ func TransformGoogleBooksResponse(searchResult map[string]interface{}) ([]Book, 
 	}
 
 	// Get string array values for response props
-	func getStringArrVal(data map[string]interface{}, key string) []string {
+	func GetStringArrVal(data map[string]interface{}, key string) []string {
 		if value, exists := data[key]; exists {
 			var result []string
 			for _, item := range value.([]interface{}) {
@@ -139,7 +139,7 @@ func TransformGoogleBooksResponse(searchResult map[string]interface{}) ([]Book, 
 
 
 	// Get int values for any response props
-	func getIntVal(data map[string]interface{}, key string) int {
+	func GetIntVal(data map[string]interface{}, key string) int {
 		if value, exists := data[key]; exists {
 			return int(value.(float64))
 		}
