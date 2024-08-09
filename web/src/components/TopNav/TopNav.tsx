@@ -1,11 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from "../AuthContext";
 import Avatar from '../Avatar/Avatar';
 import Modal from '../Modal/Modal';
 import AutoComplete from '../AutoComplete/AutoComplete';
 
-import useSearchStore from '../../store/useSearchStore';
 
 import { IoSearchOutline } from 'react-icons/io5';
 import { IoMdSettings } from "react-icons/io";
@@ -18,8 +17,6 @@ export default function TopNavigation() {
   const location = useLocation();
   const navigate = useNavigate();
   const isSearchPage = location.pathname.includes('library/books/search');
-
-  const { addSearchHistory } = useSearchStore();
 
   const handleGoBack = () => {
     navigate(-1);
@@ -75,23 +72,6 @@ export default function TopNavigation() {
             <div className={`${isSearchPage ? 'visible' : 'invisible'} w-full`}>
               <AutoComplete onSubmit={handleSearchSubmit}/>
             </div>
-            {/* <form onSubmit={(e) => e.preventDefault()} className={`${isSearchPage ? 'visible' : 'invisible'} w-full`} action="#">
-              <label htmlFor="topbar-search" className="sr-only">Search</label>
-              <div className="flex flex-row relative">
-                <div className="flex absolute inset-y-0 left-0 items-center pl-3 pointer-events-none dark:text-white">
-                  <IoSearchOutline />
-                </div>
-                <input
-                  className="bg-maastricht border border-gray-600 text-az-white font-bold sm:text-sm rounded focus:ring-primary-500 focus:border-primary-500 block w-full pl-9 p-2.5 placeholder:polo-blue placeholder:font-bold"
-                  id="topbar-search"
-                  name="search"
-                  onChange={handleSearchChange}
-                  placeholder="Search for a book or author"
-                  type="text"
-                  value={searchQuery}
-                />
-              </div>
-            </form> */}
             {/* ----- Mobile / Nav End ----- */}
             <div className={`${isSearchPage ? 'hidden' : 'visible'} navEnd lg:invisible`}>
               <div className="flex items-center">

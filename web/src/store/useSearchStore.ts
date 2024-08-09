@@ -2,13 +2,20 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 
 export interface SearchResult {
-  id: number;
-  type: string;
-  text: string;
-  subtitle?: string;
+  title: string;
+  description: string;
+  language: string;
+  pageCount: number;
+  publishDate: string;
+  authors: string[];
+  imageLinks: string[];
+  genres: string[];
+  isbn10: string;
+  isbn13: string;
+  isInLibrary: boolean;
 }
 
-interface SearchEntry {
+export interface SearchEntry {
   timestamp: number;
   results: SearchResult[];
 }
@@ -30,25 +37,35 @@ const useSearchStore = create<SearchStoreState>()(
       results: {},
       addSearchHistory: (query, results) => {
         // Store the full SearchResult objects in the history
-        set((state) => ({
-          searchHistory: {
-            ...state.searchHistory,
-            [query]: {
-              timestamp: Date.now(),
-              results, // Store full results here
+        set((state) => {
+          const newState = {
+            searchHistory: {
+              ...state.searchHistory,
+              [query]: {
+                timestamp: Date.now(),
+                results, // Store full results here
+              },
             },
-          },
-          // Optionally update the results cache if needed
-          results: {
-            ...state.results,
-            ...results.reduce((acc, result) => {
-              acc[result.id] = result;
-              return acc;
-            }, {} as { [id: number]: SearchResult }),
-          },
-        }));
+            // Optionally update the results cache if needed
+            results: {
+              ...state.results,
+              ...results.reduce((acc, result) => {
+                acc[result.id] = result;
+                return acc;
+              }, {} as { [id: number]: SearchResult }),
+            },
+          };
+
+          console.log('Updated searchHistory:', newState.searchHistory);
+          console.log('Updated results:', newState.results);
+
+          return newState;
+        });
       },
-      clearSearchHistory: () => set({ searchHistory: {}, results: {} }),
+      clearSearchHistory: () => {
+        set({ searchHistory: {}, results: {} });
+        console.log('Search history cleared');
+      },
       getFilteredSearchHistory: () => {
         const currentTime = Date.now();
         const validEntries: { [query: string]: SearchResult[] } = {};
@@ -59,6 +76,8 @@ const useSearchStore = create<SearchStoreState>()(
           }
         }
 
+        console.log('Filtered search history:', validEntries);
+
         return validEntries;
       },
     }),
@@ -68,5 +87,6 @@ const useSearchStore = create<SearchStoreState>()(
     }
   )
 );
+
 
 export default useSearchStore;

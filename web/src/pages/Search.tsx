@@ -1,42 +1,32 @@
-import CardList from "../components/CardList/CardList";
-import useStore from "../store/useStore";
+import React from 'react';
+import { useSearchParams } from 'react-router-dom';
+import CardList from '../components/CardList/CardList';
+import useSearchStore from '../store/useSearchStore';
 
 const Search = () => {
-  const { searchResults } = useStore();
+  const [searchParams] = useSearchParams();
+  const query = searchParams.get('query') || '';
+  const { searchHistory } = useSearchStore();
 
-  console.log('search page - nav results: ', searchResults);
+  // Retrieve the latest search results from the store using the query from the URL
+  const searchEntry = searchHistory[query];
+  const books = searchEntry ? searchEntry.results : [];
+
+  console.log('Search Page');
+  console.log('Search Page grabbing searchHistory from useSearch Store: ', searchEntry);
+  console.log('Search Page, raw searchParams: ', searchParams);
+  console.log('Search Page, getting query Search Params: ', query);
+
 
   return (
     <div className="bk_lib flex flex-col px-5 antialiased md:px-1 md:ml-24 h-screen pt-20">
-
-      <div className="flex flex-row relative w-full max-w-7xl justify-between items-center text-left text-white border-b-2 border-solid border-zinc-700 pb-6 mb-2">
-
-      </div>
-      {/*
-
-        A. Make request
-          a. Check if cached request exists, if yes move to D. (Render)
-          b. Render loading indicator
-          c. Get response
-        B. Reformat response data (create separate hook for this)
-        C. Save in Global Storage
-          a. Remove loading indicator
-        D. Render in Page
-
-        --- This all must happen before caching data in Global Storage
-        - Take nav results array
-        - Create temp array to reformatted response
-        - Look at each element in response array
-          - Extract the volumeInfo obj
-          - Create a new object holding all book data
-            - Transfer all data from book fields into new obj
-            - Check if new object title || ISBN10 || ISBN13 exists in user's allBooks array
-              - If yes, then set existsInLibrary custom flag in CardItemSearch data model to true
-          - Add new obj to reformatted response array
-
-      {sortedBooks && sortedBooks.length > 0 && <CardList books={sortedBooks} />} */}
+      {books && books.length > 0 ? (
+        <CardList books={books} />
+      ) : (
+        <p>No results found.</p>
+      )}
     </div>
-  )
-}
+  );
+};
 
-export default Search
+export default Search;

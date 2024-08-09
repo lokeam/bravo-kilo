@@ -1,9 +1,8 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import useSearchStore from '../../store/useSearchStore';
-import { SearchResult } from '../../store/useSearchStore';
-
-import { IoClose } from 'react-icons/io5';
-import { IoSearchOutline } from 'react-icons/io5';
+import { IoClose, IoSearchOutline } from 'react-icons/io5';
+import useBookSearch from '../../hooks/useBookSearch';
 
 interface AutoCompleteProps {
   onSubmit: (query: string) => void;
@@ -11,6 +10,7 @@ interface AutoCompleteProps {
 
 const AutoComplete: React.FC<AutoCompleteProps> = ({ onSubmit }) => {
   const [query, setQuery] = useState('');
+  const [searchParams, setSearchParams] = useSearchParams();
   const [highlightedIndex, setHighlightedIndex] = useState<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -19,6 +19,19 @@ const AutoComplete: React.FC<AutoCompleteProps> = ({ onSubmit }) => {
   const suggestions = Object.keys(getFilteredSearchHistory()).filter((key) =>
     key.toLowerCase().startsWith(query.toLowerCase())
   );
+
+  // Use hook to fetch data when the query is submitted
+  const { data } = useBookSearch(searchParams.get('query') || '');
+
+  useEffect(() => {
+    // Update search history based on fetched data when form is submitted
+    if (data && query) {
+      console.log('AutoComplete.tsx: Search results:', data);
+      addSearchHistory(query, data.books);
+    } else {
+      console.log('AutoComplete.tsx: No books found');
+    }
+  }, [data, query, addSearchHistory]);
 
   // Handlers - Clicking outside suggestions list
   const handleClickOutside = useCallback((event: MouseEvent) => {
@@ -61,6 +74,10 @@ const AutoComplete: React.FC<AutoCompleteProps> = ({ onSubmit }) => {
       } else if (e.key === 'Enter') {
         if (highlightedIndex !== null) {
           handleSuggestionClick(suggestions[highlightedIndex]);
+        } else {
+          // Submit the form if no suggestion is highlighted
+          e.preventDefault();
+          handleSubmit();
         }
       } else if (e.key === 'Escape') {
         setHighlightedIndex(null);
@@ -68,7 +85,7 @@ const AutoComplete: React.FC<AutoCompleteProps> = ({ onSubmit }) => {
     }
   };
 
-  // Handlers - Input change
+  // Handlers - Suggestion click
   const handleSuggestionClick = (suggestion: string) => {
     setQuery(suggestion);
     setHighlightedIndex(null);
@@ -76,13 +93,12 @@ const AutoComplete: React.FC<AutoCompleteProps> = ({ onSubmit }) => {
   };
 
   // Handlers - Submitting query
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
+  const handleSubmit = (e?: React.FormEvent<HTMLFormElement>) => {
+    if (e) e.preventDefault();
     const trimmedQuery = query.trim();
 
     if (trimmedQuery !== '') {
-      const fetchedResults: SearchResult[] = [];
-      addSearchHistory(trimmedQuery, fetchedResults);
+      setSearchParams({ query: trimmedQuery });
       onSubmit(trimmedQuery);
       setHighlightedIndex(null);
     }
@@ -90,11 +106,10 @@ const AutoComplete: React.FC<AutoCompleteProps> = ({ onSubmit }) => {
 
   // Handlers - Clear input
   const handleClearInput = () => {
-    console.log('handle clear input');
     setQuery('');
     setHighlightedIndex(null);
     inputRef.current?.focus();
-  }
+  };
 
   useEffect(() => {
     document.addEventListener('mousedown', handleClickOutside);
@@ -111,18 +126,19 @@ const AutoComplete: React.FC<AutoCompleteProps> = ({ onSubmit }) => {
       onBlur={handleBlur}
     >
       <form onSubmit={handleSubmit} className="searchbox_container w-full flex relative">
-        <div className={`searchbox ${
-              highlightedIndex !== null ? 'border-t border-x rounded-b-none border-b-black' : 'border'
-            } w-full rounded border-gray-600 flex relative`}
+        <div
+          className={`searchbox ${
+            highlightedIndex !== null ? 'border-t border-x rounded-b-none border-b-black' : 'border'
+          } w-full rounded border-gray-600 flex relative`}
         >
           <button
             className="searchbox__clear_search_field inline-flex outline-none rounded-none flex-row items-center justify-center bg-maastricht"
             type="submit"
-            >
-            <IoSearchOutline size={24}/>
+          >
+            <IoSearchOutline size={24} />
           </button>
           <input
-          ref={inputRef}
+            ref={inputRef}
             type="text"
             value={query}
             onChange={handleInputChange}
@@ -135,7 +151,7 @@ const AutoComplete: React.FC<AutoCompleteProps> = ({ onSubmit }) => {
             onClick={handleClearInput}
             type="button"
           >
-            <IoClose size={18}/>
+            <IoClose size={18} />
           </button>
         </div>
       </form>
