@@ -13,6 +13,7 @@ import (
 	"log"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"time"
@@ -442,6 +443,11 @@ func (h *Handlers) SearchBooks(response http.ResponseWriter, request *http.Reque
 			return
 	}
 
+	// Debug - Set headers to prevent caching
+	response.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	response.Header().Set("Pragma", "no-cache")
+	response.Header().Set("Expires", "0")
+
 	// Get user's access token
 	accessToken, err := h.getUserAccessToken(request)
 	if err != nil {
@@ -452,9 +458,9 @@ func (h *Handlers) SearchBooks(response http.ResponseWriter, request *http.Reque
 
 	// Use the access token to call the Google Books API
 	client := oauth2.NewClient(context.Background(), oauth2.StaticTokenSource(accessToken))
-	googleBooksURL := fmt.Sprintf("https://www.googleapis.com/books/v1/volumes?q=%s", query)
+	googleBooksURL := fmt.Sprintf("https://www.googleapis.com/books/v1/volumes?q=%s", url.QueryEscape(query))
 
-	h.logger.Info("Using access token", "accessToken", accessToken.AccessToken)
+	h.logger.Info("Requesting Google Books API", "url", googleBooksURL)
 
 	booksResponse, err := client.Get(googleBooksURL)
 	if err != nil {
@@ -482,6 +488,8 @@ func (h *Handlers) SearchBooks(response http.ResponseWriter, request *http.Reque
 
 	// Format the books response
 	formattedBooks := h.FormatGoogleBooksResponse(response, booksData)
+	h.logger.Info("---------------")
+	h.logger.Info("Showing formattedBooks, pre-check:", "formattedBooks", formattedBooks)
 
 	// Get user ID from JWT
 	cookie, err := request.Cookie("token")
@@ -533,12 +541,20 @@ func (h *Handlers) SearchBooks(response http.ResponseWriter, request *http.Reque
 					titleSet.Has(formattedBooks[i].Title)
 	}
 
+	h.logger.Info("===================")
+	h.logger.Info("Showing formattedBooks, post check, about to send:", "formattedBooks", formattedBooks)
+
+	dbResponse := map[string]interface{}{
+		"books": formattedBooks,
+	}
+
 	response.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(response).Encode(formattedBooks); err != nil {
+	if err := json.NewEncoder(response).Encode(dbResponse); err != nil {
 			h.logger.Error("Error encoding response", "error", err)
 			http.Error(response, "Error encoding response", http.StatusInternalServerError)
 	}
 }
+
 
 // Format Google Books Response
 func (h *Handlers) FormatGoogleBooksResponse(response http.ResponseWriter, booksData interface{}) []data.Book {
@@ -547,69 +563,84 @@ func (h *Handlers) FormatGoogleBooksResponse(response http.ResponseWriter, books
 	// Ensure that the data is correctly cast to the expected format
 	dataMap, ok := booksData.(map[string]interface{})
 	if !ok {
-			h.logger.Error("Invalid books data format")
-			http.Error(response, "Invalid books data format", http.StatusInternalServerError)
-			return nil
+		h.logger.Error("Invalid books data format")
+		http.Error(response, "Invalid books data format", http.StatusInternalServerError)
+		return nil
 	}
 
 	items, ok := dataMap["items"].([]interface{})
 	if !ok {
-			h.logger.Error("No items in books data")
-			http.Error(response, "No items in books data", http.StatusInternalServerError)
-			return nil
+		h.logger.Warn("No items in books data")
+		return gBooksResponse // Return an empty slice if no items are found
 	}
 
 	for _, item := range items {
-			volumeInfo, ok := item.(map[string]interface{})["volumeInfo"].(map[string]interface{})
-			if !ok {
-					continue
-			}
+		volumeInfo, ok := item.(map[string]interface{})["volumeInfo"].(map[string]interface{})
+		if !ok {
+			h.logger.Warn("Invalid volumeInfo format", "item", item)
+			continue // Skip items with invalid format
+		}
 
-			formattedBook := data.Book{
-					Title:       utils.GetStringVal(volumeInfo, "title"),
-					Subtitle:    utils.GetStringVal(volumeInfo, "subtitle"),
-					Description: utils.GetStringVal(volumeInfo, "description"),
-					Language:    utils.GetStringVal(volumeInfo, "language"),
-					PageCount:   utils.GetIntVal(volumeInfo, "pageCount"),
-					PublishDate: utils.GetStringVal(volumeInfo, "publishedDate"),
-			}
+		// Use utility functions to safely retrieve string and integer values with defaults
+		formattedBook := data.Book{
+			Title:       utils.GetStringValOrDefault(volumeInfo, "title", ""),
+			Subtitle:    utils.GetStringValOrDefault(volumeInfo, "subtitle", ""),
+			Description: utils.GetStringValOrDefault(volumeInfo, "description", ""),
+			Language:    utils.GetStringValOrDefault(volumeInfo, "language", ""),
+			PageCount:   utils.GetIntValOrDefault(volumeInfo, "pageCount", 0),
+			PublishDate: utils.GetStringValOrDefault(volumeInfo, "publishedDate", ""),
+		}
 
-			// Handle image links
-			if imageLinks, ok := volumeInfo["imageLinks"].(map[string]interface{}); ok {
-					formattedBook.ImageLinks = append(formattedBook.ImageLinks,
-						utils.GetStringVal(imageLinks, "thumbnail"),
-						utils.GetStringVal(imageLinks, "smallThumbnail"),
-					)
-			}
+		// Handle image links, ensuring it's always an array
+		formattedBook.ImageLinks = []string{}
+		if imageLinks, ok := volumeInfo["imageLinks"].(map[string]interface{}); ok {
+			formattedBook.ImageLinks = append(formattedBook.ImageLinks,
+				utils.GetStringValOrDefault(imageLinks, "thumbnail", ""),
+				utils.GetStringValOrDefault(imageLinks, "smallThumbnail", ""),
+			)
+		}
 
-			// Handle ISBN numbers
-			if industryIdentifiers, ok := volumeInfo["industryIdentifiers"].([]interface{}); ok {
-					for _, id := range industryIdentifiers {
-							if identifier, ok := id.(map[string]interface{}); ok {
-									if utils.GetStringVal(identifier, "type") == "ISBN_13" {
-											formattedBook.ISBN13 = utils.GetStringVal(identifier, "identifier")
-									}
-									if utils.GetStringVal(identifier, "type") == "ISBN_10" {
-											formattedBook.ISBN10 = utils.GetStringVal(identifier, "identifier")
-									}
-							}
+		// Handle ISBN numbers
+		if industryIdentifiers, ok := volumeInfo["industryIdentifiers"].([]interface{}); ok {
+			for _, id := range industryIdentifiers {
+				if identifier, ok := id.(map[string]interface{}); ok {
+					if utils.GetStringValOrDefault(identifier, "type", "") == "ISBN_13" {
+						formattedBook.ISBN13 = utils.GetStringValOrDefault(identifier, "identifier", "")
 					}
-			}
-
-			// Handle genres
-			if categories, ok := volumeInfo["categories"].([]interface{}); ok {
-					for _, category := range categories {
-							if categoryStr, ok := category.(string); ok {
-									formattedBook.Genres = append(formattedBook.Genres, categoryStr)
-							}
+					if utils.GetStringValOrDefault(identifier, "type", "") == "ISBN_10" {
+						formattedBook.ISBN10 = utils.GetStringValOrDefault(identifier, "identifier", "")
 					}
+				}
 			}
+		}
 
-			gBooksResponse = append(gBooksResponse, formattedBook)
+		// Handle genres, ensuring it's always an array
+		formattedBook.Genres = []string{}
+		if categories, ok := volumeInfo["categories"].([]interface{}); ok {
+			for _, category := range categories {
+				if categoryStr, ok := category.(string); ok {
+					formattedBook.Genres = append(formattedBook.Genres, categoryStr)
+				}
+			}
+		}
+
+		// Handle authors, ensuring it's always an array
+		formattedBook.Authors = []string{}
+		if authors, ok := volumeInfo["authors"].([]interface{}); ok {
+			for _, author := range authors {
+				if authorStr, ok := author.(string); ok {
+					formattedBook.Authors = append(formattedBook.Authors, authorStr)
+				}
+			}
+		}
+
+		gBooksResponse = append(gBooksResponse, formattedBook)
 	}
 
+	h.logger.Info("Formatted books", "books", gBooksResponse)
 	return gBooksResponse
 }
+
 
 // Get all User Books
 func (h *Handlers) GetAllUserBooks(response http.ResponseWriter, request *http.Request) {

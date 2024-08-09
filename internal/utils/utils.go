@@ -1,7 +1,6 @@
 package utils
 
 import (
-	"errors"
 	"log/slog"
 	"strings"
 )
@@ -51,97 +50,46 @@ func SplitFullName(fullName string) (string, string) {
 	return firstName, lastName
 }
 
-func TransformGoogleBooksResponse(searchResult map[string]interface{}) ([]Book, error) {
-	items, ok := searchResult["items"].([]interface{})
-	if !ok {
-		logger.Error("Invalid response format")
-		return nil, errors.New("invalid response format")
+// GetStringValOrDefault safely retrieves a string value from the map or returns a default
+func GetStringValOrDefault(data map[string]interface{}, key string, defaultValue string) string {
+	if value, exists := data[key]; exists {
+		if strValue, ok := value.(string); ok {
+			return strValue
+		}
 	}
+	return defaultValue
+}
 
-	var books []Book
-
-	// Check for book volume data
-	for _, item := range items {
-		volumeInfo, ok := item.(map[string]interface{})["volumeInfo"].(map[string]interface{})
-		if !ok {
-			logger.Error("Missing volumeInfo prop in Google API Book item response")
+// GetIntValOrDefault safely retrieves an int value from the map or returns a default
+func GetIntValOrDefault(data map[string]interface{}, key string, defaultValue int) int {
+	if value, exists := data[key]; exists {
+		if intValue, ok := value.(float64); ok { // JSON numbers are float64 by default
+			return int(intValue)
 		}
+	}
+	return defaultValue
+}
 
-		// Check for authors
-		authors := []string{}
-		if authorsData, exists := volumeInfo["authors"].([]interface{}); exists {
-			for _, author := range authorsData {
-				authors = append(authors, author.(string))
-			}
-		}
-
-		// Check for img links
-		imageLinks := []string{}
-		if imageLinksData, exists := volumeInfo["imageLinks"].(map[string]interface{}); exists {
-			for _, link := range imageLinksData {
-				imageLinks = append(imageLinks, link.(string))
-			}
-		}
-
-		// Check for ISBN
-		var isbn10, isbn13 string
-		if industryIDsData, exists := volumeInfo["industryIdentifiers"].([]interface{}); exists {
-			for _, id := range industryIDsData {
-				identifier := id.(map[string]interface{})
-				switch identifier["type"].(string) {
-				case "ISBN_10":
-					isbn10 = identifier["identifier"].(string)
-				case "ISBN_13":
-					isbn13 = identifier["identifier"].(string)
+// GetStringArrVal retrieves a string array value or returns an empty array
+func GetStringArrVal(data map[string]interface{}, key string) []string {
+	if value, exists := data[key]; exists {
+		var result []string
+		if arr, ok := value.([]interface{}); ok {
+			for _, item := range arr {
+				if str, ok := item.(string); ok {
+					result = append(result, str)
 				}
 			}
 		}
-
-		// Build out book struct
-		book := Book{
-			Authors:     authors,
-			ImageLinks:  imageLinks,
-			Title:       volumeInfo["title"].(string),
-			Subtitle:    GetStringVal(volumeInfo, "subtitle"),
-			Details:     BookDetails{
-				Genres:      GetStringArrVal(volumeInfo, "categories"),
-				Description: GetStringVal(volumeInfo, "description"),
-				ISBN10:      isbn10,
-				ISBN13:      isbn13,
-				Language:    GetStringVal(volumeInfo, "language"),
-				PageCount:   GetIntVal(volumeInfo, "pageCount"),
-				PublishDate: GetStringVal(volumeInfo, "publishedDate"),
-			},
-		}
-		books = append(books, book)
+		return result
 	}
-	return books, nil
+	return []string{}
 }
-	// Helpers to simply accessing types from map[string]interface{}
-	func GetStringVal(data map[string]interface{}, key string) string {
-		if value, exists := data[key]; exists {
-			return value.(string)
-		}
-		return ""
-	}
 
-	// Get string array values for response props
-	func GetStringArrVal(data map[string]interface{}, key string) []string {
-		if value, exists := data[key]; exists {
-			var result []string
-			for _, item := range value.([]interface{}) {
-				result = append(result, item.(string))
-			}
-			return result
-		}
-		return []string{}
+// GetIntVal retrieves an integer value for any response props
+func GetIntVal(data map[string]interface{}, key string) int {
+	if value, exists := data[key]; exists {
+		return int(value.(float64))
 	}
-
-
-	// Get int values for any response props
-	func GetIntVal(data map[string]interface{}, key string) int {
-		if value, exists := data[key]; exists {
-			return int(value.(float64))
-		}
-		return 0
-	}
+	return 0
+}
