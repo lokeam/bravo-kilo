@@ -13,15 +13,14 @@ const Search = () => {
   const books = searchEntry ? searchEntry.results : [];
 
   console.log('Search Page');
-  console.log('Search Page grabbing searchHistory from useSearch Store: ', searchEntry);
   console.log('Search Page, raw searchParams: ', searchParams);
   console.log('Search Page, getting query Search Params: ', query);
-
+  console.log('Search Page grabbing searchHistory from useSearch Store: ', searchEntry);
 
   return (
     <div className="bk_lib flex flex-col px-5 antialiased md:px-1 md:ml-24 h-screen pt-20">
       {books && books.length > 0 ? (
-        <CardList books={books} />
+        <CardList isSearchPage books={books} />
       ) : (
         <p>No results found.</p>
       )}

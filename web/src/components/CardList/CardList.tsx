@@ -6,6 +6,7 @@ import { Book } from '../../pages/Library';
 
 interface CardListItemDefault {
   books: Book[];
+  isSearchPage?: boolean;
 }
 
 interface CardListItemAuthor {
@@ -90,7 +91,7 @@ export default function CardList(props: CardListItemProps) {
       <div className="card_list__wrapper pb-20 md:pb-4 flex flex-col relative w-full max-w-7xl mt-8">
         <ul className="flex flex-col justify-center rounded text-white">
           {props.books.map((book: Book) => (
-            <CardListItem key={`${book.id}-${book.title}-${book.pageCount}`} book={book} />
+            <CardListItem key={`${book.id}-${book.title}-${book.pageCount}`} book={book} isSearchPage={props.isSearchPage} />
           ))}
         </ul>
       </div>

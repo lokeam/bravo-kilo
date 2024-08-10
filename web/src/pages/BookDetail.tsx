@@ -1,10 +1,11 @@
 import { useLocation, useParams, useNavigate } from 'react-router-dom';
+import ImagePlaceholder from '../components/CardList/ImagePlaceholder';
+
 import useScrollShrink from "../hooks/useScrollShrink";
 import useFetchBookById from '../hooks/useFetchBookById';
 import { Book } from './Library';
 
-import { IoArrowBackCircle } from "react-icons/io5";
-import { BsThreeDotsVertical } from "react-icons/bs";
+import { IoIosAdd } from "react-icons/io";
 import { TbEdit } from "react-icons/tb";
 
 
@@ -36,24 +37,22 @@ const BookDetail = () => {
   const genres = book.genres?.join(', ') || ['Unknown Genre'];
 
   return (
-    <div className="bk_book_page mx-auto flex flex-col align-center max-w-screen-md h-screen p-5">
-      <div className="bk_book_page__top_nav flex flex-row sticky top-0 justify-between w-full">
-        <button onClick={() => navigate('/library')} className="bg-transparent h-auto w-auto">
-          <IoArrowBackCircle color="white" className="h-12 w-12" />
-        </button>
-        <button className="bg-transparent">
-          <BsThreeDotsVertical className="h-12 w-12" />
-        </button>
-      </div>
+    <div className="bk_book_page mx-auto flex flex-col align-center max-w-screen-md h-screen p-5 pt-24">
 
       <div className="bk_book_thumb relative flex justify-center align-center rounded w-full">
-        <img
-          alt={`Thumbnail for ${book.title}`}
-          className="bk_book_thumb_img h-52 w-52"
-          loading="lazy"
-          src={book.imageLinks[0]}
-          ref={imageRef}
-        />
+        {
+          book.imageLinks.length > 0 ? (
+            <img
+            alt={`Thumbnail for ${book.title}`}
+            className="bk_book_thumb_img h-52 w-52"
+            loading="lazy"
+            src={book.imageLinks[0]}
+            ref={imageRef}
+          />
+          ) : (
+            <ImagePlaceholder isBookDetail />
+          )
+        }
       </div>
 
       <div className="bk_book_title_wrapper flex flex-col justify-center relative mt-6 mb-2 text-center">
@@ -68,19 +67,27 @@ const BookDetail = () => {
       </div>
 
       <div className="bk_book_cta flex flex-col w-full my-3">
-        <button onClick={() => navigate(`/library/books/${bookID}/edit`, { state: { book } })} className="flex items-center justify-center rounded bg-hepatica font-bold">
-          <TbEdit className="h-8 w-8 mr-4"/>Edit Information
-        </button>
+        {
+          !book.isInLibrary ? (
+            <button onClick={() => navigate(`/library/books/${bookID}/edit`, { state: { book } })} className="flex items-center justify-center rounded bg-hepatica font-bold">
+              <IoIosAdd className="h-8 w-8 mr-4"/>Add Book to Library
+            </button>
+          ) : (
+            <button onClick={() => navigate(`/library/books/${bookID}/edit`, { state: { book } })} className="flex items-center justify-center rounded bg-hepatica font-bold">
+              <TbEdit className="h-8 w-8 mr-4"/>Edit Book Details
+            </button>
+          )
+        }
       </div>
 
       <div className="bk_book__details text-left my-4">
         <h3 className="text-2xl font-bold pb-2">Product Details</h3>
         <div className="bk_book_metadata flex flex-col mb-4">
-          <p className="my-1 text-cadet-gray"><span className="font-bold mr-1">Publish Date:</span>{book.publishDate}</p>
-          <p className="my-1 text-cadet-gray"><span className="font-bold mr-1">Pages:</span>{book.pageCount}</p>
-          <p className="my-1 text-cadet-gray"><span className="font-bold mr-1">Language:</span>{book.language}</p>
-          <p className="my-1 text-cadet-gray"><span className="font-bold mr-1">ISBN-10:</span>{book.isbn10}</p>
-          <p className="my-1 text-cadet-gray"><span className="font-bold mr-1">ISBN-13:</span>{book.isbn13}</p>
+          <p className="my-1 text-cadet-gray"><span className="font-bold mr-1">Publish Date:</span>{book.publishDate !== "" ? book.publishDate : "No publish date available"}</p>
+          <p className="my-1 text-cadet-gray"><span className="font-bold mr-1">Pages:</span>{book.pageCount !== 0 ? book.pageCount : "No page count available"}</p>
+          <p className="my-1 text-cadet-gray"><span className="font-bold mr-1">Language:</span>{book.language !== "" ? book.language : "No language classification available"}</p>
+          <p className="my-1 text-cadet-gray"><span className="font-bold mr-1">ISBN-10:</span>{book.isbn10 !== "" ? book.isbn10 : "No ISBN10 data available"}</p>
+          <p className="my-1 text-cadet-gray"><span className="font-bold mr-1">ISBN-13:</span>{book.isbn13 !== "" ? book.isbn13: "No ISBN13 data available"}</p>
         </div>
         <div className="bk_book__details flex flex-col text-left mb-4">
           <h3 className="text-2xl font-bold mb-4">Tagged as:</h3>
@@ -90,13 +97,17 @@ const BookDetail = () => {
             ))}
           </div>
         </div>
-        <div className="bk_description text-left mb-4">
-          <h3 className="text-2xl font-bold mb-2">Personal Notes</h3>
-          <p className="text-cadet-gray">{book.notes}</p>
-        </div>
+        {
+          book.notes !== "" ? (
+            <div className="bk_description text-left mb-4">
+              <h3 className="text-2xl font-bold mb-2">Personal Notes</h3>
+              <p className="text-cadet-gray">{book.notes}</p>
+            </div>
+          ) : null
+        }
         <div className="bk_description text-left mb-4">
           <h3 className="text-2xl font-bold pb-2">Book Description</h3>
-          <p className="text-cadet-gray">{book.description}</p>
+          <p className="text-cadet-gray">{book.description !== "" ? book.description : "No book description available"}</p>
         </div>
       </div>
     </div>

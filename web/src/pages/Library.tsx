@@ -10,22 +10,23 @@ import { PiArrowsDownUp } from 'react-icons/pi';
 import { fetchBooksAuthors, fetchBooksFormat, fetchBooksGenres } from '../service/apiClient.service';
 
 export interface Book {
-  id: number;
+  id?: number;
   title: string;
   subtitle?: string;
-  description: string;
+  description?: string;
   language: string;
   pageCount: number;
-  publishDate: string;
+  publishDate?: string;
   authors: string[];
   imageLinks: string[];
   genres: string[];
-  notes: string;
-  formats: ('physical' | 'eBook' | 'audioBook')[];
-  createdAt: string;
-  lastUpdated: string;
+  notes?: string;
+  formats?: ('physical' | 'eBook' | 'audioBook')[];
+  createdAt?: string;
+  lastUpdated?: string;
   isbn10: string;
   isbn13: string;
+  isInLibrary?: boolean;
 }
 
 // Create Book Authors/Genres intersection types that combines both obj types, expect both types
@@ -263,7 +264,7 @@ const Library = () => {
       ) : activeTab === 'Genres' && bookGenres?.allGenres ? (
         <CardList allGenres={bookGenres.allGenres} genreBooks={bookGenres} />
       ) : (
-        sortedBooks && sortedBooks.length > 0 && <CardList books={sortedBooks} />
+        sortedBooks && sortedBooks.length > 0 && <CardList books={sortedBooks} isSearchPage={false} />
       )}
     </div>
   )

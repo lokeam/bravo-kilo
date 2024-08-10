@@ -10,12 +10,15 @@ import { IoSearchOutline } from 'react-icons/io5';
 import { IoMdSettings } from "react-icons/io";
 import { MdLogout } from "react-icons/md";
 import { ImArrowLeft2 } from "react-icons/im";
+import { IoIosArrowDown } from "react-icons/io";
+
 
 export default function TopNavigation() {
   const [opened, setOpened] = useState(false);
   const { logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+  const isSearchDetailPage = location.pathname.includes('library/books/');
   const isSearchPage = location.pathname.includes('library/books/search');
 
   const handleGoBack = () => {
@@ -40,7 +43,7 @@ export default function TopNavigation() {
       <header className="antialiased relative w-full h-auto">
         <nav className="fixed border-none flex items-center content-center left-0 right-0 top-0 z-50 bg-black lg:px-6 h-[67px] text-white w-full">
           <button
-            className={`${isSearchPage ? 'block' : 'hidden'} ml-1 mr-10 cursor-pointer bg-transparent border-none`}
+            className={`${isSearchDetailPage ? 'block' : 'hidden'} ml-1 mr-10 cursor-pointer bg-transparent border-none`}
             onClick={handleGoBack}
           >
             <ImArrowLeft2 size={20}/>
@@ -48,7 +51,7 @@ export default function TopNavigation() {
           <div className={`relative flex flex-row  justify-items-center items-center w-full`}>
 
             {/* ----- Logo / Nav Start ----- */}
-            <div className={`${isSearchPage ? 'hidden' : 'block'} navLeft`}>
+            <div className={`${isSearchDetailPage ? 'hidden' : 'block'} navLeft`}>
                 <button
                   className="flex border-none bg-transparent antialiased translate-x-0 mid:translate-x-0"
                   onClick={openModal}
@@ -73,7 +76,7 @@ export default function TopNavigation() {
               <AutoComplete onSubmit={handleSearchSubmit}/>
             </div>
             {/* ----- Mobile / Nav End ----- */}
-            <div className={`${isSearchPage ? 'hidden' : 'visible'} navEnd lg:invisible`}>
+            <div className={`${isSearchDetailPage ? 'hidden' : 'visible'} navEnd lg:invisible`}>
               <div className="flex items-center">
                 <button type="button" data-dropdown-toggle="notification-dropdown" className="p-3 mr-1 text-gray-500 rounded hover:text-gray-900 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-white dark:hover:bg-gray-700 focus:ring-4 focus:ring-gray-300 dark:focus:ring-gray-600">
                   <span className="sr-only">View notifications</span>

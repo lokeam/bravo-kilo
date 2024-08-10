@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { Book } from '../../pages/Library';
 import Modal from '../Modal/ModalRoot';
+import ImagePlaceholder from './ImagePlaceholder';
 import { useNavigate } from 'react-router-dom';
+import { Book } from '../../pages/Library';
 
 import { AiFillFolderAdd } from "react-icons/ai";
 import { BsThreeDotsVertical } from "react-icons/bs";
@@ -12,9 +13,10 @@ import { TbEdit } from "react-icons/tb";
 
 interface CardListItemProps {
   book: Book;
+  isSearchPage?: boolean;
 }
 
-export default function CardListItem({ book }: CardListItemProps) {
+export default function CardListItem({ book, isSearchPage }: CardListItemProps) {
   const [opened, setOpened] = useState<boolean>(false);
 
   const { authors, id, imageLinks, pageCount, title } = book;
@@ -30,10 +32,19 @@ export default function CardListItem({ book }: CardListItemProps) {
   return (
       <li key={`${title}-${id}`} className="py-3 flex items-start justify-between">
         <div className="flex gap-3 cursor-pointer" onClick={handleBookClick}>
-          <img loading="lazy" src={imageLinks[0]} alt={`Book cover thumbnail for ${title}`} className="flex-none rounded w-16 h-16" />
+          {
+            imageLinks.length > 0 ? (
+              <img loading="lazy" src={imageLinks[0]} alt={`Book cover thumbnail for ${title}`} className="flex-none rounded w-16 h-16" />
+            ) : (
+              <ImagePlaceholder isBookDetail={false}/>
+            )
+          }
           <div className="card_list__item_copy text-left pt-1">
-            <span className="block text-sm text-white font-semibold">{title}</span>
+            <span className="block text-base text-white font-semibold">{title}</span>
             <span className="block text-sm text-gray-400">by {authors[0]}</span>
+            {
+              isSearchPage && book.isInLibrary && <div className="block text-sm text-white font-semibold">IN YOUR LIBRARY</div>
+            }
           </div>
         </div>
         <button onClick={openModal} className="bg-transparent">

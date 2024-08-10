@@ -456,6 +456,9 @@ func (b *BookModel) GetByID(id int) (*Book, error) {
 	}
 	book.Formats = formats
 
+	// Mark book as inLibary
+	book.IsInLibrary = true;
+
 	return &book, nil
 }
 
@@ -603,6 +606,9 @@ func (b *BookModel) GetAllBooksByAuthors(userID int) (map[string]interface{}, er
 		}
 		book.Tags = tags
 
+		// Mark book as in Library
+		book.IsInLibrary = true;
+
 		// Add author to the list if not already present
 		if _, found := booksByAuthor[authorName]; !found {
 			authors = append(authors, authorName)
@@ -724,6 +730,9 @@ func (b *BookModel) GetAllBooksByUserID(userID int) ([]Book, error) {
 				return nil, err
 		}
 		book.Tags = tags
+
+		// Mark book as in Library
+		book.IsInLibrary = true;
 
 		books = append(books, book)
 	}
@@ -902,6 +911,10 @@ func (b *BookModel) GetBooksByAuthor(authorName string) ([]Book, error) {
 		authorRows.Close()
 
 		book.Authors = authors
+
+		// Mark book as in Library
+		book.IsInLibrary = true;
+
 		books = append(books, book)
 	}
 
@@ -1070,6 +1083,9 @@ func (b *BookModel) GetAllBooksByFormat(userID int) (map[string][]Book, error) {
 		}
 		book.Tags = tags
 
+		// Mark book as in Library
+		book.IsInLibrary = true;
+
 		// b.Logger.Info("Processing book in format", "formatType", formatType, "bookID", book.ID)
 
 		// Add book to the appropriate format list
@@ -1097,6 +1113,7 @@ func (b *BookModel) GetAllBooksByFormat(userID int) (map[string][]Book, error) {
 		}
 	}
 
+	// Debug - Remove after UAT before prod push
 	if len(booksByFormat["audioBooks"]) == 0 && len(booksByFormat["eBooks"]) == 0 && len(booksByFormat["physicalBooks"]) == 0 {
 		b.Logger.Warn("No books found for user", "userID", userID)
 	} else {
@@ -1277,6 +1294,48 @@ func (b *BookModel) GetAllBooksTitles(userID int) (*collections.Set, error) {
 	}
 
 	return isbnSet, nil
+}
+
+// Get all books and publish dates for specific user and return them in a HashMap
+func (b *BookModel) GetAllBooksPublishDate(userID int) (map[string]string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	query := `
+	SELECT b.title, b.publish_date
+	FROM books b
+	INNER JOIN user_books ub ON b.id = ub.book_id
+	WHERE ub.user_id = $1`
+
+	rows, err := b.DB.QueryContext(ctx, query, userID)
+	if err != nil {
+		b.Logger.Error("Error retrieving book titles and publish dates", "error", err)
+		return nil, err
+	}
+	defer rows.Close()
+
+	bookMap := make(map[string]string)
+
+	for rows.Next() {
+		var title string
+		var publishDate time.Time
+		if err := rows.Scan(&title, &publishDate); err != nil {
+			b.Logger.Error("Error scanning book title and publish date", "error", err)
+			return nil, err
+		}
+
+		// Format publish date to "YYYY-MM-DD"
+		formattedDate := publishDate.Format("2006-01-02")
+
+		bookMap[title] = formattedDate
+	}
+
+	if err = rows.Err(); err != nil {
+		b.Logger.Error("Error with rows", "error", err)
+		return nil, err
+	}
+
+	return bookMap, nil
 }
 
 // Format

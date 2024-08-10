@@ -94,14 +94,6 @@ const EditBook = () => {
 
   return (
     <section className="bg-white dark:bg-gray-900">
-      <div className="bk_book_page__top_nav flex flex-row sticky top-0 justify-between w-full">
-        <button onClick={() => navigate('/library')} className="bg-transparent h-auto w-auto">
-          <IoArrowBackCircle color="white" className="h-12 w-12" />
-        </button>
-        <button className="bg-transparent">
-          <BsThreeDotsVertical className="h-12 w-12" />
-        </button>
-      </div>
 
       <div className="text-left py-8 px-4 mx-auto max-w-2xl lg:py-16">
         <h2 className="mb-4 text-xl font-bold text-gray-900 dark:text-white">Edit Book</h2>

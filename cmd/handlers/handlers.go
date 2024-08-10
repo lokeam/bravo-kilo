@@ -488,8 +488,8 @@ func (h *Handlers) SearchBooks(response http.ResponseWriter, request *http.Reque
 
 	// Format the books response
 	formattedBooks := h.FormatGoogleBooksResponse(response, booksData)
-	h.logger.Info("---------------")
-	h.logger.Info("Showing formattedBooks, pre-check:", "formattedBooks", formattedBooks)
+	// h.logger.Info("---------------")
+	// h.logger.Info("Showing formattedBooks, pre-check:", "formattedBooks", formattedBooks)
 
 	// Get user ID from JWT
 	cookie, err := request.Cookie("token")
@@ -527,25 +527,41 @@ func (h *Handlers) SearchBooks(response http.ResponseWriter, request *http.Reque
 			return
 	}
 
-	titleSet, err := h.models.Book.GetAllBooksTitles(userID)
+	// Debug - temporarily remove book title check
+	// titleSet, err := h.models.Book.GetAllBooksTitles(userID)
+	// if err != nil {
+	// 		h.logger.Error("Error retrieving user's book titles", "error", err)
+	// 		http.Error(response, "Error retrieving user's book titles", http.StatusInternalServerError)
+	// 		return
+	// }
+
+	bookMap, err := h.models.Book.GetAllBooksPublishDate(userID)
 	if err != nil {
-			h.logger.Error("Error retrieving user's book titles", "error", err)
-			http.Error(response, "Error retrieving user's book titles", http.StatusInternalServerError)
-			return
+		h.logger.Error("Error retrieving user's book publish dates", "error", err)
+		http.Error(response, "Error retrieving user's book publish dates", http.StatusInternalServerError)
+		return
 	}
+
+	// Check bookMap
+	h.logger.Info("======================================")
+	fmt.Println("Checking bookmap: ", bookMap)
 
 	// Check each book against the user's library
 	for i := range formattedBooks {
-			formattedBooks[i].IsInLibrary = isbn10Set.Has(formattedBooks[i].ISBN10) ||
-					isbn13Set.Has(formattedBooks[i].ISBN13) ||
-					titleSet.Has(formattedBooks[i].Title)
+		formattedBook := &formattedBooks[i]
+		isInLibrary := (isbn10Set.Has(formattedBook.ISBN10) || isbn13Set.Has(formattedBook.ISBN13)) &&
+			bookMap[formattedBook.Title] == formattedBook.PublishDate
+			fmt.Println("checking formattedBook.publishDate", formattedBook.PublishDate)
+
+		formattedBook.IsInLibrary = isInLibrary
 	}
 
-	h.logger.Info("===================")
-	h.logger.Info("Showing formattedBooks, post check, about to send:", "formattedBooks", formattedBooks)
+	// h.logger.Info("===================")
+	// h.logger.Info("Showing formattedBooks, post check, about to send:", "formattedBooks", formattedBooks)
 
 	dbResponse := map[string]interface{}{
 		"books": formattedBooks,
+		"isSearchPage": true,
 	}
 
 	response.Header().Set("Content-Type", "application/json")
@@ -676,6 +692,7 @@ func (h *Handlers) GetAllUserBooks(response http.ResponseWriter, request *http.R
 
 	dbResponse := map[string]interface{}{
 		"books": books,
+		"isInLibrary": true,
 	}
 
 	response.Header().Set("Content-Type", "application/json")
