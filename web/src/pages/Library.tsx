@@ -27,6 +27,8 @@ export interface Book {
   isbn10: string;
   isbn13: string;
   isInLibrary?: boolean;
+  hasEmptyFields?: boolean;
+  emptyFields?: string[];
 }
 
 // Create Book Authors/Genres intersection types that combines both obj types, expect both types

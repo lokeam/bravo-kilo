@@ -571,6 +571,27 @@ func (h *Handlers) SearchBooks(response http.ResponseWriter, request *http.Reque
 	}
 }
 
+// Helper fn to check for empty fields in GBooks Response
+func checkEmptyFields(book data.Book) (bool, []string) {
+	emptyFields := []string{}
+
+	if book.Title == "" {
+		emptyFields = append(emptyFields, "Title")
+	}
+	if book.PublishDate == "" {
+		emptyFields = append(emptyFields, "Publish date")
+	}
+	if book.ISBN10 == "" {
+		emptyFields = append(emptyFields, "ISBN-10")
+	}
+	if book.ISBN13 == "" {
+		emptyFields = append(emptyFields, "ISBN-13")
+	}
+
+	hasEmptyFields := len(emptyFields) > 0
+
+	return hasEmptyFields, emptyFields
+}
 
 // Format Google Books Response
 func (h *Handlers) FormatGoogleBooksResponse(response http.ResponseWriter, booksData interface{}) []data.Book {
@@ -649,6 +670,11 @@ func (h *Handlers) FormatGoogleBooksResponse(response http.ResponseWriter, books
 				}
 			}
 		}
+
+		// Check for empty fields
+		hasEmptyFields, emptyFields := checkEmptyFields(formattedBook)
+		formattedBook.HasEmptyFields = hasEmptyFields
+		formattedBook.EmptyFields = emptyFields
 
 		gBooksResponse = append(gBooksResponse, formattedBook)
 	}
@@ -793,6 +819,58 @@ func (h *Handlers) GetBookByID(response http.ResponseWriter, request *http.Reque
 		http.Error(response, "Error encoding response", http.StatusInternalServerError)
 	}
 }
+
+// Get a Single Book's ID by title
+func (h *Handlers) GetBookIDByTitle(response http.ResponseWriter, request *http.Request) {
+	// Grab token from cookie
+	cookie, err := request.Cookie("token")
+	if err != nil {
+			h.logger.Error("No token cookie", "error", err)
+			http.Error(response, "No token cookie", http.StatusUnauthorized)
+			return
+	}
+
+	tokenStr := cookie.Value
+	claims := &Claims{}
+
+	// Parse JWT to get userID
+	token, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (interface{}, error) {
+			return jwtKey, nil
+	})
+	if err != nil || !token.Valid {
+			h.logger.Error("Invalid token", "error", err)
+			http.Error(response, "Invalid token", http.StatusUnauthorized)
+			return
+	}
+
+	// Get book title from query parameter
+	bookTitle := request.URL.Query().Get("title")
+	if bookTitle == "" {
+			http.Error(response, "Book title is required", http.StatusBadRequest)
+			return
+	}
+
+	// Retrieve the book ID by title
+	bookID, err := h.models.Book.GetBookIdByTitle(bookTitle)
+	if err != nil {
+			h.logger.Error("Error fetching book ID by title", "error", err)
+			http.Error(response, "Error fetching book ID", http.StatusInternalServerError)
+			return
+	}
+
+	if bookID == 0 {
+			http.Error(response, "Book not found", http.StatusNotFound)
+			return
+	}
+
+	response.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(response).Encode(map[string]interface{}{"bookID": bookID}); err != nil {
+			http.Error(response, "Error encoding response", http.StatusInternalServerError)
+	}
+}
+
+
+
 
 // Add Book
 func (h *Handlers) InsertBook(response http.ResponseWriter, request *http.Request) {

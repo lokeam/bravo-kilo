@@ -4,8 +4,8 @@ import { AppProvider } from './components/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import Home from './pages/Home';
 import EditBook from './pages/EditBook';
-import AddBook from './pages/AddBook';
-import ManualAdd from './pages/ManualAdd';
+import AddBookGateway from './pages/AddBookGateway';
+import AddManual from './pages/AddManual';
 import Search from './pages/Search';
 import Login from './pages/Login';
 import Library from './pages/Library';
@@ -30,11 +30,12 @@ function App() {
           <Route element={<ProtectedRoute><AuthenticatedLayout /></ProtectedRoute>}>
             <Route path="/home" element={<Home />} />
             <Route path="/library" element={<Library />} />
-            <Route path="/library/:authorID" element={<AuthorGenre />} /> {/* Dynamic route */}
-            <Route path="/library/books/add" element={<AddBook />} />
-            <Route path="/library/books/add/manual" element={<ManualAdd /> }/>
+            <Route path="/library/:authorID" element={<AuthorGenre />} />
+            <Route path="/library/books/add/gateway" element={<AddBookGateway />} />
+            <Route path="/library/books/add/manual" element={<AddManual /> }/>
+            <Route path="/library/books/add/search" element={<AddManual /> }/>
             <Route path="/library/books/search" element={<Search />} />
-            <Route path="/library/books/:bookID" element={<BookDetail />} />
+            <Route path="/library/books/:bookTitle" element={<BookDetail />} />
             <Route path="/library/books/:bookID/edit" element={<EditBook />} />
           </Route>
           <Route path="*" element={<NotFound />}/>

@@ -2,43 +2,65 @@ import { useLocation, useParams, useNavigate } from 'react-router-dom';
 import ImagePlaceholder from '../components/CardList/ImagePlaceholder';
 
 import useScrollShrink from "../hooks/useScrollShrink";
+import useFetchBookIdByTitle from '../hooks/useFetchBookIdByTitle';
 import useFetchBookById from '../hooks/useFetchBookById';
 import { Book } from './Library';
 
 import { IoIosAdd } from "react-icons/io";
+import { IoIosWarning } from "react-icons/io";
 import { TbEdit } from "react-icons/tb";
+
+interface MissingInfoWarningProps {
+  emptyFields: string[]
+}
+
+const MissingInfoWarning = ({emptyFields}: MissingInfoWarningProps) => {
+
+  return (
+    <div className="p-4 mb-4 border border-yellow-300 rounded-lg text-yellow-300">
+      <div className="bk_book_metadata flex flex-col">
+        <div className="flex flex-row pb-3">
+        <IoIosWarning size={25} className='mr-2'/>
+        <span>This book listing missing the following data:</span>
+        </div>
+        <ul className="list-disc pl-5 pb-3">
+          {emptyFields && emptyFields.length > 0 && emptyFields.map((emptyFieldStr, index) => (
+            <li key={`${emptyFieldStr}-${index}`} className="font-bold">{emptyFieldStr}</li>
+          ))}
+        </ul>
+        <p className="text-yellow-300">You may enter placeholder data if you want to save this book in your library, but you'll need the official information if you want your entry to be identifyable by search.</p>
+      </div>
+    </div>
+  )
+}
 
 
 const BookDetail = () => {
-  const { bookID } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
+  const { bookTitle } = useParams(); // Access bookTitle from URL
+  const decodedTitle = bookTitle ? decodeURIComponent(bookTitle) : '';
   const imageRef = useScrollShrink();
-  const enabled = !location.state?.book;
+  const book = location.state?.book || {};
 
-  const { data: bookData, isLoading, isError } = useFetchBookById(bookID as string, enabled);
-  const book: Book = bookData || location.state?.book;
+  const { data: bookID, isLoading: bookIdIsLoading, isError: bookIdIsError } = useFetchBookIdByTitle(decodedTitle);
 
-  if (isLoading) {
+  console.log('bookTitle: ', bookTitle);
+  console.log('bookData: ', book);
+
+  if (!book || bookIdIsLoading) {
     return <div>Loading...</div>;
   }
 
-  if (isError) {
+  if (bookIdIsError) {
     return <div>Error fetching book details</div>;
   }
-
-  if (!book) {
-    return <div>No book found</div>;
-  }
-
-  console.log('book detail page, book data: ', book);
 
   const authors = book.authors?.join(', ') || 'Unknown Author';
   const genres = book.genres?.join(', ') || ['Unknown Genre'];
 
   return (
     <div className="bk_book_page mx-auto flex flex-col align-center max-w-screen-md h-screen p-5 pt-24">
-
       <div className="bk_book_thumb relative flex justify-center align-center rounded w-full">
         {
           book.imageLinks.length > 0 ? (
@@ -69,18 +91,19 @@ const BookDetail = () => {
       <div className="bk_book_cta flex flex-col w-full my-3">
         {
           !book.isInLibrary ? (
-            <button onClick={() => navigate(`/library/books/${bookID}/edit`, { state: { book } })} className="flex items-center justify-center rounded bg-hepatica font-bold">
+            <button onClick={() => navigate(`/library/books/add/search`, { state: { book } })} className="flex items-center justify-center rounded bg-hepatica font-bold">
               <IoIosAdd className="h-8 w-8 mr-4"/>Add Book to Library
             </button>
           ) : (
             <button onClick={() => navigate(`/library/books/${bookID}/edit`, { state: { book } })} className="flex items-center justify-center rounded bg-hepatica font-bold">
-              <TbEdit className="h-8 w-8 mr-4"/>Edit Book Details
+              <TbEdit className="h-8 w-8 mr-4"/>Edit Book Information
             </button>
           )
         }
       </div>
 
       <div className="bk_book__details text-left my-4">
+        { book.hasEmptyFields && <MissingInfoWarning emptyFields={book.emptyFields} /> }
         <h3 className="text-2xl font-bold pb-2">Product Details</h3>
         <div className="bk_book_metadata flex flex-col mb-4">
           <p className="my-1 text-cadet-gray"><span className="font-bold mr-1">Publish Date:</span>{book.publishDate !== "" ? book.publishDate : "No publish date available"}</p>

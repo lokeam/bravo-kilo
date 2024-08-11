@@ -19,11 +19,15 @@ interface CardListItemProps {
 export default function CardListItem({ book, isSearchPage }: CardListItemProps) {
   const [opened, setOpened] = useState<boolean>(false);
 
-  const { authors, id, imageLinks, pageCount, title } = book;
+  const { authors, id, imageLinks, title } = book;
+  const titleSubdomain = encodeURIComponent(title);
   const navigate = useNavigate();
 
+  //console.log('encoded titleParam: ', titleParam);
+
+
   const handleBookClick = () => {
-    navigate(`/library/books/${id}`, { state: { book} });
+    navigate(`/library/books/${titleSubdomain}`, { state: { book } });
   };
 
   const openModal = () => setOpened(true);

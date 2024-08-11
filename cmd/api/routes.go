@@ -39,7 +39,8 @@ func (app *application) routes(h *handlers.Handlers) http.Handler {
 	mux.Route("/api/v1/books", func(r chi.Router) {
 		r.Use(middleware.VerifyJWT)
 		r.Get("/search", h.SearchBooks)
-		r.Get("/{bookID}", h.GetBookByID)
+		r.Get("/by-id/{bookID}", h.GetBookByID) // Changed the path to avoid conflict
+		r.Get("/by-title", h.GetBookIDByTitle) // Use query param for title
 		r.Put("/{bookID}", h.UpdateBook)
 		r.Post("/add", h.InsertBook)
 		r.Delete("/{bookID}", h.DeleteBook)

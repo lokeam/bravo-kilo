@@ -41,6 +41,9 @@ const EditBook = () => {
   const [opened, setOpened] = useState(false);
 
   const { bookID } = useParams();
+
+  console.log('edit book');
+  console.log('bookID: ', bookID);
   const {data: book, isLoading, isError } = useFetchBookById(bookID as string, !!bookID);
   const { mutate: updateBook } = useUpdateBook(bookID as string);
   const navigate = useNavigate();
@@ -87,11 +90,13 @@ const EditBook = () => {
     };
 
     updateBook(book);
+    navigate('/library/');
   };
 
   const openModal = () => setOpened(true);
   const closeModal = () => setOpened(false);
 
+  console.log('RHF Errors: ', errors);
   return (
     <section className="bg-white dark:bg-gray-900">
 
@@ -216,7 +221,7 @@ const EditBook = () => {
           </div>
           <div className="w-full">
             <label htmlFor="pageCount" className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">Page Count</label>
-            <input id="pageCount" type="number" {...register('pageCount')} className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500" />
+            <input id="pageCount" type="number" {...register('pageCount', { valueAsNumber: true })} className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500" />
           </div>
 
           <div className="sm:col-span-2">

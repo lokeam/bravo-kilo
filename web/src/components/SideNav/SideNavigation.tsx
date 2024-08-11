@@ -16,7 +16,7 @@ export default function SideNavigation() {
         <SideNavListItem pageRoute="/home" icon={GoHomeFill}>Home</SideNavListItem>
         <SideNavListItem pageRoute="/library" icon={BiLibrary}>Library</SideNavListItem>
         <SideNavListItem pageRoute="/library/books/search" icon={IoSearchOutline}>Search</SideNavListItem>
-        <SideNavListItem pageRoute="/library/books/add" icon={TbEdit}>Add</SideNavListItem>
+        <SideNavListItem pageRoute="/library/books/add/gateway" icon={TbEdit}>Add</SideNavListItem>
       </SideNavList>
     </SideNavWrapper>
   );

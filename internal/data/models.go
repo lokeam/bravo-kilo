@@ -91,24 +91,26 @@ type Token struct {
 }
 
 type Book struct {
-	ID          int        `json:"id"`
-	Title       string     `json:"title"`
-	Subtitle    string     `json:"subtitle"`
-	Description string     `json:"description"`
-	Language    string     `json:"language"`
-	PageCount   int        `json:"pageCount"`
-	PublishDate string     `json:"publishDate"`
-	Authors     []string   `json:"authors"`
-	ImageLinks  []string   `json:"imageLinks"`
-	Genres      []string   `json:"genres"`
-	Notes       string     `json:"notes"`
-	Formats     []string   `json:"formats"`
-	Tags        []string   `json:"tags"`
-	CreatedAt   time.Time  `json:"created_at"`
-	LastUpdated time.Time  `json:"lastUpdated"`
-	ISBN10      string     `json:"isbn10"`
-	ISBN13      string     `json:"isbn13"`
-	IsInLibrary bool       `json:"isInLibrary"`
+	ID              int        `json:"id"`
+	Title           string     `json:"title"`
+	Subtitle        string     `json:"subtitle"`
+	Description     string     `json:"description"`
+	Language        string     `json:"language"`
+	PageCount       int        `json:"pageCount"`
+	PublishDate     string     `json:"publishDate"`
+	Authors         []string   `json:"authors"`
+	ImageLinks      []string   `json:"imageLinks"`
+	Genres          []string   `json:"genres"`
+	Notes           string     `json:"notes"`
+	Formats         []string   `json:"formats"`
+	Tags            []string   `json:"tags"`
+	CreatedAt       time.Time  `json:"created_at"`
+	LastUpdated     time.Time  `json:"lastUpdated"`
+	ISBN10          string     `json:"isbn10"`
+	ISBN13          string     `json:"isbn13"`
+	IsInLibrary     bool       `json:"isInLibrary"`
+	HasEmptyFields  bool       `json:"hasEmptyFields"`
+	EmptyFields     []string   `json:"emptyFields"`
 }
 
 type Author struct {
@@ -362,7 +364,7 @@ func (b *BookModel) GetByID(id int) (*Book, error) {
 
 	var book Book
 	var imageLinksJSON, tagsJSON []byte
-	statement := `SELECT id, title, subtitle, description, language, page_count, publish_date, image_links, notes, formats, tags, created_at, last_updated, isbn_10, isbn_13 FROM books WHERE id = $1`
+	statement := `SELECT id, title, subtitle, description, language, page_count, publish_date, image_links, notes, tags, created_at, last_updated, isbn_10, isbn_13 FROM books WHERE id = $1`
 	row := b.DB.QueryRowContext(ctx, statement, id)
 	err := row.Scan(
 			&book.ID,
@@ -460,6 +462,25 @@ func (b *BookModel) GetByID(id int) (*Book, error) {
 	book.IsInLibrary = true;
 
 	return &book, nil
+}
+
+func (b *BookModel) GetBookIdByTitle(title string) (int, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	var bookID int
+	statement := `SELECT id FROM books WHERE title = $1`
+	err := b.DB.QueryRowContext(ctx, statement, title).Scan(&bookID)
+	if err != nil {
+			if err == sql.ErrNoRows {
+					b.Logger.Error("Book Model - No book found with the given title", "title", title)
+					return 0, nil
+			}
+			b.Logger.Error("Book Model - Error fetching book ID by title", "error", err)
+			return 0, err
+	}
+
+	return bookID, nil
 }
 
 func (b *BookModel) GetAuthorsForBook(bookID int) ([]string, error) {
@@ -650,7 +671,6 @@ func getLastName(fullName string) string {
 	return ""
 }
 
-
 func (b *BookModel) GetAllBooksByUserID(userID int) ([]Book, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
@@ -760,7 +780,7 @@ func (b *BookModel) Update(book Book) error {
 			return err
 	}
 
-	statement := `UPDATE books SET title=$1, subtitle=$2, description=$3, language=$4, page_count=$5, publish_date=$6, image_links=$7, genres=$8, notes=$9, formats=$10, tags=$11, last_updated=$12, isbn_10=$13, isbn_13=$14 WHERE id=$15`
+	statement := `UPDATE books SET title=$1, subtitle=$2, description=$3, language=$4, page_count=$5, publish_date=$6, image_links=$7, notes=$8, tags=$9, last_updated=$10, isbn_10=$11, isbn_13=$12 WHERE id=$13`
 	_, err = b.DB.ExecContext(ctx, statement,
 			book.Title,
 			book.Subtitle,
