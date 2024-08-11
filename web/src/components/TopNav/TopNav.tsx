@@ -22,7 +22,8 @@ export default function TopNavigation() {
   const isSearchPage = location.pathname.includes('library/books/search');
 
   const handleGoBack = () => {
-    navigate(-1);
+    navigate('/library');
+
   };
 
   const handleSearchSubmit = (query: string) => {

@@ -822,6 +822,7 @@ func (h *Handlers) GetBookByID(response http.ResponseWriter, request *http.Reque
 
 // Get a Single Book's ID by title
 func (h *Handlers) GetBookIDByTitle(response http.ResponseWriter, request *http.Request) {
+	h.logger.Info("GetBookIDByTitle handler")
 	// Grab token from cookie
 	cookie, err := request.Cookie("token")
 	if err != nil {
@@ -863,13 +864,13 @@ func (h *Handlers) GetBookIDByTitle(response http.ResponseWriter, request *http.
 			return
 	}
 
+	h.logger.Info("GetBookIDByTitle handler, bookID: ", "bookID", bookID)
+
 	response.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(response).Encode(map[string]interface{}{"bookID": bookID}); err != nil {
 			http.Error(response, "Error encoding response", http.StatusInternalServerError)
 	}
 }
-
-
 
 
 // Add Book

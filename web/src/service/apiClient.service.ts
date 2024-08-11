@@ -67,12 +67,18 @@ export const fetchBookByID = async (bookID: string) => {
   return data.book;
 };
 
-export const fetchBookIDByTitle = async(bookTitle: string) => {
-  const { data } = await apiClient.get(`/api/v1/books/by-title`, {
-    params: { title: bookTitle }
-  });
-  return data.bookID;
-}
+export const fetchBookIDByTitle = async (bookTitle: string) => {
+  try {
+    const response = await apiClient.get('/api/v1/books/by-title', {
+      params: { title: bookTitle }
+    });
+    console.log('API response:', response.data);
+    return response.data.bookID; // Ensure the structure matches
+  } catch (error) {
+    console.error('Error fetching book ID:', error);
+    throw new Error('Failed to fetch book ID');
+  }
+};
 
 export const verifyUserToken = async () => {
   const { data } = await apiClient.get('/auth/token/verify');

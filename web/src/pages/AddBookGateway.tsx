@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { IoSearchOutline } from 'react-icons/io5';
 import useBookSearch from '../hooks/useBookSearch';
 
-const AddBook = () => {
+const AddBookGateway = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const { data: searchResults = [], isLoading, isError } = useBookSearch(searchQuery);
   const navigate = useNavigate();
@@ -62,4 +62,4 @@ const AddBook = () => {
   );
 }
 
-export default AddBook;
+export default AddBookGateway;
