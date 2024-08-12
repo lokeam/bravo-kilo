@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"bravo-kilo/cmd/middleware"
 	"bravo-kilo/config"
 	"bravo-kilo/internal/data"
 	"bravo-kilo/internal/utils"
@@ -878,33 +879,41 @@ func (h *Handlers) InsertBook(response http.ResponseWriter, request *http.Reques
 	var book data.Book
 	err := json.NewDecoder(request.Body).Decode(&book)
 	if err != nil {
-		h.logger.Error("Error decoding book data", "error", err)
-		http.Error(response, "Error decoding book data - invalid input", http.StatusBadRequest)
-		return
+			h.logger.Error("Error decoding book data", "error", err)
+			http.Error(response, "Error decoding book data - invalid input", http.StatusBadRequest)
+			return
 	}
 
-	// Insert the book and get the ID
-	bookID, err := h.models.Book.Insert(book)
+	// Retrieve user ID from context
+	userID, ok := middleware.GetUserID(request.Context())
+	if !ok {
+			h.logger.Error("User ID not found in context")
+			http.Error(response, "User ID not found", http.StatusInternalServerError)
+			return
+	}
+
+	// Insert the book and associate it with the user
+	bookID, err := h.models.Book.InsertBook(book, userID)
 	if err != nil {
-		h.logger.Error("Error inserting book", "error", err)
-		http.Error(response, "Error inserting book", http.StatusInternalServerError)
-		return
+			h.logger.Error("Error inserting book", "error", err)
+			http.Error(response, "Error inserting book", http.StatusInternalServerError)
+			return
 	}
 
 	// Insert formats and their associations
 	for _, formatType := range book.Formats {
-		formatID, err := h.models.Format.Insert(bookID, formatType)
-		if err != nil {
-			h.logger.Error("Error inserting format", "error", err)
-			http.Error(response, "Error inserting format", http.StatusInternalServerError)
-			return
-		}
+			formatID, err := h.models.Format.Insert(bookID, formatType)
+			if err != nil {
+					h.logger.Error("Error inserting format", "error", err)
+					http.Error(response, "Error inserting format", http.StatusInternalServerError)
+					return
+			}
 
-		if err := h.models.Book.AddFormat(bookID, formatID); err != nil {
-			h.logger.Error("Error adding format association", "error", err)
-			http.Error(response, "Error adding format association", http.StatusInternalServerError)
-			return
-		}
+			if err := h.models.Book.AddFormat(bookID, formatID); err != nil {
+					h.logger.Error("Error adding format association", "error", err)
+					http.Error(response, "Error adding format association", http.StatusInternalServerError)
+					return
+			}
 	}
 
 	response.Header().Set("Content-Type", "application/json")

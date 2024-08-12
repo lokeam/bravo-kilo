@@ -9,6 +9,10 @@ import (
 
 var jwtKey = []byte("extra-super-secret-256-bit-key")
 
+type userKeyType string
+
+const userIDKey userKeyType = "userID"
+
 type Claims struct {
     UserID int `json:"userId"`
     jwt.RegisteredClaims
@@ -33,7 +37,12 @@ func VerifyJWT(next http.Handler) http.Handler {
             return
         }
 
-        ctx := context.WithValue(r.Context(), "userID", claims.UserID)
+        ctx := context.WithValue(r.Context(), userIDKey, claims.UserID)
         next.ServeHTTP(w, r.WithContext(ctx))
     })
+}
+
+func GetUserID(ctx context.Context) (int, bool) {
+    userID, ok := ctx.Value(userIDKey).(int)
+    return userID, ok
 }

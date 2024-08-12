@@ -284,22 +284,19 @@ func (t *TokenModel) DeleteByUserID(userID int) error {
 }
 
 // Book
-func (b *BookModel) Insert(book Book) (int, error) {
+func (b *BookModel) InsertBook(book Book, userID int) (int, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
 
-	// Start new transaction
 	tx, err := b.DB.BeginTx(ctx, nil)
 	if err != nil {
 		b.Logger.Error("Error beginning transaction", "error", err)
 		return 0, err
 	}
-	// Rollback if things go pearshaped
 	defer tx.Rollback()
 
 	var newId int
 
-	// Marshal arrays to JSON strings
 	imageLinksJSON, err := json.Marshal(book.ImageLinks)
 	if err != nil {
 		b.Logger.Error("Error marshalling image links to JSON", "error", err)
@@ -338,55 +335,78 @@ func (b *BookModel) Insert(book Book) (int, error) {
 
 	b.Logger.Info("Inserted book with ID", "bookID", newId)
 
-	// Verify book exists in db before carrying on
-	var bookExists bool
-	err = tx.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM books WHERE id = $1)", newId).Scan(&bookExists)
-	if err != nil || !bookExists {
-		b.Logger.Error("Book insertion verification failed", "bookID", newId, "error", err)
+	// Insert authors and associate them with the book
+	for _, author := range book.Authors {
+		var authorID int
+		err = tx.QueryRowContext(ctx, `SELECT id FROM authors WHERE name = $1`, author).Scan(&authorID)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				err = tx.QueryRowContext(ctx, `INSERT INTO authors (name) VALUES ($1) RETURNING id`, author).Scan(&authorID)
+				if err != nil {
+					b.Logger.Error("Error inserting author", "error", err)
+					return 0, err
+				}
+			} else {
+				b.Logger.Error("Error querying author", "error", err)
+				return 0, err
+			}
+		}
+
+		_, err = tx.ExecContext(ctx, `INSERT INTO book_authors (book_id, author_id) VALUES ($1, $2)`, newId, authorID)
+		if err != nil {
+			b.Logger.Error("Error inserting book_author association", "error", err)
+			return 0, err
+		}
+	}
+
+	// Insert genres and associate them with the book
+	for _, genre := range book.Genres {
+		var genreID int
+		err = tx.QueryRowContext(ctx, `SELECT id FROM genres WHERE name = $1`, genre).Scan(&genreID)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				err = tx.QueryRowContext(ctx, `INSERT INTO genres (name) VALUES ($1) RETURNING id`, genre).Scan(&genreID)
+				if err != nil {
+					b.Logger.Error("Error inserting genre", "error", err)
+					return 0, err
+				}
+			} else {
+				b.Logger.Error("Error querying genre", "error", err)
+				return 0, err
+			}
+		}
+
+		_, err = tx.ExecContext(ctx, `INSERT INTO book_genres (book_id, genre_id) VALUES ($1, $2)`, newId, genreID)
+		if err != nil {
+			b.Logger.Error("Error inserting book_genre association", "error", err)
+			return 0, err
+		}
+	}
+
+	// Associate the book with the user
+	if err := b.AddBookToUser(tx, userID, newId); err != nil {
+		b.Logger.Error("Error adding book to user", "error", err)
 		return 0, err
 	}
 
-	b.Logger.Info("Verified book insertion", "bookID", newId)
-
-	// Commit book insertion before proceeding w/ author assoc.
-	if err = tx.Commit(); err != nil {
+	if err := tx.Commit(); err != nil {
 		b.Logger.Error("Error committing transaction for book", "bookID", newId, "error", err)
 		return 0, err
 	}
 
-	// Start new transaction for associating authors
-	tx, err = b.DB.BeginTx(ctx, nil)
-	if err != nil {
-		b.Logger.Error("Error beginning transaction for authors", "error", err)
-		return 0, err
-	}
-	// Rollback on error
-	defer tx.Rollback()
-
-	// Associate authors w/ book
-	for _, authorName := range book.Authors {
-		authorID, err := b.Author.AddOrGetAuthorID(authorName)
-		if err != nil {
-			b.Logger.Error("Error fetching/adding author ID", "error", err)
-			return 0, err
-		}
-
-		b.Logger.Info("Attempting to associate author", "authorID", authorID, "bookID", newId)
-		err = b.AddAuthor(newId, authorID)
-		if err != nil {
-			b.Logger.Error("Error adding author association", "error", err)
-			return 0, err
-		}
-		b.Logger.Info("Associated author successfully", "authorID", authorID, "bookID", newId)
-	}
-
-	// Commit transaction for author assoc.
-	if err = tx.Commit(); err != nil {
-		b.Logger.Error("Error committing transaction for authors", "bookID", newId, "error", err)
-		return 0, err
-	}
-
 	return newId, nil
+}
+
+
+
+func (b *BookModel) AddBookToUser(tx *sql.Tx, userID, bookID int) error {
+	statement := `INSERT INTO user_books (user_id, book_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`
+	_, err := tx.ExecContext(context.Background(), statement, userID, bookID)
+	if err != nil {
+		b.Logger.Error("Error adding book to user", "error", err)
+		return err
+	}
+	return nil
 }
 
 
@@ -978,20 +998,7 @@ func (b *BookModel) GetBooksByAuthor(authorName string) ([]Book, error) {
 	return books, nil
 }
 
-func (a *AuthorModel) Insert(name string) (int, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
-	defer cancel()
 
-	var authorID int
-	statement := `INSERT INTO authors (name) VALUES ($1) ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name RETURNING id`
-	err := a.DB.QueryRowContext(ctx, statement, name).Scan(&authorID)
-	if err != nil {
-		a.Logger.Error("Author Model - Error inserting author", "error", err)
-		return 0, err
-	}
-
-	return authorID, nil
-}
 
 func (b *BookModel) AddAuthor(bookID, authorID int) error {
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
@@ -1551,6 +1558,21 @@ func (c *CategoryModel) GetByName(name string) (*Category, error) {
 	}
 
 	return &category, nil
+}
+
+func (a *AuthorModel) Insert(name string) (int, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	var authorID int
+	statement := `INSERT INTO authors (name) VALUES ($1) ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name RETURNING id`
+	err := a.DB.QueryRowContext(ctx, statement, name).Scan(&authorID)
+	if err != nil {
+		a.Logger.Error("Author Model - Error inserting author", "error", err)
+		return 0, err
+	}
+
+	return authorID, nil
 }
 
 // AddOrGetAuthorID inserts a new author or retrieves an existing author's ID
