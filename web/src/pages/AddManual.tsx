@@ -38,16 +38,33 @@ const ManualAdd = () => {
   // Retrieve book data from navigation state
   const bookData = location.state?.book || {};
 
-  const {
-    control,
-    handleSubmit,
-    register,
-    reset,
-    formState: { errors }
-  } = useForm<BookFormData>({
-    resolver: zodResolver(bookSchema),
-    defaultValues: bookData, // Set default values from the state
-  });
+// Use default values to ensure inputs are always controlled
+const {
+  control,
+  handleSubmit,
+  register,
+  reset,
+  formState: { errors },
+} = useForm<BookFormData>({
+  resolver: zodResolver(bookSchema),
+  defaultValues: {
+    title: '',
+    subtitle: '',
+    authors: [''],
+    genres: [''],
+    tags: [''],
+    publishDate: '',
+    isbn10: '',
+    isbn13: '',
+    formats: [],
+    language: '',
+    pageCount: 0,
+    imageLinks: [''],
+    description: '',
+    notes: '',
+    ...bookData, // Merge with any existing data
+  },
+});
 
   const {
     fields: authorFields,
@@ -86,10 +103,14 @@ const ManualAdd = () => {
   });
 
   useEffect(() => {
-    if (bookData) reset(bookData); // Reset form fields with book data
+    // Only reset if bookData is actually different
+    if (bookData && Object.keys(bookData).length > 0) {
+      reset(bookData);
+    }
   }, [bookData, reset]);
 
   const onSubmit: SubmitHandler<BookFormData> = (data) => {
+    console.log('Submitted data:', data);
     const defaultDate = new Date().toISOString();
 
     const book: Book = {
@@ -104,126 +125,170 @@ const ManualAdd = () => {
     navigate('/library/');
   };
 
+  console.log('RHF errors: ', errors );
+
   return (
-<section className="bg-white dark:bg-gray-900">
+    <section className="bg-white dark:bg-gray-900">
       <div className="text-left py-8 px-4 mx-auto max-w-2xl lg:py-16">
         <h2 className="mb-4 text-xl font-bold text-gray-900 dark:text-white">Add Book</h2>
-        <form onSubmit={handleSubmit(onSubmit)}>
+        <form className="grid gap-4 sm:grid-cols-2 sm:gap-6" onSubmit={handleSubmit(onSubmit)}>
 
           {/* Title */}
-          <div>
-            <label htmlFor="title">Title</label>
+          <div className="sm:col-span-2">
+            <label
+              className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
+              id="title"
+              htmlFor="title"
+            >
+              Title
+            </label>
             <input
               id="title"
               type="text"
               {...register("title")}
-              className={`border ${errors.title ? 'border-red-500' : 'border-gray-300'}`}
+              className={`
+                border ${errors.title ? 'border-red-500' : 'border-gray-300'}
+                bg-gray-50 border border-gray-00 text-gray-900 text-sm rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500
+                `}
             />
             {errors.title && <p className="text-red-500">{errors.title.message}</p>}
           </div>
 
           {/* Subtitle */}
           <div className="block sm:col-span-2">
-            <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white" htmlFor="subtitle">Subtitle</label>
+            <label
+              className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
+              htmlFor="subtitle">Subtitle</label>
             <input
               id="subtitle"
               className="bg-gray-50 border border-gray-00 text-gray-900 text-sm rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
               {...register('subtitle')}
             />
+            {errors.subtitle && <p className="text-red-500">{errors.subtitle.message}</p>}
           </div>
 
           {/* Authors Field Array */}
-          {authorFields.map((item, index) => (
-            <div className="flex items-center p-4" key={item.id}>
-              <Controller
-                render={({ field }) => <input {...field} className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500" />}
-                name={`authors.${index}`}
-                control={control}
-              />
-              <button type="button" onClick={() => authorFields.length > 1 && removeAuthor(index)}  className="ml-5 rounded bg-transparent">
-                <IoClose size={20}/>
+          <div className="block sm:col-span-2">
+            <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">Authors</label>
+            <div className="border border-gray-300 rounded">
+              {authorFields.map((item, index) => (
+                <div className="flex items-center p-4" key={item.id}>
+                  <Controller
+                    render={({ field }) => <input {...field} className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500" />}
+                    name={`authors.${index}`}
+                    control={control}
+                  />
+                  <button type="button" onClick={() => authorFields.length > 1 && removeAuthor(index)}  className="ml-5 rounded bg-transparent">
+                    <IoClose size={20}/>
+                  </button>
+                </div>
+              ))}
+              <button type="button" onClick={() => appendAuthor('')} className="flex flex-row justify-between items-center bg-transparent m-4">
+                <IoAddOutline size={20} className="mr-1"/>
+                Add Author
               </button>
             </div>
-          ))}
-          <button type="button" onClick={() => appendAuthor('')} className="flex flex-row justify-between items-center bg-transparent m-4">
-            <IoAddOutline size={20} className="mr-1"/>
-            Add Author
-          </button>
+            {errors.authors && <p className="text-red-500">{errors.authors.message}</p>}
+          </div>
+
 
           {/* Genres Field Array */}
-          {genreFields.map((item, index) => (
-            <div key={item.id} className="flex items-center p-4">
-              <Controller
-                render={({ field }) => <input {...field} className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"/>}
-                name={`genres.${index}`}
-                control={control}
-              />
-              <button type="button" onClick={() => genreFields.length > 1 && removeGenre(index)} className="ml-5">
-                <IoClose size={20}/>
+          <div className="block sm:col-span-2">
+            <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">Genres</label>
+            <div className="border border-gray-300 rounded">
+                {genreFields.map((item, index) => (
+                  <div key={item.id} className="flex items-center p-4">
+                    <Controller
+                      render={({ field }) => <input {...field} className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"/>}
+                      name={`genres.${index}`}
+                      control={control}
+                    />
+                    <button type="button" onClick={() => genreFields.length > 1 && removeGenre(index)} className="ml-5">
+                      <IoClose size={20}/>
+                    </button>
+                  </div>
+                ))}
+              <button type="button" onClick={() => appendGenre('')} className="flex flex-row justify-between items-center bg-transparent m-4">
+                <IoAddOutline size={20} className="mr-1"/>
+                Add Genre
               </button>
             </div>
-          ))}
-          <button type="button" onClick={() => appendGenre('')} className="flex flex-row justify-between items-center bg-transparent m-4">
-            <IoAddOutline size={20} className="mr-1"/>
-            Add Genre
-          </button>
+            {errors.genres && <p className="text-red-500">{errors.genres.message}</p>}
+          </div>
 
           {/* Tags Field Array */}
-          {tagFields.map((item, index) => (
-            <div key={item.id} className="flex items-center p-4">
-              <Controller
-                render={({ field }) => <input {...field} className="bg-gray-50 text-gray-900 text-sm focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500" />}
-                name={`tags.${index}`}
-                control={control}
-              />
-              <button type="button" onClick={() => tagFields.length > 1 && removeTag(index)} className="flex flex-row justify-between items-center bg-transparent mt-2 ml-5">
-                <IoClose size={20}/>
+          <div className="block sm:col-span-2">
+            <label htmlFor="tags" className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">Personal Tags</label>
+            <div className="border border-gray-300 rounded">
+                {tagFields.map((item, index) => (
+                  <div key={item.id} className="flex items-center p-4">
+                    <Controller
+                      render={({ field }) => <input {...field} className="bg-gray-50 text-gray-900 text-sm focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500" />}
+                      name={`tags.${index}`}
+                      control={control}
+                    />
+                    <button type="button" onClick={() => tagFields.length > 1 && removeTag(index)} className="flex flex-row justify-between items-center bg-transparent mt-2 ml-5">
+                      <IoClose size={20}/>
+                    </button>
+                  </div>
+                ))}
+              <button type="button" onClick={() => appendTag('')} className="flex flex-row justify-between items-center bg-transparent m-4">
+                <IoAddOutline size={20} className="mr-1"/>
+                Add Tag
               </button>
             </div>
-          ))}
-          <button type="button" onClick={() => appendTag('')} className="flex flex-row justify-between items-center bg-transparent mt-2">
-            <IoAddOutline size={20} className="mr-1"/>
-            Add Tag
-          </button>
-{/* Publish Date */}
-          <div>
-            <label htmlFor="publishDate">Publish Date</label>
+            {errors.tags && <p className="text-red-500">{errors.tags.message}</p>}
+          </div>
+
+
+          {/* Publish Date */}
+          <div className="sm:col-span-2">
+            <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white" htmlFor="publishDate">Publish Date</label>
             <input
               id="publishDate"
               type="text"
               {...register("publishDate")}
-              className={`border ${errors.publishDate ? 'border-red-500' : 'border-gray-300'}`}
+              className={`
+                border ${errors.publishDate ? 'border-red-500' : 'border-gray-300'}
+                bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500
+                `}
             />
             {errors.publishDate && <p className="text-red-500">{errors.publishDate.message}</p>}
           </div>
 
           {/* ISBN10 */}
-          <div>
-            <label htmlFor="isbn10">ISBN-10</label>
+          <div className="w-full">
+            <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white" htmlFor="isbn10">ISBN-10</label>
             <input
               id="isbn10"
               type="text"
               {...register("isbn10")}
-              className={`border ${errors.isbn10 ? 'border-red-500' : 'border-gray-300'}`}
+              className={`
+                border ${errors.isbn10 ? 'border-red-500' : 'border-gray-300'}
+                bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500
+                `}
             />
             {errors.isbn10 && <p className="text-red-500">{errors.isbn10.message}</p>}
           </div>
 
           {/* ISBN13 */}
-          <div>
-            <label htmlFor="isbn13">ISBN-13</label>
+          <div className="w-full">
+            <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white" htmlFor="isbn13">ISBN-13</label>
             <input
               id="isbn13"
               type="text"
               {...register("isbn13")}
-              className={`border ${errors.isbn13 ? 'border-red-500' : 'border-gray-300'}`}
+              className={`
+                border ${errors.isbn13 ? 'border-red-500' : 'border-gray-300'}
+                bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500
+                `}
             />
             {errors.isbn13 && <p className="text-red-500">{errors.isbn13.message}</p>}
           </div>
 
           {/* Formats */}
-          <div>
-            <label>Formats</label>
+          <div className="sm:col-span-2">
+            <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">Formats</label>
             <ul className="grid w-full gap-6 md:grid-cols-3">
               {['physical', 'eBook', 'audioBook'].map((format) => (
                 <li key={format}>
@@ -238,71 +303,92 @@ const ManualAdd = () => {
                 </li>
               ))}
             </ul>
+            {errors.formats && <p className="text-red-500">{errors.formats.message}</p>}
           </div>
 
           {/* Language */}
-          <div>
-            <label htmlFor="language">Language</label>
+          <div className="w-full">
+            <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white" htmlFor="language">Language</label>
             <input
               id="language"
               type="text"
               {...register("language")}
-              className={`border ${errors.language ? 'border-red-500' : 'border-gray-300'}`}
+              className={`
+                border ${errors.language ? 'border-red-500' : 'border-gray-300'}
+                className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
+                `}
             />
             {errors.language && <p className="text-red-500">{errors.language.message}</p>}
           </div>
 
           {/* Page Count */}
-          <div>
-            <label htmlFor="pageCount">Page Count</label>
+          <div className="w-full">
+            <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white" htmlFor="pageCount">Page Count</label>
             <input
               id="pageCount"
               type="number"
               {...register("pageCount", { valueAsNumber: true })}
-              className={`border ${errors.pageCount ? 'border-red-500' : 'border-gray-300'}`}
+              className={`
+                border ${errors.pageCount ? 'border-red-500' : 'border-gray-300'}
+                bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500
+                `}
             />
             {errors.pageCount && <p className="text-red-500">{errors.pageCount.message}</p>}
           </div>
 
           {/* Image Links Field Array */}
-          {imageLinkFields.map((item, index) => (
-            <div key={item.id} className="flex items-center p-4">
-              <Controller
-                render={({ field }) => <input {...field} className="bg-gray-50 text-gray-900 text-sm focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500" />}
-                name={`imageLinks.${index}`}
-                control={control}
-              />
-              <button type="button" onClick={() => imageLinkFields.length > 1 && removeImageLink(index)} className="flex flex-row justify-between items-center bg-transparent mt-2 ml-5">
-                <IoClose size={20}/>
+          <div className="sm:col-span-2">
+            <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">Formats</label>
+            <div className="border border-gray-300 rounded">
+                {imageLinkFields.map((item, index) => (
+                  <div key={item.id} className="flex items-center p-4">
+                    <Controller
+                      render={({ field }) => <input {...field} className="bg-gray-50 text-gray-900 text-sm focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500" />}
+                      name={`imageLinks.${index}`}
+                      control={control}
+                    />
+                    <button type="button" onClick={() => imageLinkFields.length > 1 && removeImageLink(index)} className="flex flex-row justify-between items-center bg-transparent mt-2 ml-5">
+                      <IoClose size={20}/>
+                    </button>
+                  </div>
+                ))}
+              <button type="button" onClick={() => appendImageLink('')} className="flex flex-row justify-between items-center bg-transparent m-4">
+                <IoAddOutline size={20} className="mr-1"/>
+                Add Image Link
               </button>
             </div>
-          ))}
-          <button type="button" onClick={() => appendImageLink('')} className="flex flex-row justify-between items-center bg-transparent mt-2">
-            <IoAddOutline size={20} className="mr-1"/>
-            Add Image Link
-          </button>
+            {errors.imageLinks && <p className="text-red-500">{errors.imageLinks.message}</p>}
+          </div>
+
 
           {/* Description */}
-          <div>
-            <label htmlFor="description">Description</label>
+          <div className="sm:col-span-2">
+            <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white" htmlFor="description">Description</label>
             <textarea
               id="description"
               rows={4}
               {...register("description")}
-              className={`border ${errors.description ? 'border-red-500' : 'border-gray-300'}`}
+              className={`
+                border ${errors.description ? 'border-red-500' : 'border-gray-300'}
+                block p-2.5 w-full text-sm text-gray-900 bg-gray-50 rounded border border-gray-300 focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500
+                `}
             />
             {errors.description && <p className="text-red-500">{errors.description.message}</p>}
           </div>
 
           {/* Notes */}
-          <div>
-            <label htmlFor="notes">Notes</label>
+          <div className="sm:col-span-2">
+            <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white" htmlFor="notes">Notes</label>
             <textarea
               id="notes"
               rows={4}
               {...register("notes")}
-              className="border border-gray-300"
+              className={`
+                border ${errors.notes ? 'border-red-500' : 'border-gray-300'}
+                block p-2.5 w-full text-sm text-gray-900 bg-gray-50 rounded border border-gray-300 focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500
+                `}
             />
+            {errors.notes && <p className="text-red-500">{errors.notes.message}</p>}
           </div>
 
           <button type="submit" className="mt-4 p-2 bg-blue-500 text-white rounded">

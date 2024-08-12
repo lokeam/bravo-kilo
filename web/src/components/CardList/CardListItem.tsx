@@ -23,7 +23,8 @@ export default function CardListItem({ book, isSearchPage }: CardListItemProps) 
   const titleSubdomain = encodeURIComponent(title);
   const navigate = useNavigate();
 
-  //console.log('encoded titleParam: ', titleParam);
+
+  console.log('authors: ', authors);
 
 
   const handleBookClick = () => {
@@ -45,7 +46,7 @@ export default function CardListItem({ book, isSearchPage }: CardListItemProps) 
           }
           <div className="card_list__item_copy text-left pt-1">
             <span className="block text-base text-white font-semibold">{title}</span>
-            <span className="block text-sm text-gray-400">by {authors[0]}</span>
+            <span className="block text-sm text-gray-400">by {authors && authors.length > 0 ? authors[0] : 'author data not available'}</span>
             {
               isSearchPage && book.isInLibrary && <div className="block text-sm text-white font-semibold">IN YOUR LIBRARY</div>
             }

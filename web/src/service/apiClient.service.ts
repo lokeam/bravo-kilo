@@ -90,8 +90,13 @@ export const signOutUser = async () => {
 };
 
 export const updateBook = async (book: Book, bookID: string) => {
-  const { data } = await apiClient.put(`/api/v1/books/${bookID}`, book);
-  return data;
+  try {
+    const { data } = await apiClient.put(`/api/v1/books/${bookID}`, book);
+    return data;
+  } catch (error) {
+    console.error("Error updating book:", error);
+    throw error;
+  }
 };
 
 export const addBook = async (book: Book) => {

@@ -13,8 +13,12 @@ const useAddBook = () => {
       return addBook(book);
     },
     onSuccess: () => {
-      console.log(`useAddBook - onSuccess`); // Add this line
+      console.log(`useAddBook - onSuccess`); // Add this lineuserBooks
       queryClient.invalidateQueries({ queryKey: ['book'] });
+      queryClient.invalidateQueries({ queryKey: ['userBooks'] });
+      queryClient.invalidateQueries({ queryKey: ['booksFormat'] });
+      queryClient.invalidateQueries({ queryKey: ['userBookAuthors'] });
+      queryClient.invalidateQueries({ queryKey: ['userBookGenres'] });
       navigate('/library/');
     },
     onError: (error: any) => {

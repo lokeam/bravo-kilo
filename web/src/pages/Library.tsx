@@ -68,7 +68,7 @@ const Library = () => {
 
   // Use useQuery to retrieve cached books authors
   const {
-    data: bookAuthors,
+    data: bookAuthors = { allAuthors: [], },
     isLoading: isAuthorsLoading,
     isError: isAuthorsError,
   } = useQuery<BookAuthorsData>({
@@ -80,7 +80,7 @@ const Library = () => {
 
   // Use useQuery to get cached book genres
   const {
-    data: bookGenres,
+    data: bookGenres = { allGenres: [], },
     isLoading: isGenresLoading,
     isError: isGenresError,
   } = useQuery<BookGenresData>({
@@ -89,6 +89,7 @@ const Library = () => {
     staleTime: Infinity,
     gcTime: 1000 * 60 * 60 * 24,
   });
+
 
   useEffect(() => {
     if (bookAuthors) {
@@ -127,13 +128,13 @@ const Library = () => {
             return order === "asc" ? a.title.localeCompare(b.title) : b.title.localeCompare(a.title);
 
           case "publishDate":
-            return order === "asc"
-              ? new Date(a.publishDate).getTime() - new Date(b.publishDate).getTime()
-              : new Date(b.publishDate).getTime() - new Date(a.publishDate).getTime();
+            const dateA = a.publishDate ? new Date(a.publishDate).getTime() : 0;
+            const dateB = b.publishDate ? new Date(b.publishDate).getTime() : 0;
+            return order === "asc" ? dateA - dateB : dateB - dateA;
 
           case "author": {
-            const aSurname = a.authors[0].split(" ").pop() || "";
-            const bSurname = b.authors[0].split(" ").pop() || "";
+            const aSurname = a.authors?.[0]?.split(" ").pop() || "";
+            const bSurname = b.authors?.[0]?.split(" ").pop() || "";
             return order === "asc" ? aSurname.localeCompare(bSurname) : bSurname.localeCompare(aSurname);
           }
 
@@ -145,24 +146,29 @@ const Library = () => {
     []
   );
 
+
   const sortedBooks = useMemo(() => {
+    if (!books || books.length === 0) {
+      console.log('No books available');
+      return [];
+    }
     let booksToSort = [];
     if (activeTab === 'Audiobooks' && bookFormats) {
       console.log('Using audiobooks format');
-      booksToSort = bookFormats.audioBooks;
+      booksToSort = bookFormats.audioBooks || [];
     } else if (activeTab === 'eBooks' && bookFormats) {
       console.log('Using eBooks format');
-      booksToSort = bookFormats.eBooks;
+      booksToSort = bookFormats.eBooks || [];
     } else if (activeTab === 'Printed Books' && bookFormats) {
       console.log('Using printed books format');
-      booksToSort = bookFormats.physicalBooks;
-    } else  {
-      // Default to all books
+      booksToSort = bookFormats.physicalBooks || [];
+    } else {
       console.log('Using all books');
       booksToSort = books || [];
     }
     return getSortedBooks(booksToSort, sortCriteria, sortOrder);
   }, [activeTab, books, bookFormats, sortCriteria, sortOrder, getSortedBooks]);
+
 
 
 
@@ -197,6 +203,17 @@ const Library = () => {
     return <div>Error loading books</div>;
   }
 
+
+  if (!bookAuthors || bookAuthors.allAuthors.length === 0) {
+    console.log('No authors data available');
+    return <div>No authors found</div>;
+  }
+
+  if (!bookGenres || bookGenres.allGenres.length === 0) {
+    console.log('No genres data available');
+    return <div>No genres found</div>;
+  }
+
   const sortButtonTitle = {
     'title': 'Title: A to Z',
     'author': 'Author: A to Z',
@@ -206,6 +223,12 @@ const Library = () => {
 
   const openModal = () => setOpened(true);
   const closeModal = () => setOpened(false);
+
+
+  console.log('Fetched books:', books);
+  console.log('Fetched authors:', bookAuthors);
+  console.log('Fetched genres:', bookGenres);
+  console.log('Fetched formats:', bookFormats);
 
   return (
     <div className="bk_lib flex flex-col items-center place-content-around px-5 antialiased md:px-1 md:ml-24 h-screen pt-28">
@@ -261,9 +284,9 @@ const Library = () => {
       </div>
 
       {/* Libary Card List View  */}
-      {activeTab === 'Authors' && bookAuthors?.allAuthors ? (
+      {activeTab === 'Authors' && bookAuthors?.allAuthors.length > 0 ? (
         <CardList allAuthors={bookAuthors.allAuthors} authorBooks={bookAuthors} />
-      ) : activeTab === 'Genres' && bookGenres?.allGenres ? (
+      ) : activeTab === 'Genres' && bookGenres?.allGenres.length > 0 ? (
         <CardList allGenres={bookGenres.allGenres} genreBooks={bookGenres} />
       ) : (
         sortedBooks && sortedBooks.length > 0 && <CardList books={sortedBooks} isSearchPage={false} />
