@@ -18,7 +18,7 @@ func New(db *sql.DB, logger *slog.Logger) Models {
 	return Models{
 		User:      UserModel{DB: db, Logger: logger},
 		Token:     TokenModel{DB: db, Logger: logger},
-		Book:      BookModel{DB: db, Logger: logger},
+		Book:      BookModel{DB: db, Logger: logger, Author: &AuthorModel{DB: db, Logger: logger}},
 		Category:  CategoryModel{DB: db, Logger: logger},
 		Format:    FormatModel{DB: db, Logger: logger},
 		Author:    AuthorModel{DB: db, Logger: logger},
@@ -49,6 +49,7 @@ type TokenModel struct {
 type BookModel struct {
 	DB     *sql.DB
 	Logger *slog.Logger
+	Author *AuthorModel
 }
 
 type CategoryModel struct {
@@ -287,76 +288,107 @@ func (b *BookModel) Insert(book Book) (int, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
 
+	// Start new transaction
+	tx, err := b.DB.BeginTx(ctx, nil)
+	if err != nil {
+		b.Logger.Error("Error beginning transaction", "error", err)
+		return 0, err
+	}
+	// Rollback if things go pearshaped
+	defer tx.Rollback()
+
 	var newId int
 
 	// Marshal arrays to JSON strings
 	imageLinksJSON, err := json.Marshal(book.ImageLinks)
 	if err != nil {
-			b.Logger.Error("Error marshalling image links to JSON", "error", err)
-			return 0, err
+		b.Logger.Error("Error marshalling image links to JSON", "error", err)
+		return 0, err
 	}
 	tagsJSON, err := json.Marshal(book.Tags)
 	if err != nil {
-			b.Logger.Error("Error marshalling tags to JSON", "error", err)
-			return 0, err
+		b.Logger.Error("Error marshalling tags to JSON", "error", err)
+		return 0, err
 	}
 
+	// Insert book into books table
 	statement := `INSERT INTO books (title, subtitle, description, language, page_count, publish_date, image_links, notes, tags, created_at, last_updated, isbn_10, isbn_13)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id`
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id`
 
-	err = b.DB.QueryRowContext(ctx, statement,
-			book.Title,
-			book.Subtitle,
-			book.Description,
-			book.Language,
-			book.PageCount,
-			book.PublishDate,
-			imageLinksJSON,   // Insert JSON string
-			book.Notes,
-			tagsJSON,         // Insert JSON string
-			time.Now(),
-			time.Now(),
-			book.ISBN10,
-			book.ISBN13,
+	err = tx.QueryRowContext(ctx, statement,
+		book.Title,
+		book.Subtitle,
+		book.Description,
+		book.Language,
+		book.PageCount,
+		book.PublishDate,
+		imageLinksJSON,
+		book.Notes,
+		tagsJSON,
+		time.Now(),
+		time.Now(),
+		book.ISBN10,
+		book.ISBN13,
 	).Scan(&newId)
 
 	if err != nil {
-			b.Logger.Error("Book Model - Error inserting book", "error", err)
-			return 0, err
+		b.Logger.Error("Book Model - Error inserting book", "error", err)
+		return 0, err
 	}
 
-	// Insert genres into the book_genres table
-	for _, genre := range book.Genres {
-		genreID, err := b.addOrGetGenreID(genre)
-		if err != nil {
-			b.Logger.Error("Error getting genre ID", "error", err)
-			return 0, err
-		}
+	b.Logger.Info("Inserted book with ID", "bookID", newId)
 
-		err = b.AddGenre(newId, genreID)
-		if err != nil {
-			b.Logger.Error("Error adding genre association", "error", err)
-			return 0, err
-		}
+	// Verify book exists in db before carrying on
+	var bookExists bool
+	err = tx.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM books WHERE id = $1)", newId).Scan(&bookExists)
+	if err != nil || !bookExists {
+		b.Logger.Error("Book insertion verification failed", "bookID", newId, "error", err)
+		return 0, err
 	}
 
-	// Insert formats into the book_formats table
-	for _, format := range book.Formats {
-		formatID, err := b.addOrGetFormatID(format)
+	b.Logger.Info("Verified book insertion", "bookID", newId)
+
+	// Commit book insertion before proceeding w/ author assoc.
+	if err = tx.Commit(); err != nil {
+		b.Logger.Error("Error committing transaction for book", "bookID", newId, "error", err)
+		return 0, err
+	}
+
+	// Start new transaction for associating authors
+	tx, err = b.DB.BeginTx(ctx, nil)
+	if err != nil {
+		b.Logger.Error("Error beginning transaction for authors", "error", err)
+		return 0, err
+	}
+	// Rollback on error
+	defer tx.Rollback()
+
+	// Associate authors w/ book
+	for _, authorName := range book.Authors {
+		authorID, err := b.Author.AddOrGetAuthorID(authorName)
 		if err != nil {
-			b.Logger.Error("Error getting format ID", "error", err)
+			b.Logger.Error("Error fetching/adding author ID", "error", err)
 			return 0, err
 		}
 
-		err = b.AddFormat(newId, formatID)
+		b.Logger.Info("Attempting to associate author", "authorID", authorID, "bookID", newId)
+		err = b.AddAuthor(newId, authorID)
 		if err != nil {
-			b.Logger.Error("Error adding format association", "error", err)
+			b.Logger.Error("Error adding author association", "error", err)
 			return 0, err
 		}
+		b.Logger.Info("Associated author successfully", "authorID", authorID, "bookID", newId)
+	}
+
+	// Commit transaction for author assoc.
+	if err = tx.Commit(); err != nil {
+		b.Logger.Error("Error committing transaction for authors", "bookID", newId, "error", err)
+		return 0, err
 	}
 
 	return newId, nil
 }
+
 
 func (b *BookModel) GetByID(id int) (*Book, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
@@ -946,6 +978,35 @@ func (b *BookModel) GetBooksByAuthor(authorName string) ([]Book, error) {
 	return books, nil
 }
 
+func (a *AuthorModel) Insert(name string) (int, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	var authorID int
+	statement := `INSERT INTO authors (name) VALUES ($1) ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name RETURNING id`
+	err := a.DB.QueryRowContext(ctx, statement, name).Scan(&authorID)
+	if err != nil {
+		a.Logger.Error("Author Model - Error inserting author", "error", err)
+		return 0, err
+	}
+
+	return authorID, nil
+}
+
+func (b *BookModel) AddAuthor(bookID, authorID int) error {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	statement := `INSERT INTO book_authors (book_id, author_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`
+	_, err := b.DB.ExecContext(ctx, statement, bookID, authorID)
+	if err != nil {
+		b.Logger.Error("Error adding author association", "error", err)
+		return err
+	}
+
+	return nil
+}
+
 // Method to update authors for a book
 func (b *BookModel) UpdateAuthors(bookID int, authors []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
@@ -1492,22 +1553,32 @@ func (c *CategoryModel) GetByName(name string) (*Category, error) {
 	return &category, nil
 }
 
-
-// Author
-func (a *AuthorModel) Insert(name string) (int, error) {
+// AddOrGetAuthorID inserts a new author or retrieves an existing author's ID
+func (a *AuthorModel) AddOrGetAuthorID(name string) (int, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
 
-	var newID int
-	statement := `INSERT INTO authors (name) VALUES ($1) RETURNING id`
-	err := a.DB.QueryRowContext(ctx, statement, name).Scan(&newID)
-	if err != nil {
-		a.Logger.Error("Author Model - Error inserting author", "error", err)
+	var authorID int
+	query := `SELECT id FROM authors WHERE name = $1`
+	err := a.DB.QueryRowContext(ctx, query, name).Scan(&authorID)
+	if err != nil && err != sql.ErrNoRows {
+		a.Logger.Error("Error checking author existence", "error", err)
 		return 0, err
 	}
 
-	return newID, nil
+	if authorID == 0 {
+		// Author does not exist, insert new author
+		query = `INSERT INTO authors (name) VALUES ($1) RETURNING id`
+		err = a.DB.QueryRowContext(ctx, query, name).Scan(&authorID)
+		if err != nil {
+			a.Logger.Error("Error inserting new author", "error", err)
+			return 0, err
+		}
+	}
+
+	return authorID, nil
 }
+
 
 func (a *AuthorModel) GetByID(id int) (*Author, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
