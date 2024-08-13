@@ -9,8 +9,6 @@ import useFetchBookById from '../hooks/useFetchBookById';
 import Modal from '../components/Modal/ModalRoot';
 import { Book } from './Library';
 
-import { IoArrowBackCircle } from "react-icons/io5";
-import { BsThreeDotsVertical } from "react-icons/bs";
 import { IoClose } from 'react-icons/io5';
 import { IoAddOutline } from 'react-icons/io5';
 import { IoIosWarning } from "react-icons/io";
@@ -44,7 +42,7 @@ const EditBook = () => {
 
   console.log('edit book');
   console.log('bookID: ', bookID);
-  const {data: book, isLoading, isError } = useFetchBookById(bookID as string, !!bookID);
+  const { data: book, isLoading, isError } = useFetchBookById(bookID as string, !!bookID);
   const { mutate: updateBook } = useUpdateBook(bookID as string);
   const navigate = useNavigate();
 
@@ -84,13 +82,13 @@ const EditBook = () => {
 
     const book: Book = {
       ...data,
-      id: Number(data.id),
+      id: Number(bookID),
       createdAt: defaultDate,
       lastUpdated: defaultDate,
     };
 
     updateBook(book);
-    navigate('/library/');
+
   };
 
   const openModal = () => setOpened(true);
@@ -98,13 +96,13 @@ const EditBook = () => {
 
   console.log('RHF Errors: ', errors);
   return (
-    <section className="bg-white dark:bg-gray-900">
+    <section className="bg-white dark:bg-gray-900 my-20">
 
-      <div className="text-left py-8 px-4 mx-auto max-w-2xl lg:py-16">
+      <div className="text-left px-4 py-8 md:pl-24 mx-auto max-w-2xl lg:py-16">
         <h2 className="mb-4 text-xl font-bold text-gray-900 dark:text-white">Edit Book</h2>
         <form className="grid gap-4 sm:grid-cols-2 sm:gap-6" onSubmit={handleSubmit(onSubmit)}>
           <div className="sm:col-span-2">
-            <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white" htmlFor="title">Title</label>
+            <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white" htmlFor="title">Title<span className="text-red-600 ml-px">*</span></label>
             <input className="bg-gray-50 border border-gray-00 text-gray-900 text-sm rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500" id="title" {...register('title')} />
           </div>
           <div className="block sm:col-span-2">
@@ -114,7 +112,7 @@ const EditBook = () => {
 
           {/* Authors Field Array */}
           <div className="block sm:col-span-2">
-            <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">Authors</label>
+            <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">Authors<span className="text-red-600 ml-px">*</span></label>
             <div className="border border-gray-300 rounded">
               {authorFields.map((item, index) => (
                 <div className="flex items-center p-4" key={item.id}>
@@ -123,12 +121,12 @@ const EditBook = () => {
                     name={`authors.${index}`}
                     control={control}
                   />
-                  <button type="button" onClick={() => authorFields.length > 1 && removeAuthor(index)}  className="ml-5 rounded bg-transparent">
+                  <button type="button" onClick={() => authorFields.length > 1 && removeAuthor(index)}  className="flex flex-row justify-between items-center bg-dark-clay m-4">
                     <IoClose size={20}/>
                   </button>
                 </div>
               ))}
-              <button type="button" onClick={() => appendAuthor('')} className="flex flex-row justify-between items-center bg-transparent m-4">
+              <button type="button" onClick={() => appendAuthor('')} className="flex flex-row justify-between items-center bg-dark-clay m-4">
                 <IoAddOutline size={20} className="mr-1"/>
                 Add Author
               </button>
@@ -137,7 +135,7 @@ const EditBook = () => {
 
           {/* Genres Field Array */}
           <div className="block sm:col-span-2">
-            <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">Genres</label>
+            <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">Genres<span className="text-red-600 ml-px">*</span></label>
             <div className="border border-gray-300 rounded">
               {genreFields.map((item, index) => (
                   <div key={item.id} className="flex items-center p-4">
@@ -146,12 +144,12 @@ const EditBook = () => {
                       name={`genres.${index}`}
                       control={control}
                     />
-                    <button type="button" onClick={() => genreFields.length > 1 && removeGenre(index)} className="ml-5">
+                    <button type="button" onClick={() => genreFields.length > 1 && removeGenre(index)} className="flex flex-row justify-between items-center bg-dark-clay m-4">
                       <IoClose size={20}/>
                     </button>
                   </div>
                 ))}
-              <button type="button" onClick={() => appendGenre('')} className="flex flex-row justify-between items-center bg-transparent m-4">
+              <button type="button" onClick={() => appendGenre('')} className="flex flex-row justify-between items-center bg-dark-clay m-4">
                 <IoAddOutline size={20} className="mr-1"/>
                 Add Genre
               </button>
@@ -160,45 +158,46 @@ const EditBook = () => {
 
           {/* Tags Field Array */}
           <div className="block sm:col-span-2">
-            <label htmlFor="tags" className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">Personal Tags</label>
+            <label htmlFor="tags" className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">Personal Tags<span className="text-red-600 ml-px">*</span></label>
             <div className="border border-gray-300 rounded">
               {tagFields.map((item, index) => (
                   <div key={item.id} className="flex items-center p-4">
                     <Controller
-                      render={({ field }) => <input {...field} className="bg-gray-50 text-gray-900 text-sm focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500" />}
+                      render={({ field }) => <input {...field} className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500" />}
                       name={`tags.${index}`}
                       control={control}
                     />
-                    <button type="button" onClick={() => tagFields.length > 1 && removeTag(index)} className="flex flex-row justify-between items-center bg-transparent mt-2 ml-5">
+                    <button type="button" onClick={() => tagFields.length > 1 && removeTag(index)} className="flex flex-row justify-between items-center bg-dark-clay m-4">
                       <IoClose size={20}/>
                     </button>
                   </div>
                 ))}
-                <button type="button" onClick={() => appendTag('')} className="flex flex-row justify-between items-center bg-transparent mt-2">
+                <button type="button" onClick={() => appendTag('')} className="flex flex-row justify-between items-center bg-dark-clay m-4">
                   <IoAddOutline size={20} className="mr-1"/>
                   Add Tag
                 </button>
             </div>
           </div>
 
+          {/* Publish Date */}
           <div className="sm:col-span-2">
-            <label htmlFor="publishDate" className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">Publish Date</label>
+            <label htmlFor="publishDate" className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">Publish Date<span className="text-red-600 ml-px">*</span></label>
             <input id="publishDate" {...register('publishDate')} className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"/>
           </div>
 
           <div className="w-full">
-            <label htmlFor="isbn10" className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">ISBN-10</label>
+            <label htmlFor="isbn10" className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">ISBN-10<span className="text-red-600 ml-px">*</span></label>
             <input id="isbn10" {...register('isbn10')} className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500" />
           </div>
 
           <div className="w-full">
-            <label htmlFor="isbn13" className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">ISBN-13</label>
+            <label htmlFor="isbn13" className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">ISBN-13<span className="text-red-600 ml-px">*</span></label>
             <input id="isbn13" {...register('isbn13')} className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500" />
           </div>
 
           {/* Formats */}
           <div className="sm:col-span-2">
-            <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">Formats</label>
+            <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">Formats<span className="text-red-600 ml-px">*</span></label>
               <ul className="grid w-full gap-6 md:grid-cols-3">
                 {['physical', 'eBook', 'audioBook'].map((format) => (
                   <li key={format}>
@@ -215,27 +214,33 @@ const EditBook = () => {
               </ul>
           </div>
 
+          {/* Language */}
           <div className="w-full">
-            <label htmlFor="language" className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">Language</label>
+            <label htmlFor="language" className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">Language<span className="text-red-600 ml-px">*</span></label>
             <input id="language" {...register('language')} className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500" />
           </div>
+
+          {/* Page Count */}
           <div className="w-full">
-            <label htmlFor="pageCount" className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">Page Count</label>
+            <label htmlFor="pageCount" className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">Page Count<span className="text-red-600 ml-px">*</span></label>
             <input id="pageCount" type="number" {...register('pageCount', { valueAsNumber: true })} className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500" />
           </div>
 
+          {/* Image Links Field Array */}
           <div className="sm:col-span-2">
-            <label htmlFor="imageLinks" className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">Image Links</label>
+            <label htmlFor="imageLinks" className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">Image Links<span className="text-red-600 ml-px">*</span></label>
             <input id="imageLinks" {...register('imageLinks')} className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500" />
           </div>
 
+          {/* Description */}
           <div className="sm:col-span-2">
-            <label htmlFor="description" className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">Description</label>
+            <label htmlFor="description" className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">Description<span className="text-red-600 ml-px">*</span></label>
             <textarea id="description" rows={4} {...register('description')} className="block p-2.5 w-full text-sm text-gray-900 bg-gray-50 rounded border border-gray-300 focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500" />
           </div>
 
+          {/* Notes */}
           <div className="sm:col-span-2">
-            <label htmlFor="notes" className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">Notes</label>
+            <label htmlFor="notes" className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">Notes<span className="text-red-600 ml-px">*</span></label>
             <textarea id="notes" rows={4} {...register('notes')} className="block p-2.5 w-full text-sm text-gray-900 bg-gray-50 rounded border border-gray-300 focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500" />
           </div>
 

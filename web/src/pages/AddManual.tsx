@@ -51,7 +51,7 @@ const {
     title: '',
     subtitle: '',
     authors: [''],
-    genres: [''],
+    genres: ['Genre 1'],
     tags: [''],
     publishDate: '',
     isbn10: '',
@@ -128,8 +128,8 @@ const {
   console.log('RHF errors: ', errors );
 
   return (
-    <section className="bg-white dark:bg-gray-900">
-      <div className="text-left py-8 px-4 mx-auto max-w-2xl lg:py-16">
+    <section className="bg-white dark:bg-gray-900 my-20">
+      <div className="text-left px-4 py-8 md:pl-24 mx-auto max-w-2xl lg:py-16">
         <h2 className="mb-4 text-xl font-bold text-gray-900 dark:text-white">Add Book</h2>
         <form className="grid gap-4 sm:grid-cols-2 sm:gap-6" onSubmit={handleSubmit(onSubmit)}>
 
@@ -141,10 +141,12 @@ const {
               htmlFor="title"
             >
               Title
+              <span className="text-red-600 ml-px">*</span>
             </label>
             <input
               id="title"
               type="text"
+              placeholder="Enter a book title"
               {...register("title")}
               className={`
                 border ${errors.title ? 'border-red-500' : 'border-gray-300'}
@@ -158,10 +160,14 @@ const {
           <div className="block sm:col-span-2">
             <label
               className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
-              htmlFor="subtitle">Subtitle</label>
+              htmlFor="subtitle"
+              >
+                Subtitle
+              </label>
             <input
               id="subtitle"
               className="bg-gray-50 border border-gray-00 text-gray-900 text-sm rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
+              placeholder="Subtitle optional"
               {...register('subtitle')}
             />
             {errors.subtitle && <p className="text-red-500">{errors.subtitle.message}</p>}
@@ -169,7 +175,7 @@ const {
 
           {/* Authors Field Array */}
           <div className="block sm:col-span-2">
-            <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">Authors</label>
+            <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">Authors<span className="text-red-600 ml-px">*</span></label>
             <div className="border border-gray-300 rounded">
               {authorFields.map((item, index) => (
                 <div className="flex items-center p-4" key={item.id}>
@@ -178,12 +184,12 @@ const {
                     name={`authors.${index}`}
                     control={control}
                   />
-                  <button type="button" onClick={() => authorFields.length > 1 && removeAuthor(index)}  className="ml-5 rounded bg-transparent">
+                  <button type="button" onClick={() => authorFields.length > 1 && removeAuthor(index)}  className="ml-5 rounded bg-dark-clay">
                     <IoClose size={20}/>
                   </button>
                 </div>
               ))}
-              <button type="button" onClick={() => appendAuthor('')} className="flex flex-row justify-between items-center bg-transparent m-4">
+              <button type="button" onClick={() => appendAuthor('')} className="flex flex-row justify-between items-center bg-dark-clay m-4">
                 <IoAddOutline size={20} className="mr-1"/>
                 Add Author
               </button>
@@ -194,7 +200,7 @@ const {
 
           {/* Genres Field Array */}
           <div className="block sm:col-span-2">
-            <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">Genres</label>
+            <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">Genres<span className="text-red-600 ml-px">*</span></label>
             <div className="border border-gray-300 rounded">
                 {genreFields.map((item, index) => (
                   <div key={item.id} className="flex items-center p-4">
@@ -203,12 +209,12 @@ const {
                       name={`genres.${index}`}
                       control={control}
                     />
-                    <button type="button" onClick={() => genreFields.length > 1 && removeGenre(index)} className="ml-5">
+                    <button type="button" onClick={() => genreFields.length > 1 && removeGenre(index)} className="ml-5 bg-dark-clay">
                       <IoClose size={20}/>
                     </button>
                   </div>
                 ))}
-              <button type="button" onClick={() => appendGenre('')} className="flex flex-row justify-between items-center bg-transparent m-4">
+              <button type="button" onClick={() => appendGenre('')} className="flex flex-row justify-between items-center bg-dark-clay m-4">
                 <IoAddOutline size={20} className="mr-1"/>
                 Add Genre
               </button>
@@ -218,21 +224,21 @@ const {
 
           {/* Tags Field Array */}
           <div className="block sm:col-span-2">
-            <label htmlFor="tags" className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">Personal Tags</label>
+            <label htmlFor="tags" className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">Personal Tags<span className="text-red-600 ml-px">*</span></label>
             <div className="border border-gray-300 rounded">
                 {tagFields.map((item, index) => (
                   <div key={item.id} className="flex items-center p-4">
                     <Controller
-                      render={({ field }) => <input {...field} className="bg-gray-50 text-gray-900 text-sm focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500" />}
+                      render={({ field }) => <input {...field} className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500" placeholder="Please enter a personal tag" />}
                       name={`tags.${index}`}
                       control={control}
                     />
-                    <button type="button" onClick={() => tagFields.length > 1 && removeTag(index)} className="flex flex-row justify-between items-center bg-transparent mt-2 ml-5">
+                    <button type="button" onClick={() => tagFields.length > 1 && removeTag(index)} className="flex flex-row justify-between items-center bg-dark-clay mt-2 ml-5">
                       <IoClose size={20}/>
                     </button>
                   </div>
                 ))}
-              <button type="button" onClick={() => appendTag('')} className="flex flex-row justify-between items-center bg-transparent m-4">
+              <button type="button" onClick={() => appendTag('')} className="flex flex-row justify-between items-center bg-dark-clay m-4">
                 <IoAddOutline size={20} className="mr-1"/>
                 Add Tag
               </button>
@@ -243,9 +249,10 @@ const {
 
           {/* Publish Date */}
           <div className="sm:col-span-2">
-            <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white" htmlFor="publishDate">Publish Date</label>
+            <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white" htmlFor="publishDate">Publish Date<span className="text-red-600 ml-px">*</span></label>
             <input
               id="publishDate"
+              placeholder="YYYY-MM-DD"
               type="text"
               {...register("publishDate")}
               className={`
@@ -258,9 +265,10 @@ const {
 
           {/* ISBN10 */}
           <div className="w-full">
-            <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white" htmlFor="isbn10">ISBN-10</label>
+            <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white" htmlFor="isbn10">ISBN-10<span className="text-red-600 ml-px">*</span></label>
             <input
               id="isbn10"
+              placeholder="XXXXXXXXXX"
               type="text"
               {...register("isbn10")}
               className={`
@@ -273,9 +281,10 @@ const {
 
           {/* ISBN13 */}
           <div className="w-full">
-            <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white" htmlFor="isbn13">ISBN-13</label>
+            <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white" htmlFor="isbn13">ISBN-13<span className="text-red-600 ml-px">*</span></label>
             <input
               id="isbn13"
+              placeholder="XXXXXXXXXXXXX"
               type="text"
               {...register("isbn13")}
               className={`
@@ -288,29 +297,29 @@ const {
 
           {/* Formats */}
           <div className="sm:col-span-2">
-            <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">Formats</label>
-            <ul className="grid w-full gap-6 md:grid-cols-3">
-              {['physical', 'eBook', 'audioBook'].map((format) => (
-                <li key={format}>
-                  <input
-                    type="checkbox"
-                    id={`formats_${format}`}
-                    {...register('formats')}
-                    value={format}
-                    className="hidden peer"
-                  />
-                  <label htmlFor={`formats_${format}`} className="inline-flex text-center items-center justify-center w-full p-2 text-gray-500 bg-white border-2 border-gray-200 rounded cursor-pointer dark:hover:text-gray-300 dark:border-gray-700 peer-checked:border-blue-600 hover:text-gray-600 dark:peer-checked:text-gray-300 peer-checked:text-gray-600 hover:bg-gray-50 dark:text-gray-400 dark:bg-gray-800 dark:hover:bg-gray-700">{format}</label>
-                </li>
-              ))}
-            </ul>
-            {errors.formats && <p className="text-red-500">{errors.formats.message}</p>}
+            <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">Formats<span className="text-red-600 ml-px">*</span></label>
+              <ul className="grid w-full gap-6 md:grid-cols-3">
+                {['physical', 'eBook', 'audioBook'].map((format) => (
+                  <li key={format}>
+                    <input
+                      type="checkbox"
+                      id={`formats_${format}`}
+                      {...register('formats')}
+                      value={format}
+                      className="hidden peer"
+                    />
+                    <label htmlFor={`formats_${format}`} className="inline-flex text-center items-center justify-center w-full p-2 text-gray-500 bg-white border-2 border-gray-200 rounded cursor-pointer dark:hover:text-gray-300 dark:border-gray-700 peer-checked:border-blue-600 hover:text-gray-600 dark:peer-checked:text-gray-300 peer-checked:text-gray-600 hover:bg-gray-50 dark:text-gray-400 dark:bg-gray-800 dark:hover:bg-gray-700">{format}</label>
+                  </li>
+                ))}
+              </ul>
           </div>
 
           {/* Language */}
           <div className="w-full">
-            <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white" htmlFor="language">Language</label>
+            <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white" htmlFor="language">Language<span className="text-red-600 ml-px">*</span></label>
             <input
               id="language"
+              placeholder="en"
               type="text"
               {...register("language")}
               className={`
@@ -323,7 +332,7 @@ const {
 
           {/* Page Count */}
           <div className="w-full">
-            <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white" htmlFor="pageCount">Page Count</label>
+            <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white" htmlFor="pageCount">Page Count<span className="text-red-600 ml-px">*</span></label>
             <input
               id="pageCount"
               type="number"
@@ -338,21 +347,21 @@ const {
 
           {/* Image Links Field Array */}
           <div className="sm:col-span-2">
-            <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">Formats</label>
+            <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">Image Links<span className="text-red-600 ml-px">*</span></label>
             <div className="border border-gray-300 rounded">
                 {imageLinkFields.map((item, index) => (
                   <div key={item.id} className="flex items-center p-4">
                     <Controller
-                      render={({ field }) => <input {...field} className="bg-gray-50 text-gray-900 text-sm focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500" />}
+                      render={({ field }) => <input {...field} className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500" />}
                       name={`imageLinks.${index}`}
                       control={control}
                     />
-                    <button type="button" onClick={() => imageLinkFields.length > 1 && removeImageLink(index)} className="flex flex-row justify-between items-center bg-transparent mt-2 ml-5">
+                    <button type="button" onClick={() => imageLinkFields.length > 1 && removeImageLink(index)} className="ml-5 bg-dark-clay">
                       <IoClose size={20}/>
                     </button>
                   </div>
                 ))}
-              <button type="button" onClick={() => appendImageLink('')} className="flex flex-row justify-between items-center bg-transparent m-4">
+              <button type="button" onClick={() => appendImageLink('')} className="flex flex-row justify-between items-center bg-dark-clay m-4">
                 <IoAddOutline size={20} className="mr-1"/>
                 Add Image Link
               </button>
@@ -363,7 +372,7 @@ const {
 
           {/* Description */}
           <div className="sm:col-span-2">
-            <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white" htmlFor="description">Description</label>
+            <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white" htmlFor="description">Description<span className="text-red-600 ml-px">*</span></label>
             <textarea
               id="description"
               rows={4}
@@ -378,7 +387,7 @@ const {
 
           {/* Notes */}
           <div className="sm:col-span-2">
-            <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white" htmlFor="notes">Notes</label>
+            <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white" htmlFor="notes">Notes<span className="text-red-600 ml-px">*</span></label>
             <textarea
               id="notes"
               rows={4}

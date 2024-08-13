@@ -26,6 +26,7 @@ export default {
         'polo-blue': '#93accd',
         'nevada-gray': '#606d79',
         'dark-ebony': '#0c0c0c',
+        'dark-clay': '#1f2937',
       }
     },
   },
