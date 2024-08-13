@@ -24,7 +24,7 @@ export default function CardListItem({ book, isSearchPage }: CardListItemProps) 
   const navigate = useNavigate();
 
 
-  console.log('authors: ', authors);
+  //console.log('authors: ', authors);
 
 
   const handleBookClick = () => {
@@ -38,7 +38,7 @@ export default function CardListItem({ book, isSearchPage }: CardListItemProps) 
       <li key={`${title}-${id}`} className="py-3 flex items-start justify-between">
         <div className="flex gap-3 cursor-pointer" onClick={handleBookClick}>
           {
-            imageLinks.length > 0 ? (
+            imageLinks && imageLinks.length > 0 ? (
               <img loading="lazy" src={imageLinks[0]} alt={`Book cover thumbnail for ${title}`} className="flex-none rounded w-16 h-16" />
             ) : (
               <ImagePlaceholder isBookDetail={false}/>

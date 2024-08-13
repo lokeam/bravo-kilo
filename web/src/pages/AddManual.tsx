@@ -226,24 +226,24 @@ const {
           <div className="block sm:col-span-2">
             <label htmlFor="tags" className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">Personal Tags<span className="text-red-600 ml-px">*</span></label>
             <div className="border border-gray-300 rounded">
-                {tagFields.map((item, index) => (
+              {tagFields.map((item, index) => (
                   <div key={item.id} className="flex items-center p-4">
                     <Controller
-                      render={({ field }) => <input {...field} className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500" placeholder="Please enter a personal tag" />}
+                      render={({ field }) => <input {...field} className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500" />}
                       name={`tags.${index}`}
                       control={control}
                     />
-                    <button type="button" onClick={() => tagFields.length > 1 && removeTag(index)} className="flex flex-row justify-between items-center bg-dark-clay mt-2 ml-5">
+                    <button type="button" onClick={() => tagFields.length > 1 && removeTag(index)} className="flex flex-row justify-between items-center bg-dark-clay m-4">
                       <IoClose size={20}/>
                     </button>
                   </div>
                 ))}
-              <button type="button" onClick={() => appendTag('')} className="flex flex-row justify-between items-center bg-dark-clay m-4">
-                <IoAddOutline size={20} className="mr-1"/>
-                Add Tag
-              </button>
+                <button type="button" onClick={() => appendTag('')} className="flex flex-row justify-between items-center bg-dark-clay m-4">
+                  <IoAddOutline size={20} className="mr-1"/>
+                  Add Tag
+                </button>
             </div>
-            {errors.tags && <p className="text-red-500">{errors.tags.message}</p>}
+            {errors.tags && <p className="text-red-500">Please enter at least one personal tag</p>}
           </div>
 
 
@@ -312,6 +312,7 @@ const {
                   </li>
                 ))}
               </ul>
+              {errors.formats && <p className="text-red-500">Please select at least one book format</p>}
           </div>
 
           {/* Language */}

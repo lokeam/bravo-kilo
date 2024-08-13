@@ -12,7 +12,7 @@ interface SnackbarProps {
   onClose: () => void;
 }
 
-const Snackbar = ({ message, open, duration = 3000, onClose, variant }: SnackbarProps) => {
+const Snackbar = ({ message, open, duration = 6000, onClose, variant }: SnackbarProps) => {
   useEffect(() => {
     if (open) {
       const timer = setTimeout(() => {
@@ -40,8 +40,17 @@ const Snackbar = ({ message, open, duration = 3000, onClose, variant }: Snackbar
     error: <BsFillXCircleFill className="mr-2" size={20} />
   };
 
+  console.log('Snackbar component');
   return (
-    <div className={`${variantStyles[variant]} fixed bottom-36 left-1/2 transform -translate-x-1/2 text-white px-4 py-2 rounded shadow-lg flex items-center`}>
+    <div
+      className={`
+        ${variantStyles[variant]} fixed bottom-36 transform -translate-x-1/2 text-white px-4 py-2 rounded shadow-lg flex items-center
+        ${open ? 'animate-fade-in': 'animate-fade-out'}
+      `}
+      role="alert"
+      aria-live="assertive"
+      aria-atomic="true"
+    >
       { variantIcons[variant] }
       <span>{ message }</span>
     </div>

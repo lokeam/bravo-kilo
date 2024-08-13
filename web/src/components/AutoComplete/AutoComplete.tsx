@@ -141,7 +141,7 @@ const AutoComplete: React.FC = () => {
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}
             className={`autocomplete-input bg-maastricht text-az-white font-bold outline-none block w-full pl-4 p-2.5 placeholder:polo-blue placeholder:font-bold`}
-            placeholder="Search for a book or author"
+            placeholder="Add a book via Search"
           />
           <button
             className="inline-flex outline-none rounded-none flex-row items-center justify-center bg-maastricht"

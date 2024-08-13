@@ -44,12 +44,11 @@ function isCardListItemGenre(props: CardListItemProps): props is CardListItemGen
 
 
 export default function CardList(props: CardListItemProps) {
-
-  console.log('CardList Props: ', props);
+  // console.log('CardList Props: ', props);
 
   // Author Card List
   if (isCardListItemAuthor(props)) {
-    console.log('Card List Author flag tripped');
+    //console.log('Card List Author flag tripped');
     return (
       <div className="card_list__wrapper pb-20 md:pb-4 flex flex-col relative w-full max-w-7xl mt-8">
         <ul className="flex flex-col justify-center rounded text-white">
@@ -86,7 +85,7 @@ export default function CardList(props: CardListItemProps) {
 
   // Standard Library.tsx Card List
   if (isCardListItemDefault(props)) {
-    console.log('Card List Default flag tripped');
+    //console.log('Card List Default flag tripped');
     return (
       <div className="card_list__wrapper pb-20 md:pb-4 flex flex-col relative w-full max-w-7xl mt-8">
         <ul className="flex flex-col justify-center rounded text-white">

@@ -9,6 +9,14 @@ interface SearchResult {
   subtitle?: string;
 }
 
+interface SnackbarState {
+  snackbarMessage: string | null;
+  snackbarOpen: boolean;
+  snackbarVariant: 'added' | 'updated' | 'removed' | 'error' | null;
+  showSnackbar: (msg: string, variant: 'added' | 'updated' | 'removed' | 'error') => void;
+  hideSnackbar: () => void;
+}
+
 interface LibrarySortState {
   sortCriteria: 'title' | 'publishDate' | 'author' | 'pageCount';
   sortOrder: 'asc' | 'desc';
@@ -22,7 +30,9 @@ interface LibrarySortState {
   addSearchHistory: (query: string, results: SearchResult[]) => void; // Method to add to history
 }
 
-const useStore = create<LibrarySortState>()(
+type StoreState = LibrarySortState & SnackbarState;
+
+const useStore = create<StoreState>()(
   persist(
     (set) => ({
       sortCriteria: 'title',
@@ -62,6 +72,25 @@ const useStore = create<LibrarySortState>()(
           };
         });
       },
+      // Testing Snackbar state
+      snackbarMessage: null,
+      snackbarOpen: false,
+      snackbarVariant: null,
+      showSnackbar: (msg, variant) => {
+        console.log('useStore --- showSnackbar fired');
+        set({
+          snackbarMessage: msg,
+          snackbarOpen: true,
+          snackbarVariant: variant,
+        })
+      },
+      hideSnackbar: () => {
+        set({
+          snackbarMessage: null,
+          snackbarOpen: false,
+          snackbarVariant: null,
+        })
+      },
     }),
     {
       name: 'library-sort',
@@ -73,6 +102,10 @@ const useStore = create<LibrarySortState>()(
         searchResults: state.searchResults,
         searchHistory: state.searchHistory, // Persist search history
         results: state.results, // Persist results
+        // Persist Snackbar state
+        snackbarMessage: state.snackbarMessage,
+        snackbarOpen: state.snackbarOpen,
+        snackbarVariant: state.snackbarVariant,
       }),
     }
   )

@@ -1,24 +1,22 @@
 import { Suspense } from 'react';
 import { Route, Routes } from 'react-router-dom';
 import { AppProvider } from './components/AuthContext';
+import AuthenticatedLayout from './pages/AuthLayout';
 import ProtectedRoute from './components/ProtectedRoute';
 import Home from './pages/Home';
 import EditBook from './pages/EditBook';
 import AddBookGateway from './pages/AddBookGateway';
 import AddManual from './pages/AddManual';
+import AddUpload from './pages/AddUpload';
 import Search from './pages/Search';
 import Login from './pages/Login';
 import Library from './pages/Library';
 import AuthorGenre from './pages/AuthorGenre';
 import BookDetail from './pages/BookDetail';
-
+import NotFound from './pages/NotFound';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 
-import NotFound from './pages/NotFound';
-
 import './App.css'
-import AuthenticatedLayout from './pages/AuthLayout';
-
 
 function App() {
   return (
@@ -34,6 +32,7 @@ function App() {
             <Route path="/library/books/add/gateway" element={<AddBookGateway />} />
             <Route path="/library/books/add/manual" element={<AddManual /> }/>
             <Route path="/library/books/add/search" element={<AddManual /> }/>
+            <Route path="/library/books/add/upload" element={<AddUpload /> }/>
             <Route path="/library/books/search" element={<Search />} />
             <Route path="/library/books/:bookTitle" element={<BookDetail />} />
             <Route path="/library/books/:bookID/edit" element={<EditBook />} />

@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { Controller, useForm, useFieldArray, SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { useNavigate, useParams } from 'react-router-dom';
+
 import useUpdateBook from '../hooks/useUpdateBook';
 import useFetchBookById from '../hooks/useFetchBookById';
 
@@ -109,7 +110,7 @@ const EditBook = () => {
     };
 
     updateBook(book);
-
+    navigate('/library');
   };
 
   const openModal = () => setOpened(true);

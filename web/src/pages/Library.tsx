@@ -5,6 +5,8 @@ import useStore from '../store/useStore';
 import useFetchBooks from '../hooks/useFetchBooks';
 import CardList from '../components/CardList/CardList';
 import Modal from '../components/Modal/Modal';
+import Snackbar from '../components/Snackbar/Snackbar';
+
 import '../components/Modal/Modal.css';
 import { PiArrowsDownUp } from 'react-icons/pi';
 import { fetchBooksAuthors, fetchBooksFormat, fetchBooksGenres } from '../service/apiClient.service';
@@ -48,11 +50,16 @@ type BookGenresData = {
 };
 
 const Library = () => {
+  // Zustand storage
+  const {
+    // Library Sorting
+    sortCriteria, sortOrder, setSort, activeTab, setActiveTab, snackbarMessage, snackbarOpen, snackbarVariant, hideSnackbar,
+  } = useStore();
+
   const [opened, setOpened] = useState(false);
   const { search } = useLocation();
   const query = new URLSearchParams(search);
   const userID = parseInt(query.get('userID') || '0', 10);
-  const { sortCriteria, sortOrder, setSort, activeTab, setActiveTab } = useStore();
   const { data: books, isLoading, isError } = useFetchBooks(userID, true);
   const queryClient = useQueryClient();
 
@@ -91,17 +98,17 @@ const Library = () => {
   });
 
 
-  useEffect(() => {
-    if (bookAuthors) {
-      console.log('Authors data:', bookAuthors); // Log to verify authors data
-    }
-  }, [bookAuthors]);
+  // useEffect(() => {
+  //   if (bookAuthors) {
+  //     console.log('Authors data:', bookAuthors); // Log to verify authors data
+  //   }
+  // }, [bookAuthors]);
 
-  useEffect(() => {
-    if (bookGenres) {
-      console.log('Genres data:', bookGenres); // Log to verify genres data
-    }
-  }, [bookGenres]);
+  // useEffect(() => {
+  //   if (bookGenres) {
+  //     console.log('Genres data:', bookGenres); // Log to verify genres data
+  //   }
+  // }, [bookGenres]);
 
   // Retrieve cached books formats
   const bookFormats = queryClient.getQueryData<{
@@ -111,9 +118,9 @@ const Library = () => {
   }>(['booksFormat', userID]);
 
 
-  console.log('bookAuthors: ', bookAuthors);
-  console.log('****************************************');
-  console.log('bookGenres: ', bookGenres);
+  // console.log('bookAuthors: ', bookAuthors);
+  // console.log('****************************************');
+  // console.log('bookGenres: ', bookGenres);
 
   // Memoize book sorting
   const getSortedBooks = useCallback(
@@ -225,10 +232,15 @@ const Library = () => {
   const closeModal = () => setOpened(false);
 
 
-  console.log('Fetched books:', books);
-  console.log('Fetched authors:', bookAuthors);
-  console.log('Fetched genres:', bookGenres);
-  console.log('Fetched formats:', bookFormats);
+  // console.log('Fetched books:', books);
+  // console.log('Fetched authors:', bookAuthors);
+  // console.log('Fetched genres:', bookGenres);
+  // console.log('Fetched formats:', bookFormats);
+  console.log('-----');
+  console.log('testing snackbarMessage wired to state: ', snackbarMessage);
+  console.log('testing snackbarOpen wired to state: ', snackbarOpen);
+  console.log('testing snackbarVariant wired to state: ', snackbarVariant);
+
 
   return (
     <div className="bk_lib flex flex-col items-center place-content-around px-5 antialiased md:pr-5 md:ml-24 h-screen pt-28">
@@ -291,6 +303,14 @@ const Library = () => {
       ) : (
         sortedBooks && sortedBooks.length > 0 && <CardList books={sortedBooks} isSearchPage={false} />
       )}
+
+      {/* Snackbar */}
+      <Snackbar
+        message={snackbarMessage || ''}
+        open={snackbarOpen}
+        variant={snackbarVariant || 'added'}
+        onClose={hideSnackbar}
+      />
     </div>
   )
 }

@@ -1,11 +1,14 @@
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { addBook } from '../service/apiClient.service';
+import useStore from '../store/useStore';
 import { Book } from '../pages/Library';
 
 const useAddBook = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+
+  const { showSnackbar } = useStore();
 
   return useMutation({
     mutationFn: (book: Book) => {
@@ -19,10 +22,12 @@ const useAddBook = () => {
       queryClient.invalidateQueries({ queryKey: ['booksFormat'] });
       queryClient.invalidateQueries({ queryKey: ['userBookAuthors'] });
       queryClient.invalidateQueries({ queryKey: ['userBookGenres'] });
+      showSnackbar('Book added', 'added');
       navigate('/library/');
     },
     onError: (error: any) => {
       console.log('useAddBook - Error updating book: ', error);
+      showSnackbar(`Error updating book ${error.message}`, error);
     }
   });
 };
