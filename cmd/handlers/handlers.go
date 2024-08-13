@@ -11,12 +11,16 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
+	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -1077,4 +1081,85 @@ func (h *Handlers) GetBooksByGenres(response http.ResponseWriter, request *http.
 	if err := json.NewEncoder(response).Encode(booksByGenres); err != nil {
 			http.Error(response, "Error encoding response", http.StatusInternalServerError)
 	}
+}
+
+// File Handling - Upload CSV
+func (h *Handlers) UploadCSV(response http.ResponseWriter, request *http.Request) {
+
+	// Check auth
+	userID, ok := middleware.GetUserID(request.Context())
+	if !ok {
+		http.Error(response, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// Parse multipart form, cap size@10MB
+	err := request.ParseMultipartForm(10 << 20)
+	if err != nil {
+		http.Error(response, "File too large", http.StatusBadRequest)
+		return
+	}
+
+	// Get file from form data
+	file, fileHeader, err := request.FormFile("file")
+	if err != nil {
+		http.Error(response, "Invalid file upload", http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	// Validate file type using magic numbers
+	buf := make([]byte, 512)
+	if _, err := file.Read(buf); err != nil {
+		http.Error(response, "Error reading file", http.StatusInternalServerError)
+		return
+	}
+	if !isCSV(buf) {
+		http.Error(response, "Invalid file type", http.StatusBadRequest)
+		return
+	}
+
+	// Reset file reader
+	file.Seek(0, 0)
+
+	// Sanitize and store file
+	safeFileName := fmt.Sprintf("%d_%s", userID, sanitizeFileName(fileHeader.Filename))
+	destination := fmt.Sprintf("/uploads/%s", safeFileName)
+
+	outFile, err := os.Create(destination)
+	if err != nil {
+		http.Error(response, "Unable to save file", http.StatusInternalServerError)
+		return
+	}
+	defer outFile.Close()
+
+	if _, err := io.Copy(outFile, file); err != nil {
+		http.Error(response, "Unable to save file", http.StatusInternalServerError)
+		return
+	}
+
+	response.WriteHeader(http.StatusOK)
+	json.NewEncoder(response).Encode(map[string]string{"message": "File uploaded successfully"})
+}
+
+func isCSV(data []byte) bool {
+	return http.DetectContentType(data) == "text/csv"
+}
+
+func sanitizeFileName(filename string) string {
+	// Strip dir path
+	filename = filepath.Base(filename)
+
+	// Define regex to only allow alphanumeric, hypthens and underscores
+	allowedCharsRegex := regexp.MustCompile(`[^a-zA-Z0-9\-_\.]+`)
+
+	// Swap unsafe chars w/ underscore
+	sanitized := allowedCharsRegex.ReplaceAllString(filename, "_")
+
+	// Make sure file ends with .csv filename
+	if !strings.HasSuffix(sanitized, ".csv") {
+		sanitized += ".csv"
+	}
+
+	return sanitized
 }
