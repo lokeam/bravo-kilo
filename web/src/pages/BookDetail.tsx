@@ -174,8 +174,8 @@ const BookDetail = () => {
         <div className="bk_book__details flex flex-col text-left mb-4">
           <h3 className="text-2xl font-bold mb-4">Tagged as:</h3>
           <div className="bk_book_genres w-full flex flex-row items-center content-evenly gap-6">
-            {book.genres.map((genre) => (
-              <button key={`${genre}}`} className="border border-gray-500">
+            {book.genres && book.genres.length > 0 && book.genres.map((genre: string, index: number) => (
+              <button key={`${genre}-${index}`} className="border border-gray-500">
                 {genre}
               </button>
             ))}

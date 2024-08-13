@@ -51,19 +51,40 @@ const EditBook = () => {
     resolver: zodResolver(bookSchema),
   });
 
-  const { fields: authorFields, append: appendAuthor, remove: removeAuthor } = useFieldArray({
+  const {
+    fields: authorFields,
+    append: appendAuthor,
+    remove: removeAuthor
+  } = useFieldArray({
     control,
     name: 'authors' as const,
   });
 
-  const { fields: genreFields, append: appendGenre, remove: removeGenre } = useFieldArray({
+  const {
+    fields: genreFields,
+    append: appendGenre,
+    remove: removeGenre
+  } = useFieldArray({
     control,
     name: 'genres' as const,
   });
 
-  const { fields: tagFields, append: appendTag, remove: removeTag } = useFieldArray({
+  const {
+    fields: tagFields,
+    append: appendTag,
+    remove: removeTag
+  } = useFieldArray({
     control,
     name: 'tags' as const,
+  });
+
+  const {
+    fields: imageLinkFields,
+    append: appendImageLink,
+    remove: removeImageLink
+  } = useFieldArray({
+    control,
+    name: 'imageLinks' as const,
   });
 
   useEffect(() => {
@@ -228,8 +249,26 @@ const EditBook = () => {
 
           {/* Image Links Field Array */}
           <div className="sm:col-span-2">
-            <label htmlFor="imageLinks" className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">Image Links<span className="text-red-600 ml-px">*</span></label>
-            <input id="imageLinks" {...register('imageLinks')} className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500" />
+            <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">Image Links<span className="text-red-600 ml-px">*</span></label>
+            <div className="border border-gray-300 rounded">
+                {imageLinkFields.map((item, index) => (
+                  <div key={item.id} className="flex items-center p-4">
+                    <Controller
+                      render={({ field }) => <input {...field} className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500" />}
+                      name={`imageLinks.${index}`}
+                      control={control}
+                    />
+                    <button type="button" onClick={() => imageLinkFields.length > 1 && removeImageLink(index)} className="ml-5 bg-dark-clay">
+                      <IoClose size={20}/>
+                    </button>
+                  </div>
+                ))}
+              <button type="button" onClick={() => appendImageLink('')} className="flex flex-row justify-between items-center bg-dark-clay m-4">
+                <IoAddOutline size={20} className="mr-1"/>
+                Add Image Link
+              </button>
+            </div>
+            {errors.imageLinks && <p className="text-red-500">{errors.imageLinks.message}</p>}
           </div>
 
           {/* Description */}
