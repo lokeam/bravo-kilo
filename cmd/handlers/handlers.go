@@ -1108,6 +1108,13 @@ func (h *Handlers) UploadCSV(response http.ResponseWriter, request *http.Request
 	}
 	defer file.Close()
 
+	// Validate Content-Type header
+	contentType := fileHeader.Header.Get("Content-Type")
+	if contentType != "text/csv" {
+		http.Error(response, "Invalid file type", http.StatusBadRequest)
+		return
+	}
+
 	// Validate file type using magic numbers
 	buf := make([]byte, 512)
 	if _, err := file.Read(buf); err != nil {
@@ -1125,6 +1132,12 @@ func (h *Handlers) UploadCSV(response http.ResponseWriter, request *http.Request
 	// Sanitize and store file
 	safeFileName := fmt.Sprintf("%d_%s", userID, sanitizeFileName(fileHeader.Filename))
 	destination := fmt.Sprintf("/uploads/%s", safeFileName)
+
+	// Make sure destination dir exists
+	if err := os.MkdirAll("/uploads", os.ModePerm); err != nil {
+		http.Error(response, "Unable to create directory", http.StatusInternalServerError)
+		return
+	}
 
 	outFile, err := os.Create(destination)
 	if err != nil {
