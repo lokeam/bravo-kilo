@@ -4,11 +4,8 @@ import useSearchStore from '../../store/useSearchStore';
 import { IoClose, IoSearchOutline } from 'react-icons/io5';
 import useBookSearch from '../../hooks/useBookSearch';
 
-interface AutoCompleteProps {
-  onSubmit: (query: string) => void;
-}
 
-const AutoComplete: React.FC<AutoCompleteProps> = ({ onSubmit }) => {
+const AutoComplete: React.FC = () => {
   const [query, setQuery] = useState('');
   const [searchParams, setSearchParams] = useSearchParams();
   const [highlightedIndex, setHighlightedIndex] = useState<number | null>(null);

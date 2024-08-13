@@ -9,7 +9,6 @@ import { TbEdit } from "react-icons/tb";
 import { IoSearchOutline } from 'react-icons/io5';
 
 export default function SideNavigation() {
-
   return (
     <SideNavWrapper className="" ariaLabel="Main navigation">
       <SideNavList>
