@@ -35,6 +35,13 @@ func main() {
 	logger.Init()
 	log := logger.Log
 
+	// Check if upload dir set
+	uploadDir := os.Getenv("UPLOAD_DIR")
+	if uploadDir == "" {
+		log.Error("Upload dir is not set")
+		os.Exit(1)
+	}
+
 	var cfg appConfig
 	cfg.port = 8081
 

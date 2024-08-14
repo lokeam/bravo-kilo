@@ -1,7 +1,9 @@
 package utils
 
 import (
+	"fmt"
 	"log/slog"
+	"regexp"
 	"strings"
 )
 
@@ -92,4 +94,27 @@ func GetIntVal(data map[string]interface{}, key string) int {
 		return int(value.(float64))
 	}
 	return 0
+}
+
+func SanitizeChars(field string) string {
+	// Define regex to only allow alphanumeric, hypthens and underscores
+	allowedCharsRegex := regexp.MustCompile(`[^a-zA-Z0-9\-_\.]+`)
+
+	return allowedCharsRegex.ReplaceAllString(field, "")
+}
+
+// Prevent buffer overflow
+func TruncateField(field string, maxLength int) string {
+	if len(field) > maxLength {
+		return field[:maxLength]
+	}
+	return field
+}
+
+func ValidateFieldLength(field string, maxLength int) error {
+	if len(field) > maxLength {
+		return fmt.Errorf("field exceeds maximum length of %d characters", maxLength)
+	}
+
+	return nil
 }
