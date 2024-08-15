@@ -245,7 +245,6 @@ func (h *Handlers) GoogleCallback(response http.ResponseWriter, request *http.Re
 	h.logger.Info("JWT successfully sent to FE with status code: ", "info", http.StatusSeeOther)
 }
 
-
 // Retrieve Token
 func (h *Handlers) getUserAccessToken(request *http.Request) (*oauth2.Token, error) {
 	// Get userID from JWT
@@ -290,7 +289,6 @@ func (h *Handlers) getUserAccessToken(request *http.Request) (*oauth2.Token, err
 
 	return newToken, nil
 }
-
 
 // Verify JWT Token
 func (h *Handlers) VerifyToken(response http.ResponseWriter, request *http.Request) {
@@ -684,9 +682,11 @@ func (h *Handlers) FormatGoogleBooksResponse(response http.ResponseWriter, books
 	return gBooksResponse
 }
 
-
 // Get all User Books
 func (h *Handlers) GetAllUserBooks(response http.ResponseWriter, request *http.Request) {
+		// Set Content Security Policy headers
+		utils.SetCSPHeaders(response)
+
 	// Grab token from cookie
 	cookie, err := request.Cookie("token")
 	if err != nil {
@@ -731,6 +731,9 @@ func (h *Handlers) GetAllUserBooks(response http.ResponseWriter, request *http.R
 
 // Retrieve books by a specific author
 func (h *Handlers) GetBooksByAuthors(response http.ResponseWriter, request *http.Request) {
+	// Set Content Security Policy headers
+	utils.SetCSPHeaders(response)
+
 	// Grab token from cookie
 	cookie, err := request.Cookie("token")
 	if err != nil {
@@ -771,6 +774,9 @@ func (h *Handlers) GetBooksByAuthors(response http.ResponseWriter, request *http
 
 // Get Single Book by ID
 func (h *Handlers) GetBookByID(response http.ResponseWriter, request *http.Request) {
+	// Set Content Security Policy headers
+	utils.SetCSPHeaders(response)
+
 	// Grab token from cookie
 	cookie, err := request.Cookie("token")
 	if err != nil {
@@ -999,6 +1005,9 @@ func (h *Handlers) DeleteBook(response http.ResponseWriter, request *http.Reques
 
 // Sorting - Get Books by Format
 func (h *Handlers) GetBooksByFormat(response http.ResponseWriter, request *http.Request) {
+	// Set Content Security Policy headers
+	utils.SetCSPHeaders(response)
+
 	// Grab token from cookie
 	cookie, err := request.Cookie("token")
 	if err != nil {
@@ -1039,6 +1048,9 @@ func (h *Handlers) GetBooksByFormat(response http.ResponseWriter, request *http.
 
 // Sorting - Get Books by Genre
 func (h *Handlers) GetBooksByGenres(response http.ResponseWriter, request *http.Request) {
+	// Set Content Security Policy headers
+	utils.SetCSPHeaders(response)
+
 	// Grab token from cookie
 	cookie, err := request.Cookie("token")
 	if err != nil {
@@ -1078,3 +1090,4 @@ func (h *Handlers) GetBooksByGenres(response http.ResponseWriter, request *http.
 			http.Error(response, "Error encoding response", http.StatusInternalServerError)
 	}
 }
+

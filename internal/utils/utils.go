@@ -3,6 +3,8 @@ package utils
 import (
 	"fmt"
 	"log/slog"
+	"net/http"
+	"net/url"
 	"regexp"
 	"strings"
 )
@@ -97,9 +99,20 @@ func GetIntVal(data map[string]interface{}, key string) int {
 }
 
 func SanitizeChars(field string) string {
-	// Define regex to only allow alphanumeric, hypthens and underscores
-	allowedCharsRegex := regexp.MustCompile(`[^a-zA-Z0-9\-_\.]+`)
+	// Define regex to allow alphanumeric, hyphens, underscores, double quotes, periods, and single quotes
+	allowedCharsRegex := regexp.MustCompile(`[^a-zA-Z0-9\-_\"\'\.]+`)
 
+	// Allow potentially harmful chars (e.g., in URLs) only within double quotes
+	if strings.HasPrefix(field, "\"") && strings.HasSuffix(field, "\"") {
+		// Attempt to parse the field as a URL
+		unquoted := strings.Trim(field, "\"")
+		if _, err := url.ParseRequestURI(unquoted); err == nil {
+			// Valid URL, return the field as is
+			return field
+		}
+	}
+
+	// If not a valid URL, sanitize normally
 	return allowedCharsRegex.ReplaceAllString(field, "")
 }
 
@@ -117,4 +130,31 @@ func ValidateFieldLength(field string, maxLength int) error {
 	}
 
 	return nil
+}
+
+func ProtectAgainstCSVInjection(field string) string {
+	if strings.HasPrefix(field, "=") || strings.HasPrefix(field, "+") ||
+		 strings.HasPrefix(field, "-") || strings.HasPrefix(field, "@") {
+			return "'" + field
+	}
+	return field
+}
+
+func IsURL(field string) bool {
+	_, err := url.ParseRequestURI(field)
+	return err == nil
+}
+
+func IsFromAllowedDomain(domain string, allowedDomains []string) bool {
+	for _, allowedDomain := range allowedDomains {
+		if strings.HasSuffix(domain, allowedDomain) {
+			return true
+		}
+	}
+	return false
+}
+
+func SetCSPHeaders(response http.ResponseWriter) {
+	csp := "default-src 'self'; img-src 'self' https://google.com https://unsplash.com"
+	response.Header().Set("Content-Security-Policy", csp)
 }
