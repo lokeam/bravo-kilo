@@ -90,12 +90,12 @@ const BookDetail = () => {
   const genres = book.genres?.join(', ') || ['Unknown Genre'];
 
   return (
-    <div className="bk_book_page mx-auto flex flex-col align-center max-w-screen-md h-screen p-5 pt-24">
+    <div className="bk_book_page mx-auto flex flex-col align-center p-5 pt-24 max-w-screen-md mdTablet:pr-5 mdTablet:ml-24 h-screen">
       <div className="bk_book_thumb relative flex justify-center align-center rounded w-full">
         {book.imageLinks && book.imageLinks.length > 0 ? (
           <img
             alt={`Thumbnail for ${book.title}`}
-            className="bk_book_thumb_img h-52 w-52"
+            className="bk_book_thumb_img object-contain w-52"
             loading="lazy"
             src={book.imageLinks[0]}
             ref={imageRef}

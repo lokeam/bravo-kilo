@@ -7,13 +7,13 @@ interface CardProps {
 }
 
 const BookshelfCard = ({ book }: CardProps) => {
-  const { authors, id, imageLinks, title } = book
-
+  const { authors, imageLinks, title } = book
   const navigate = useNavigate();
+  const titleSubdomain = encodeURIComponent(title);
 
   const handleCardClick = () => {
-    navigate(`/library/books/${id}`, { state: { book }});
-  }
+    navigate(`/library/books/${titleSubdomain}`, { state: { book } });
+  };
 
   return (
     <div className="card_wrapper relative box-border min-w-0 h-full cursor-pointer truncate" onClick={handleCardClick}>
