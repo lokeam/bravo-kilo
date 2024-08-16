@@ -5,6 +5,8 @@ import useStore from '../store/useStore';
 import { Book } from '../pages/Library';
 
 const useUpdateBook = (bookID: string) => {
+
+  console.log('useUpdateBook fired')
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 

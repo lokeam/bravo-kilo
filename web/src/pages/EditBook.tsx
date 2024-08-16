@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 
 import useUpdateBook from '../hooks/useUpdateBook';
+import useDeleteBook from '../hooks/useDeleteBook';
 import useFetchBookById from '../hooks/useFetchBookById';
 
 import Modal from '../components/Modal/ModalRoot';
@@ -14,6 +15,7 @@ import { IoClose } from 'react-icons/io5';
 import { IoAddOutline } from 'react-icons/io5';
 import { IoIosWarning } from "react-icons/io";
 import { MdDeleteForever } from "react-icons/md";
+import { deleteBook } from '../service/apiClient.service';
 
 
 const bookSchema = z.object({
@@ -45,6 +47,7 @@ const EditBook = () => {
   console.log('bookID: ', bookID);
   const { data: book, isLoading, isError } = useFetchBookById(bookID as string, !!bookID);
   const { mutate: updateBook } = useUpdateBook(bookID as string);
+  const { mutate: deleteBook } = useDeleteBook();
   const navigate = useNavigate();
 
   /* React hook form handlers */
@@ -115,6 +118,11 @@ const EditBook = () => {
 
   const openModal = () => setOpened(true);
   const closeModal = () => setOpened(false);
+  const handleDelete = (event: React.MouseEvent<HTMLButtonElement>) => {
+    event?.preventDefault;
+    deleteBook(bookID as string)
+  };
+
 
   console.log('RHF Errors: ', errors);
 
@@ -311,21 +319,21 @@ const EditBook = () => {
 
           <button className="bg-majorelle hover:bg-hepatica" type="submit">Update Book</button>
           <button type="button" onClick={openModal} className="border-red-500 text-red-500 hover:text-white hover:bg-red-600 focus:ring-red-900">Delete Book</button>
-          <Modal opened={opened} onClose={closeModal} title="Danger zone">
-              <div className="flex items-center justify-center">
-                <IoIosWarning size={30} />
-              </div>
-              <h3 className="flex items-center justify-center text-lg">Are you sure that you want to delete this book?</h3>
-              <p className="flex items-center justify-center mb-5">This action cannot be undone.</p>
-              <button onClick={closeModal} className="flex flex-row justify-between items-center bg-transparent mr-1 w-full mb-3 lg:mb-0">
-                <span>Cancel</span>
-              </button>
-              <button className="flex flex-row justify-between items-center bg-transparent mr-1 w-full text-white bg-red-600 hover:bg-red-800 focus:ring-red-800 mb-3 lg:mb-0">
-                <span>Yes, I want to delete this book</span>
-                <MdDeleteForever size={30}/>
-              </button>
-            </Modal>
         </form>
+        <Modal opened={opened} onClose={closeModal} title="Danger zone">
+          <div className="flex items-center justify-center">
+            <IoIosWarning size={30} />
+          </div>
+          <h3 className="flex items-center justify-center text-lg">Are you sure that you want to delete this book?</h3>
+          <p className="flex items-center justify-center mb-5">This action cannot be undone.</p>
+          <button type="button" onClick={closeModal} className="flex flex-row justify-between items-center bg-transparent mr-1 w-full mb-3 lg:mb-0">
+            <span>Cancel</span>
+          </button>
+          <button type="button" onClick={handleDelete} className="flex flex-row justify-between items-center bg-transparent mr-1 w-full text-white bg-red-600 hover:bg-red-800 focus:ring-red-800 mb-3 lg:mb-0">
+            <span>Yes, I want to delete this book</span>
+            <MdDeleteForever size={30}/>
+          </button>
+          </Modal>
       </div>
     </section>
   );

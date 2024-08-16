@@ -106,4 +106,14 @@ export const addBook = async (book: Book) => {
   return data;
 }
 
+export const deleteBook = async(bookID: string) => {
+  try {
+    const { data } = await apiClient.delete(`/api/v1/books/${bookID}`);
+    return data;
+  } catch (error) {
+    console.error('Error deleting book', error);
+    throw error;
+  }
+};
+
 export default apiClient;

@@ -1061,16 +1061,62 @@ func (b *BookModel) UpdateAuthors(bookID int, authors []string) error {
 }
 
 func (b *BookModel) Delete(id int) error {
+	// Start a new context with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
 
-	statement := `DELETE FROM books WHERE id = $1`
-	_, err := b.DB.ExecContext(ctx, statement, id)
+	// Start transaction
+	tx, err := b.DB.BeginTx(ctx, nil)
+	if err != nil {
+			b.Logger.Error("Book Model - Error starting transaction", "error", err)
+			return err
+	}
+
+	// Roll back in case of error
+	defer func() {
+		if p:= recover(); p != nil {
+			tx.Rollback()
+			panic(p)
+		} else if err != nil {
+			tx.Rollback()
+		} else {
+			err = tx.Commit()
+		}
+	}()
+
+	// Delete assoc. entries in users table
+	deleteUserBookStatement := `DELETE FROM user_books WHERE book_id = $1`
+	_, err = tx.ExecContext(ctx, deleteUserBookStatement, id)
+	if err != nil {
+		b.Logger.Error("Book Model - Error deleting from user_books", "error", err)
+		return err
+	}
+
+	// Delete assoc entries in genres table
+	deleteBookGenresStatement := `DELETE FROM book_genres WHERE book_id = $1`
+	_, err = tx.ExecContext(ctx, deleteBookGenresStatement, id)
+	if err != nil {
+		b.Logger.Error("Book Model - Error deleting from book_genres", "error", err)
+		return err
+	}
+
+	// Delete assoc entries in the authors table
+	deleteBookAuthorsStatement := `DELETE FROM book_authors WHERE book_id = $1`
+	_, err = tx.ExecContext(ctx, deleteBookAuthorsStatement, id)
+	if err != nil {
+		b.Logger.Error("Book Model - Error deleting from book_authors", "error", err)
+		return err
+	}
+
+	// Delete book from books table
+	deleteBookStatement := `DELETE from books WHERE id = $1`
+	_, err = tx.ExecContext(ctx, deleteBookStatement, id)
 	if err != nil {
 		b.Logger.Error("Book Model - Error deleting book", "error", err)
 		return err
 	}
 
+	// Commit if we're all gtg
 	return nil
 }
 
