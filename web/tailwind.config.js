@@ -30,7 +30,15 @@ export default {
         'night': '#111827', // potential dark bg
         'charcoal': '#334155', // top nav/other border color
         'hepatica': '#6366F1', // bright purple, cta btn
-        'majorelle': '#4F46E5', // dark purple, cta btn, white text (#fff)\
+        'majorelle': '#4F46E5', // dark purple, cta btn, white text (#fff)
+        'margorelle-d1': '#423ABF', // 1 shade darker than margorelle
+        'margorelle-d2': '#352F99', // 2 shades darker than margorelle
+        'margorelle-d3': '#282373', // 3 shades darker than margorelle
+        'margorelle-d4': '#282373', // 4 shades darker than margorelle
+        'margorelle-d5': '#1A174C', // 5 shades darker than margorelle
+        'margorelle-d6': '#0D0C26', // 6 shades darker than margorelle
+        'margorelle-comp1-r': '#bf3a9c', // red complementary to margorelle
+        'margorelle-comp1-g': '#67bf3a', // green complementary to margorelle
         'anti-flash-white': '#F1F5F9', // heading tags
         'bright-gray': '#E5E7EB', // white alternative heading / paragraph tag
         'az-white': '#E2E8F0', // sidebar text white, hover
@@ -45,6 +53,10 @@ export default {
         'dark-clay': '#1f2937',
       }
     },
+    screens: {
+      'lgMobile': '600px',
+      'mdTablet': '940px',
+    }
   },
   plugins: [],
 }

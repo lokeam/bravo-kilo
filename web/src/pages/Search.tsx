@@ -18,7 +18,7 @@ const Search = () => {
   console.log('Search Page grabbing searchHistory from useSearch Store: ', searchEntry);
 
   return (
-    <div className="bk_lib flex flex-col px-5 antialiased md:px-1 md:ml-24 h-screen pt-20">
+    <div className="bk_search flex flex-col items-center place-content-around px-5 antialiased mdTablet:pr-5 mdTablet:ml-24 h-screen pt-28">
       {books && books.length > 0 ? (
         <CardList isSearchPage books={books} />
       ) : (

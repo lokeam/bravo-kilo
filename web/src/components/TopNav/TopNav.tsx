@@ -14,17 +14,18 @@ export default function TopNavigation() {
   const [opened, setOpened] = useState(false);
   const { logout } = useAuth();
   const location = useLocation();
-  const isSearchDetailPage = location.pathname.includes('library/books/');
+  const isBookDetailPage = location.pathname.includes('library/books/');
   const isSearchPage = location.pathname.includes('library/books/search');
 
   const openModal = () => setOpened(true);
   const closeModal = () => setOpened(false);
 
+
   return (
     <header className="antialiased relative w-full h-auto">
-      <nav className="fixed border-none flex items-center content-between left-0 right-0 top-0 z-50 bg-black pl-6 pr-8 lg:pr-12 h-[67px] text-white w-full">
+      <nav className={`${isBookDetailPage ? 'bg-transparent' : 'bg-black'} fixed border-none flex items-center content-between left-0 right-0 top-0 z-50 pl-6 pr-8 lg:pr-12 h-[67px] text-white w-full`}>
         <Link
-          className={`${isSearchDetailPage ? 'block' : 'hidden'} h-13 w-13 px-3 mr-6 inline-block content-center cursor-pointer bg-transparent border-none`}
+          className={`${isBookDetailPage ? 'block' : 'hidden'} h-13 w-13 px-3 mr-6 inline-block content-center cursor-pointer bg-transparent border-none`}
           to={"/library"}
         >
           <ImArrowLeft2 className="text-white" size={20}/>
@@ -32,7 +33,7 @@ export default function TopNavigation() {
         <div className={`relative flex flex-row  justify-items-center items-center w-full`}>
 
           {/* ----- Avatar / Nav Start ----- */}
-          <div className={`${isSearchDetailPage ? 'hidden' : 'block'} navLeft`}>
+          <div className={`${isBookDetailPage ? 'hidden' : 'block'} navLeft`}>
               <button
                 className="flex border-none bg-transparent antialiased translate-x-0 mid:translate-x-0"
                 onClick={openModal}
@@ -58,7 +59,7 @@ export default function TopNavigation() {
           </div>
 
           {/* ----- Mobile / Nav End ----- */}
-          <div className={`${isSearchDetailPage ? 'hidden' : 'visible'} navEnd lg:invisible`}>
+          <div className={`${isBookDetailPage ? 'hidden' : 'visible'} navEnd lg:invisible`}>
             <div className="flex items-center">
               <Link
                 className="p-3 mr-1 text-gray-500 rounded hover:text-gray-900 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-white dark:hover:bg-gray-700 focus:ring-4 focus:ring-gray-300 dark:focus:ring-gray-600"

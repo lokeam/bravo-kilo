@@ -38,6 +38,10 @@
   margin: 0;
   /*/padding: 2rem;*/
   text-align: center;
+
+  /* DEBUG: testing blur book detail bg*/
+  overflow-x: hidden;
+  position: relative;
 }
 
 /* Custom Nav classes */
@@ -65,4 +69,13 @@
   width: 100%;
   height: auto;
   transition: transform 0.1s ease, opacity 0.1s ease;
+}
+
+.blurBg {
+  height: 1000px;
+  width: 1000px;
+  background-image: radial-gradient(closest-side, rgba(255, 230, 0, 0.21), #000);
+  position: absolute;
+  top: -570px;
+  left: 15%;
 }

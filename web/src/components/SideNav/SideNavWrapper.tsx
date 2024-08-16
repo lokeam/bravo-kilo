@@ -7,8 +7,8 @@ interface SideNavWrapperProps {
 
 export const SideNavWrapper = ({ ariaLabel, children }: SideNavWrapperProps) => {
   return (
-    <nav className={`flex flex-row w-full fixed bottom-0 left-0 md:top-0 md:h-screen md:w-20 border-t md:border-none bg-black border-ebony-clay md:translate-x-0 z-30 text-white`} aria-label={ariaLabel}>
-      <div className="flex flex-row w-full md:flex-col content-center justify-between md:justify-center overflow-y-auto px-5 md:px-2 h-full bg-black">
+    <nav className={`flex flex-row w-full fixed bottom-0 left-0 mdTablet:top-0 mdTablet:h-screen mdTablet:w-20 border-t mdTablet:border-none bg-black border-ebony-clay mdTablet:translate-x-0 z-30 text-white`} aria-label={ariaLabel}>
+      <div className="flex flex-row w-full mdTablet:flex-col content-center justify-between mdTablet:justify-center overflow-y-auto px-5 mdTablet:px-2 h-full bg-black">
         {children}
       </div>
     </nav>

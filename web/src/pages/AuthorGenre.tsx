@@ -9,9 +9,9 @@ const AuthorGenre = () => {
   const decodedAuthorName = authorID ? decodeURIComponent(authorID).split('-').join(' ') : 'Unknown Author';
 
   console.log('Author landing page, testing books: ', books);
-
+// flex flex-col items-center place-content-around px-5 antialiased mdTablet:pr-5 mdTablet:ml-24 h-screen pt-28
   return (
-    <div className="bk_lib flex flex-col items-center\ px-5 antialiased md:px-1 md:ml-24 h-screen pt-28">
+    <div className="bk_lib flex flex-col items-center px-5 antialiased mdTablet:pr-5 mdTablet:ml-24 h-screen pt-28">
       <h1 className="text-left">Books by {decodedAuthorName}</h1>
 
       <div className="flex flex-row relative w-full max-w-7xl justify-between items-center text-left text-white border-b-2 border-solid border-zinc-700">

@@ -17,7 +17,7 @@ export const SideNavListItem = ({ pageRoute, icon: Icon, children }: SideNavList
       {({isActive}) => (
         <>
           { Icon ? (
-              <Icon className={`w-5 h-5 mb-1 ${isActive ? 'text-az-white' : ''}`} />
+              <Icon className={`w-5 h-5 mb-1 ${isActive ? 'text-white' : ''}`} />
             ) : null }
             <span className={`${isActive ? 'text-az-white font-bold' : ''}`}>{children}</span>
         </>

@@ -32,7 +32,6 @@ export default function CardListItem({ book, isSearchPage }: CardListItemProps) 
   const { authors, id, imageLinks, title } = book;
   const titleSubdomain = encodeURIComponent(title);
 
-
   const handleBookClick = () => {
     navigate(`/library/books/${titleSubdomain}`, { state: { book } });
   };

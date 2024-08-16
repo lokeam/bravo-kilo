@@ -243,7 +243,7 @@ const Library = () => {
 
 
   return (
-    <div className="bk_lib flex flex-col items-center place-content-around px-5 antialiased md:pr-5 md:ml-24 h-screen pt-28">
+    <div className="bk_lib flex flex-col items-center place-content-around px-5 antialiased mdTablet:pr-5 mdTablet:ml-24 h-screen pt-28">
       {/* Library Nav */}
       <div className="bookshelf_body relative w-full z-10 pb-8">
         <div className="bookshelf_grid_wrapper box-border ">
