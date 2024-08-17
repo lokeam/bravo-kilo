@@ -38,9 +38,6 @@
   margin: 0;
   /*/padding: 2rem;*/
   text-align: center;
-
-  /* DEBUG: testing blur book detail bg*/
-  overflow-x: hidden;
   position: relative;
 }
 
@@ -72,8 +69,8 @@
 }
 
 .blurBg {
-  height: 1000px;
-  width: 1000px;
+  height: 100vh;
+  width: 100vw;
   background-image: radial-gradient(closest-side, rgba(255, 230, 0, 0.21), #000);
   position: absolute;
   top: -570px;

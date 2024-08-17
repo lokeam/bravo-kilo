@@ -31,14 +31,11 @@ const MissingInfoWarning = ({emptyFields}: MissingInfoWarningProps) => {
 }
 
 const BookDetail = () => {
-  console.log('Rendering BookDetail component');
-  const { bookTitle } = useParams(); // Access bookTitle from URL
+  const { bookTitle } = useParams();
   const decodedTitle = bookTitle ? decodeURIComponent(bookTitle) : '';
   const imageRef = useScrollShrink();
   const navigate = useNavigate();
   const location = useLocation();
-
-
 
   const bookFromState = location.state?.book;
   const isInLibrary = bookFromState?.isInLibrary ?? true;
@@ -93,13 +90,10 @@ const BookDetail = () => {
   console.log('testing bookCover: ', bookCover);
 
   return (
-    <div className="bk_edit_book_page_wrapper relative flex flex-col items-center place-content-around px-5 antialiased mdTablet:pr-5 mdTablet:ml-24 h-screen">
-      <div
-        className="book_coverImage blurBg"
-      >
-      </div>
+    <div className="bk_edit_book_page_wrapper overflow-x-hidden overflow-y-auto z-10 bg-transparent relative flex flex-col items-center place-content-around px-5 antialiased mdTablet:pr-5 mdTablet:ml-24">
+      <div className="book_coverImage blurBg -z-10"></div>
 
-      <div className="bk_edit_book_page max-w-screen-mdTablet pb-20 md:pb-4 flex flex-col relative w-full">
+      <div className="bk_edit_book_page max-w-screen-mdTablet py-20 md:pb-4 flex flex-col relative w-full">
         <div className="bk_book_thumb relative flex justify-center align-center rounded w-full">
           {book.imageLinks && book.imageLinks.length > 0 ? (
             <img
@@ -108,6 +102,7 @@ const BookDetail = () => {
               loading="lazy"
               src={book.imageLinks[0]}
               ref={imageRef}
+              onLoad={() => console.log('Image loaded, ref: ', imageRef.current)}
             />
           ) : (
             <ImagePlaceholder isBookDetail />
