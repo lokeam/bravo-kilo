@@ -165,7 +165,7 @@ func (b *BookModel) AddBookToUser(tx *sql.Tx, userID, bookID int) error {
 	return nil
 }
 
-func (b *BookModel) GetByID(id int) (*Book, error) {
+func (b *BookModel) GetBookByID(id int) (*Book, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
 
@@ -317,6 +317,18 @@ func (b *BookModel) GetAuthorsForBook(bookID int) ([]string, error) {
 	}
 
 	return authors, nil
+}
+
+func (b *BookModel) IsUserBookOwner(userID, bookID int) (bool, error) {
+	var exists bool
+
+	query := `SELECT EXISTS(SELECT 1 FROM user_books WHERE user_id = $1 AND book_id = $2)`
+	err := b.DB.QueryRow(query, userID, bookID).Scan(&exists)
+	if err != nil {
+		return false, err
+	}
+
+	return exists, nil
 }
 
 func (b *BookModel) Update(book Book) error {

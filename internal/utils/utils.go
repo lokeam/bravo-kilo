@@ -1,12 +1,15 @@
 package utils
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"net/url"
 	"regexp"
 	"strings"
+
+	"github.com/golang-jwt/jwt/v5"
 )
 
 // Book struct to hold simplified structure for Books
@@ -29,10 +32,17 @@ type BookDetails struct {
 	PublishDate  string        `json:"publishDate"`
 }
 
+type Claims struct {
+	UserID int `json:"userID"`
+	jwt.RegisteredClaims
+}
+
 type IndustryID struct {
 	Indentifier  string  `json:"identifier"`
 	Type         string  `json:"type"`
 }
+
+var jwtKey = []byte("extra-super-secret-256-bit-key")
 
 var logger *slog.Logger
 
@@ -157,4 +167,24 @@ func IsFromAllowedDomain(domain string, allowedDomains []string) bool {
 func SetCSPHeaders(response http.ResponseWriter) {
 	csp := "default-src 'self'; img-src 'self' https://google.com https://unsplash.com"
 	response.Header().Set("Content-Security-Policy", csp)
+}
+
+func ExtractUserIDFromJWT(request *http.Request) (int, error) {
+	cookie, err := request.Cookie("token")
+	if err != nil {
+		return 0, errors.New("no token cookie")
+	}
+
+	tokenStr := cookie.Value
+	claims := &Claims{}
+
+	// Parse JWT token
+	token, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (interface{}, error) {
+		return jwtKey, nil
+	})
+	if err != nil || !token.Valid {
+		return 0, errors.New("invalid token")
+	}
+
+	return claims.UserID, nil
 }

@@ -22,18 +22,18 @@ func (app *application) routes(h *handlers.Handlers) http.Handler {
     AllowCredentials: true,
 	}))
 
-	mux.Get("/auth/google/signin", h.GoogleSignIn)
-	mux.Get("/auth/google/callback", h.GoogleCallback)
-	mux.Get("/auth/token/verify", h.VerifyToken)
-	mux.Post("/auth/token/refresh", h.RefreshToken)
-	mux.Post("/auth/signout", h.SignOut)
+	mux.Get("/auth/google/signin", h.HandleGoogleSignIn)
+	mux.Get("/auth/google/callback", h.HandleGoogleCallback)
+	mux.Get("/auth/token/verify", h.HandleVerifyToken)
+	mux.Post("/auth/token/refresh", h.HandleRefreshToken)
+	mux.Post("/auth/signout", h.HandleSignOut)
 
 	mux.Route("/api/v1/user", func(r chi.Router) {
 		r.Use(middleware.VerifyJWT)
-		r.Get("/books", h.GetAllUserBooks)
-		r.Get("/books/authors", h.GetBooksByAuthors)
-		r.Get("/books/format", h.GetBooksByFormat)
-		r.Get("/books/genres", h.GetBooksByGenres)
+		r.Get("/books", h.HandleGetAllUserBooks)
+		r.Get("/books/authors", h.HandleGetBooksByAuthors)
+		r.Get("/books/format", h.HandleGetBooksByFormat)
+		r.Get("/books/genres", h.HandleGetBooksByGenres)
 
 		// Apply rate limiting on uploads
 		r.With(middleware.RateLimiter).Post("/upload", h.UploadCSV)
@@ -41,12 +41,12 @@ func (app *application) routes(h *handlers.Handlers) http.Handler {
 
 	mux.Route("/api/v1/books", func(r chi.Router) {
 		r.Use(middleware.VerifyJWT)
-		r.Get("/search", h.SearchBooks)
-		r.Get("/by-id/{bookID}", h.GetBookByID) // Changed the path to avoid conflict
-		r.Get("/by-title", h.GetBookIDByTitle) // Use query param for title
-		r.Put("/{bookID}", h.UpdateBook)
-		r.Post("/add", h.InsertBook)
-		r.Delete("/{bookID}", h.DeleteBook)
+		r.Get("/search", h.HandleSearchBooks)
+		r.Get("/by-id/{bookID}", h.HandleGetBookByID)
+		r.Get("/by-title", h.HandleGetBookIDByTitle)
+		r.Put("/{bookID}", h.HandleUpdateBook)
+		r.Post("/add", h.HandleInsertBook)
+		r.Delete("/{bookID}", h.HandleDeleteBook)
 	})
 
 	return mux
