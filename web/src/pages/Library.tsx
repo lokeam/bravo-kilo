@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useLocation } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '../components/AuthContext';
 import useStore from '../store/useStore';
 import useFetchBooks from '../hooks/useFetchBooks';
 import CardList from '../components/CardList/CardList';
@@ -57,10 +57,10 @@ const Library = () => {
   } = useStore();
 
   const [opened, setOpened] = useState(false);
-  const { search } = useLocation();
-  const query = new URLSearchParams(search);
-  const userID = parseInt(query.get('userID') || '0', 10);
+  const { user } = useAuth();
+  const userID = parseInt(user.id || 0, 10);
   const { data: books, isLoading, isError } = useFetchBooks(userID, true);
+
   const queryClient = useQueryClient();
 
   // Prefetch data for book formats
@@ -74,6 +74,7 @@ const Library = () => {
   }, [userID, queryClient]);
 
   // Use useQuery to retrieve cached books authors
+  console.log('Library page, userID: ', userID);
   const {
     data: bookAuthors = { allAuthors: [], },
     isLoading: isAuthorsLoading,
@@ -112,9 +113,9 @@ const Library = () => {
 
   // Retrieve cached books formats
   const bookFormats = queryClient.getQueryData<{
-    audioBooks: Book[],
-    eBooks: Book[],
-    physicalBooks: Book[]
+    audioBook: Book[],
+    eBook: Book[],
+    physical: Book[]
   }>(['booksFormat', userID]);
 
 
@@ -162,13 +163,16 @@ const Library = () => {
     let booksToSort = [];
     if (activeTab === 'Audiobooks' && bookFormats) {
       console.log('Using audiobooks format');
-      booksToSort = bookFormats.audioBooks || [];
+      booksToSort = bookFormats.audioBook || [];
+      console.log('set booksToSort to audioBooks: ', booksToSort);
     } else if (activeTab === 'eBooks' && bookFormats) {
       console.log('Using eBooks format');
-      booksToSort = bookFormats.eBooks || [];
+      booksToSort = bookFormats.eBook || [];
+      console.log('set booksToSort to ebooks: ', booksToSort);
     } else if (activeTab === 'Printed Books' && bookFormats) {
       console.log('Using printed books format');
-      booksToSort = bookFormats.physicalBooks || [];
+      booksToSort = bookFormats.physical || [];
+      console.log('set booksToSort to physicalBooks: ', booksToSort);
     } else {
       console.log('Using all books');
       booksToSort = books || [];
@@ -193,11 +197,6 @@ const Library = () => {
     (tab: string) => {
       console.log(`Switching to tab: ${tab}`);
       setActiveTab(tab);
-
-      // Navigate to Author page when Authors tab clicked
-      // if (tab === 'Authors') {
-      //   navigate('/library/author');
-      // }
     },
     [setActiveTab]
   );
@@ -209,7 +208,6 @@ const Library = () => {
   if (isError || isAuthorsError || isGenresError) {
     return <div>Error loading books</div>;
   }
-
 
   if (!bookAuthors || bookAuthors.allAuthors.length === 0) {
     console.log('No authors data available');
@@ -232,14 +230,14 @@ const Library = () => {
   const closeModal = () => setOpened(false);
 
 
-  // console.log('Fetched books:', books);
-  // console.log('Fetched authors:', bookAuthors);
-  // console.log('Fetched genres:', bookGenres);
-  // console.log('Fetched formats:', bookFormats);
+  console.log('Fetched books:', books);
+  //console.log('Fetched authors:', bookAuthors);
+  console.log('Fetched genres:', bookGenres);
+  //console.log('Fetched formats:', bookFormats);
   console.log('-----');
-  console.log('testing snackbarMessage wired to state: ', snackbarMessage);
-  console.log('testing snackbarOpen wired to state: ', snackbarOpen);
-  console.log('testing snackbarVariant wired to state: ', snackbarVariant);
+  // console.log('testing snackbarMessage wired to state: ', snackbarMessage);
+  // console.log('testing snackbarOpen wired to state: ', snackbarOpen);
+  // console.log('testing snackbarVariant wired to state: ', snackbarVariant);
 
 
   return (

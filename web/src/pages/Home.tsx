@@ -16,7 +16,7 @@ const Home = () => {
 
   const { data: books, isLoading: isLoadingBooks, isError: isErrorBooks } = useFetchBooks(userID, true);
   const { data: booksFormat, isLoading: isLoadingFormat, isError: isErrorFormat} = useFetchBooksFormat(userID, true)
-  const { audioBooks = [], physicalBooks = [], eBooks = [] } = booksFormat || {};
+  const { audioBook = [], physical = [], eBook = [] } = booksFormat || {};
 
   console.log('dashboard home - books: ', books);
   console.log('dashboard home == booksCount: ', booksFormat);
@@ -39,7 +39,7 @@ const Home = () => {
           <div className="stat_1 flex flex-col h-40 text-center justify-center items-center rounded bg-ebony-clay w-full p-12">
             <div className="flex flex-row items-baseline text-5xl font-bold leading-9 whitespace-nowrap mb-2">
               <BsBookHalf color={"#6366F1"} size={32} className="mr-4" />
-              <span>{physicalBooks?.length || 0}</span>
+              <span>{physical?.length || 0}</span>
             </div>
             <div className="col-start-1 whitespace-nowrap text-xl leading-7 font-semibold mb-2">Total Physical Books</div>
           </div>
@@ -47,7 +47,7 @@ const Home = () => {
           <div className="stat_2 flex flex-col h-40 text-center justify-center items-center rounded bg-ebony-clay w-full p-12 mt-4 min-[817px]:mt-0">
             <div className="flex flex-row items-baseline text-5xl font-bold leading-9 whitespace-nowrap mb-2">
               <LuFile color={"#6366F1"} size={32} className="mr-4" />
-              <span>{eBooks?.length || 0}</span>
+              <span>{eBook?.length || 0}</span>
             </div>
             <div className="col-start-1 whitespace-nowrap text-xl leading-7 font-semibold mb-2">Total eBooks</div>
 
@@ -56,7 +56,7 @@ const Home = () => {
           <div className="stat_3 flex flex-col h-40 text-center justify-center items-center rounded bg-ebony-clay w-full p-12 mt-4 min-[817px]:mt-0">
             <div className="flex flex-row items-baseline text-5xl font-bold leading-9 whitespace-nowrap mb-2">
               <LuFileAudio color={"#6366F1"} size={32} className="mr-4" />
-              <span>{audioBooks?.length || 0}</span>
+              <span>{audioBook?.length || 0}</span>
             </div>
             <div className="col-start-1 whitespace-nowrap text-xl leading-7 font-semibold mb-2">Total Audio Books</div>
           </div>

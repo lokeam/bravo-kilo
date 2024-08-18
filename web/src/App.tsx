@@ -23,7 +23,7 @@ function App() {
     <AppProvider>
       <Suspense fallback={<h1>Loading...</h1>}>
         <Routes>
-          <Route path="/" element={<Home />} />
+          <Route path="/tosho" element={<Home />} />
           <Route path="/login" element={<Login />}/>
           <Route element={<ProtectedRoute><AuthenticatedLayout /></ProtectedRoute>}>
             <Route path="/home" element={<Home />} />

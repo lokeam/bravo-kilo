@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -105,7 +106,6 @@ func (h *Handlers) UploadCSV(response http.ResponseWriter, request *http.Request
 	h.ParseAndProcessCSV(destination, response)
 }
 
-
 func isCSV(data []byte) bool {
 	return http.DetectContentType(data) == "text/csv"
 }
@@ -140,6 +140,7 @@ func (h *Handlers) ParseAndProcessCSV(filePath string, response http.ResponseWri
 	// Create csv reader
 	reader := csv.NewReader(file)
 	maxLength := 250
+	expectedColumms := 14
 
 	// Process each record in file
 	for {
@@ -152,8 +153,27 @@ func (h *Handlers) ParseAndProcessCSV(filePath string, response http.ResponseWri
 			http.Error(response, "Error reading file", http.StatusInternalServerError)
 		}
 
+		// Validate number of columns
+		if len(record) != expectedColumms {
+			h.logger.Error("Incorrect number of columns in record", "record", record);
+			http.Error(response, "Invalid CSV format: incorrect number of columns", http.StatusBadRequest)
+			return
+		}
+
 		// Sanitize, truncate, validate each field
 		for i, field := range record {
+			// Protect against CSV injection
+			field = utils.ProtectAgainstCSVInjection(field)
+
+			// Image url check here at designated column
+			// if i == imageURLColumnIndex { // replace with the actual index of the image URL column
+			// 	if err := h.ParseImageURL(field, allowedDomains); err != nil {
+			// 		h.logger.Error("Invalid URL", "error", err)
+			// 		http.Error(response, fmt.Sprintf("Error in record %d: %v", i, err), http.StatusBadRequest)
+			// 		return
+			// 	}
+			// }
+
 			sanitizedField := utils.SanitizeChars(field)
 			truncatedField := utils.TruncateField(sanitizedField, maxLength)
 
@@ -177,6 +197,32 @@ func (h *Handlers) ParseAndProcessCSV(filePath string, response http.ResponseWri
 	response.WriteHeader(http.StatusOK)
 	json.NewEncoder(response).Encode(map[string]string{"message": "File processed successfully"})
 }
+
+
+func (h *Handlers) ParseImageURL(urlStr string, allowedDomains []string) error {
+	// Parse the URL
+	parsedURL, err := url.Parse(urlStr)
+	if err != nil {
+		h.logger.Error("Invalid Image URL", "error", err)
+		return fmt.Errorf("invalid URL: %v", err)
+	}
+
+	// Enforce HTTPS
+	if parsedURL.Scheme != "https" {
+		h.logger.Error("Invalid URL scheme, image URL does not use HTTPS")
+		return fmt.Errorf("invalid URL scheme: only HTTPS is allowed")
+	}
+
+	// Check if domain is in whitelist
+	domain := parsedURL.Hostname()
+	if !utils.IsFromAllowedDomain(domain, allowedDomains) {
+		h.logger.Error("URL domain is not allowed", "error", domain)
+		return fmt.Errorf("URL domain is not allowed %s", domain)
+	}
+
+	return nil
+}
+
 
 func (h *Handlers) handleParsingError(filePath string, response http.ResponseWriter, err error) {
 	// Log the error and send a response to the client

@@ -188,3 +188,19 @@ func ExtractUserIDFromJWT(request *http.Request) (int, error) {
 
 	return claims.UserID, nil
 }
+
+// Returns els in A but not in B
+func FindDifference(a, b []string) []string {
+	setB := make(map[string]struct{}, len(b))
+	for _, x := range b {
+		setB[x] = struct{}{}
+	}
+
+	var diff[]string
+	for _, x := range a {
+		if _, found := setB[x]; !found {
+			diff = append(diff, x)
+		}
+	}
+	return diff
+}

@@ -37,3 +37,13 @@ func (s *Set) Size() int {
 func (s *Set) Clear() {
 	s.m = make(map[string]struct{})
 }
+
+// Returns all elements in set as a slice of strings
+func (s *Set) Elements() []string {
+	elements := make([]string, 0, len(s.m))
+	for key := range s.m {
+		elements = append(elements, key)
+	}
+
+	return elements
+}

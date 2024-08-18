@@ -119,6 +119,7 @@ func (h *Handlers) HandleGetBookByID(response http.ResponseWriter, request *http
 		return
 	}
 
+	// Fetch the book by ID
 	book, err := h.models.Book.GetBookByID(bookID)
 	if err != nil {
 		h.logger.Error("Error fetching book", "error", err)
@@ -126,8 +127,8 @@ func (h *Handlers) HandleGetBookByID(response http.ResponseWriter, request *http
 		return
 	}
 
-	// Get formats
-	formats, err := h.models.Book.GetFormats(bookID)
+	// Get formats using context from request
+	formats, err := h.models.Book.GetFormats(request.Context(), bookID)
 	if err != nil {
 		h.logger.Error("Error fetching formats", "error", err)
 		http.Error(response, "Error fetching formats", http.StatusInternalServerError)
@@ -140,6 +141,7 @@ func (h *Handlers) HandleGetBookByID(response http.ResponseWriter, request *http
 		http.Error(response, "Error encoding response", http.StatusInternalServerError)
 	}
 }
+
 
 // Get a Single Book's ID by title
 func (h *Handlers) HandleGetBookIDByTitle(response http.ResponseWriter, request *http.Request) {
@@ -215,7 +217,8 @@ func (h *Handlers) HandleInsertBook(response http.ResponseWriter, request *http.
 			return
 		}
 
-		if err := h.models.Book.AddFormat(bookID, formatID); err != nil {
+		// Pass the context to the AddFormats method and wrap formatID in a slice
+		if err := h.models.Book.AddFormats(request.Context(), bookID, []int{formatID}); err != nil {
 			h.logger.Error("Error adding format association", "error", err)
 			http.Error(response, "Error adding format association", http.StatusInternalServerError)
 			return
@@ -236,7 +239,7 @@ func (h *Handlers) HandleUpdateBook(response http.ResponseWriter, request *http.
 		return
 	}
 
-	// Grab book data
+	// Grab book data from request body
 	var book data.Book
 	err = json.NewDecoder(request.Body).Decode(&book)
 	if err != nil {
@@ -255,12 +258,25 @@ func (h *Handlers) HandleUpdateBook(response http.ResponseWriter, request *http.
 		return
 	}
 
-	// Remove old format associations
-	err = h.models.Book.RemoveFormats(book.ID)
+	// Fetch current formats using context from request
+	currentFormats, err := h.models.Book.GetFormats(request.Context(), book.ID)
 	if err != nil {
-		h.logger.Error("Error removing old formats", "error", err)
-		http.Error(response, "Error removing old formats", http.StatusInternalServerError)
+		h.logger.Error("Error fetching current formats", "error", err)
+		http.Error(response, "Error fetching current formats", http.StatusInternalServerError)
 		return
+	}
+
+	// Determine formats to remove
+	formatsToRemove := utils.FindDifference(currentFormats, book.Formats)
+
+	// Remove specific format associations
+	if len(formatsToRemove) > 0 {
+		err = h.models.Book.RemoveSpecificFormats(request.Context(), book.ID, formatsToRemove)
+		if err != nil {
+			h.logger.Error("Error removing specific formats", "error", err)
+			http.Error(response, "Error removing specific formats", http.StatusInternalServerError)
+			return
+		}
 	}
 
 	// Insert new formats and their associations
@@ -272,7 +288,8 @@ func (h *Handlers) HandleUpdateBook(response http.ResponseWriter, request *http.
 			return
 		}
 
-		if err := h.models.Book.AddFormat(book.ID, formatID); err != nil {
+		// Wrap formatID in a slice and pass to AddFormats
+		if err := h.models.Book.AddFormats(request.Context(), book.ID, []int{formatID}); err != nil {
 			h.logger.Error("Error adding format association", "error", err)
 			http.Error(response, "Error adding format association", http.StatusInternalServerError)
 			return
@@ -282,6 +299,7 @@ func (h *Handlers) HandleUpdateBook(response http.ResponseWriter, request *http.
 	response.WriteHeader(http.StatusOK)
 	json.NewEncoder(response).Encode(map[string]string{"message": "Book updated successfully"})
 }
+
 
 // Delete Book
 func (h *Handlers) HandleDeleteBook(response http.ResponseWriter, request *http.Request) {
@@ -346,18 +364,18 @@ func (h *Handlers) HandleGetBooksByGenres(response http.ResponseWriter, request 
 	}
 	h.logger.Info("Valid user ID received from token", "userID", userID)
 
-	// Get books by genres
-	booksByGenres, err := h.models.Book.GetAllBooksByGenres(userID)
+	// Get the request context and pass it to GetAllBooksByGenres
+	booksByGenres, err := h.models.Book.GetAllBooksByGenres(request.Context(), userID)
 	if err != nil {
-			h.logger.Error("Error fetching books by genres", "error", err)
-			http.Error(response, "Error fetching books by genres", http.StatusInternalServerError)
-			return
+		h.logger.Error("Error fetching books by genres", "error", err)
+		http.Error(response, "Error fetching books by genres", http.StatusInternalServerError)
+		return
 	}
 
 	// h.logger.Info("Books fetched successfully", "booksByGenres", booksByGenres)
 
 	response.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(response).Encode(booksByGenres); err != nil {
-			http.Error(response, "Error encoding response", http.StatusInternalServerError)
+		http.Error(response, "Error encoding response", http.StatusInternalServerError)
 	}
 }

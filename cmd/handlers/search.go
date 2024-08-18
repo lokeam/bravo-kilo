@@ -225,23 +225,33 @@ func (h *Handlers) HandleSearchBooks(response http.ResponseWriter, request *http
 	// 		return
 	// }
 
-	bookMap, err := h.models.Book.GetAllBooksPublishDate(userID)
-	if err != nil {
-		h.logger.Error("Error retrieving user's book publish dates", "error", err)
-		http.Error(response, "Error retrieving user's book publish dates", http.StatusInternalServerError)
-		return
-	}
+    // Fetch the user's book publish dates as a slice of BookInfo structs
+    bookList, err := h.models.Book.GetAllBooksPublishDate(userID)
+    if err != nil {
+        h.logger.Error("Error retrieving user's book publish dates", "error", err)
+        http.Error(response, "Error retrieving user's book publish dates", http.StatusInternalServerError)
+        return
+    }
 
 	// Check bookMap
 	h.logger.Info("======================================")
-	fmt.Println("Checking bookmap: ", bookMap)
+	fmt.Println("Checking bookmap: ", bookList)
+
+    // Helper function to check if a book is in the user's library
+  bookExistsInLibrary := func(title, publishDate string) bool {
+		for _, book := range bookList {
+			if book.Title == title && book.PublishDate == publishDate {
+				return true
+			}
+		}
+		return false
+	}
 
 	// Check each book against the user's library
 	for i := range formattedBooks {
 		formattedBook := &formattedBooks[i]
 		isInLibrary := (isbn10Set.Has(formattedBook.ISBN10) || isbn13Set.Has(formattedBook.ISBN13)) &&
-			bookMap[formattedBook.Title] == formattedBook.PublishDate
-			fmt.Println("checking formattedBook.publishDate", formattedBook.PublishDate)
+				bookExistsInLibrary(formattedBook.Title, formattedBook.PublishDate)
 
 		formattedBook.IsInLibrary = isInLibrary
 	}
