@@ -3,23 +3,26 @@ module bravo-kilo
 go 1.21.6
 
 require (
+	github.com/go-chi/chi v1.5.5
+	github.com/go-chi/chi/v5 v5.1.0
+	github.com/go-chi/cors v1.2.1
+	github.com/golang-jwt/jwt/v5 v5.2.1
+	github.com/jackc/pgconn v1.14.3
+	github.com/jackc/pgx/v4 v4.18.3
+	github.com/joho/godotenv v1.5.1
+	github.com/lib/pq v1.10.9
+	golang.org/x/oauth2 v0.21.0
+	golang.org/x/time v0.6.0
+)
+
+require (
 	cloud.google.com/go/compute/metadata v0.3.0 // indirect
-	github.com/go-chi/chi v1.5.5 // indirect
-	github.com/go-chi/chi/v5 v5.1.0 // indirect
-	github.com/go-chi/cors v1.2.1 // indirect
-	github.com/golang-jwt/jwt/v5 v5.2.1 // indirect
 	github.com/jackc/chunkreader/v2 v2.0.1 // indirect
-	github.com/jackc/pgconn v1.14.3 // indirect
 	github.com/jackc/pgio v1.0.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgproto3/v2 v2.3.3 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20221227161230-091c0ba34f0a // indirect
 	github.com/jackc/pgtype v1.14.0 // indirect
-	github.com/jackc/pgx/v4 v4.18.3 // indirect
-	github.com/joho/godotenv v1.5.1 // indirect
-	github.com/lib/pq v1.10.9 // indirect
 	golang.org/x/crypto v0.20.0 // indirect
-	golang.org/x/oauth2 v0.21.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
-	golang.org/x/time v0.6.0 // indirect
 )
