@@ -17,16 +17,27 @@ import (
 )
 
 type BookModel struct {
-	DB     *sql.DB
-	Logger *slog.Logger
-	Author *AuthorModel
+	DB                       *sql.DB
+	Logger                   *slog.Logger
+	Author                   *AuthorModel
+	insertBookStmt           *sql.Stmt
+	getBookByIDStmt          *sql.Stmt
+	addBookToUserStmt        *sql.Stmt
+	getBookIdByTitleStmt     *sql.Stmt
+	getAuthorsForBooksStmt   *sql.Stmt
+	isUserBookOwnerStmt      *sql.Stmt
+	getAllBooksByUserIDStmt  *sql.Stmt
+	getAllBooksByAuthorsStmt *sql.Stmt
+	getAllBooksByGenresStmt  *sql.Stmt
+	getAllBooksByFormatStmt  *sql.Stmt
+	getFormatsStmt           *sql.Stmt
+	getGenresStmt            *sql.Stmt
 }
 
 type BookInfo struct {
 	Title       string
 	PublishDate string
 }
-
 
 type Book struct {
 	ID              int        `json:"id"`
@@ -49,6 +60,187 @@ type Book struct {
 	IsInLibrary     bool       `json:"isInLibrary"`
 	HasEmptyFields  bool       `json:"hasEmptyFields"`
 	EmptyFields     []string   `json:"emptyFields"`
+}
+
+// Prepared Statements
+func (b *BookModel) InitPreparedStatements() error {
+	var err error
+
+	// Prepared insert statement for books
+	b.insertBookStmt, err = b.DB.Prepare(`
+		INSERT INTO books (title, subtitle, description, language, page_count, publish_date, image_links, notes, tags, created_at, last_updated, isbn_10, isbn_13)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id`)
+	if err != nil {
+		return err
+	}
+
+	// Prepared select statement for GetBookByID
+	b.getBookByIDStmt, err = b.DB.Prepare(`
+		WITH book_data AS (
+			SELECT
+				b.id, b.title, b.subtitle, b.description, b.language, b.page_count, b.publish_date,
+				b.image_links, b.notes, b.tags, b.created_at, b.last_updated, b.isbn_10, b.isbn_13
+			FROM books b
+			WHERE b.id = $1
+		),
+		authors_data AS (
+			SELECT a.name
+			FROM authors a
+			JOIN book_authors ba ON a.id = ba.author_id
+			WHERE ba.book_id = $1
+		),
+		genres_data AS (
+			SELECT g.name
+			FROM genres g
+			JOIN book_genres bg ON g.id = bg.genre_id
+			WHERE bg.book_id = $1
+		),
+		formats_data AS (
+			SELECT f.format_type
+			FROM formats f
+			JOIN book_formats bf ON f.id = bf.format_id
+			WHERE bf.book_id = $1
+		)
+		SELECT
+			b.id, b.title, b.subtitle, b.description, b.language, b.page_count, b.publish_date,
+			b.image_links, b.notes, b.tags, b.created_at, b.last_updated, b.isbn_10, b.isbn_13,
+			a.name AS author_name, g.name AS genre_name, f.format_type AS format_type
+		FROM book_data b
+		LEFT JOIN authors_data a ON true
+		LEFT JOIN genres_data g ON true
+		LEFT JOIN formats_data f ON true`)
+	if err != nil {
+		return err
+	}
+
+	// Prepared insert statement for adding books to user
+	b.addBookToUserStmt, err = b.DB.Prepare(`INSERT INTO user_books (user_id, book_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`)
+	if err != nil {
+		return err
+	}
+
+	// Prepared select statement for getting book ID by title
+	b.getBookIdByTitleStmt, err = b.DB.Prepare(`SELECT id FROM books WHERE title = $1`)
+	if err != nil {
+		return err
+	}
+
+	// Prepared select statement for GetAuthorsForBooks
+	b.getAuthorsForBooksStmt, err = b.DB.Prepare(`
+		SELECT ba.book_id, a.name
+		FROM authors a
+		JOIN book_authors ba ON a.id = ba.author_id
+		WHERE ba.book_id = ANY($1)`)
+	if err != nil {
+		return err
+	}
+
+	// Prepared select statement for IsUserBookOwner
+	b.isUserBookOwnerStmt, err = b.DB.Prepare(`
+		SELECT EXISTS(SELECT 1 FROM user_books WHERE user_id = $1 AND book_id = $2)`)
+	if err != nil {
+		return err
+	}
+
+	// Prepared select statement for GetAllBooksByUserID
+	b.getAllBooksByUserIDStmt, err = b.DB.Prepare(`
+		SELECT b.id, b.title, b.subtitle, b.description, b.language, b.page_count, b.publish_date,
+					 b.image_links, b.notes, b.created_at, b.last_updated, b.isbn_10, b.isbn_13
+		FROM books b
+		INNER JOIN user_books ub ON b.id = ub.book_id
+		WHERE ub.user_id = $1`)
+	if err != nil {
+		return err
+	}
+
+	// Prepared select statement for GetAllBooksByAuthors
+	b.getAllBooksByAuthorsStmt, err = b.DB.Prepare(`
+	SELECT b.id, b.title, b.subtitle, b.description, b.language, b.page_count, b.publish_date,
+				 b.image_links, b.notes, b.created_at, b.last_updated, b.isbn_10, b.isbn_13,
+				 a.name AS author_name,
+				 json_agg(DISTINCT g.name) AS genres,
+				 json_agg(DISTINCT f.format_type) AS formats,
+				 b.tags
+	FROM books b
+	INNER JOIN book_authors ba ON b.id = ba.book_id
+	INNER JOIN authors a ON ba.author_id = a.id
+	INNER JOIN user_books ub ON b.id = ub.book_id
+	LEFT JOIN book_genres bg ON b.id = bg.book_id
+	LEFT JOIN genres g ON bg.genre_id = g.id
+	LEFT JOIN book_formats bf ON b.id = bf.book_id
+	LEFT JOIN formats f ON bf.format_id = f.id
+	WHERE ub.user_id = $1::integer  -- Explicitly cast the user_id to integer
+	GROUP BY b.id, a.name`)
+	if err != nil {
+		return err
+	}
+
+	// Prepared statment for GetAllBooksByGenres
+	b.getAllBooksByGenresStmt, err = b.DB.Prepare(`
+	SELECT b.id, b.title, b.subtitle, b.description, b.language, b.page_count, b.publish_date,
+		   b.image_links, b.notes, b.created_at, b.last_updated, b.isbn_10, b.isbn_13,
+		   g.name AS genre_name,
+		   json_agg(DISTINCT a.name) AS authors,
+		   json_agg(DISTINCT f.format_type) AS formats,
+		   b.tags
+	FROM books b
+	INNER JOIN book_genres bg ON b.id = bg.book_id
+	INNER JOIN genres g ON bg.genre_id = g.id
+	INNER JOIN user_books ub ON b.id = ub.book_id
+	LEFT JOIN book_authors ba ON b.id = ba.book_id
+	LEFT JOIN authors a ON ba.author_id = a.id
+	LEFT JOIN book_formats bf ON b.id = bf.book_id
+	LEFT JOIN formats f ON bf.format_id = f.id
+	WHERE ub.user_id = $1
+	GROUP BY b.id, g.name`)
+	if err != nil {
+		return err
+	}
+
+	// Prepared statement for GetAllBooksByFormat
+	b.getAllBooksByFormatStmt, err = b.DB.Prepare(`
+	SELECT
+		b.id, b.title, b.subtitle, b.description, b.language, b.page_count, b.publish_date,
+		b.image_links, b.notes, b.created_at, b.last_updated, b.isbn_10, b.isbn_13,
+		f.format_type,
+		array_to_json(array_agg(DISTINCT a.name)) as authors,
+		array_to_json(array_agg(DISTINCT g.name)) as genres,
+		b.tags
+	FROM books b
+	INNER JOIN book_formats bf ON b.id = bf.book_id
+	INNER JOIN formats f ON bf.format_id = f.id
+	INNER JOIN user_books ub ON b.id = ub.book_id
+	LEFT JOIN book_authors ba ON b.id = ba.book_id
+	LEFT JOIN authors a ON ba.author_id = a.id
+	LEFT JOIN book_genres bg ON b.id = bg.book_id
+	LEFT JOIN genres g ON bg.genre_id = g.id
+	WHERE ub.user_id = $1
+	GROUP BY b.id, f.format_type`)
+	if err != nil {
+	return err
+	}
+
+	// Prepared select statement for GetFormats
+	b.getFormatsStmt, err = b.DB.Prepare(`
+		SELECT f.format_type
+		FROM formats f
+		JOIN book_formats bf ON f.id = bf.format_id
+		WHERE bf.book_id = $1`)
+	if err != nil {
+		return err
+	}
+
+	// Prepared select statement for GetGenres
+	b.getGenresStmt, err = b.DB.Prepare(`
+		SELECT g.name
+		FROM genres g
+		JOIN book_genres bg ON g.id = bg.genre_id
+		WHERE bg.book_id = $1`)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // General Book
@@ -76,32 +268,55 @@ func (b *BookModel) InsertBook(book Book, userID int) (int, error) {
 		return 0, err
 	}
 
-	// Insert book into books table
-	statement := `INSERT INTO books (title, subtitle, description, language, page_count, publish_date, image_links, notes, tags, created_at, last_updated, isbn_10, isbn_13)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id`
+	// Format publish date in case Google Books only returns year
+	formattedPublishDate := formatPublishDate(book.PublishDate)
 
-	err = tx.QueryRowContext(ctx, statement,
-		book.Title,
-		book.Subtitle,
-		book.Description,
-		book.Language,
-		book.PageCount,
-		book.PublishDate,
-		imageLinksJSON,
-		book.Notes,
-		tagsJSON,
-		time.Now(),
-		time.Now(),
-		book.ISBN10,
-		book.ISBN13,
-	).Scan(&newId)
+	// Check if prepared statement is available
+	if b.insertBookStmt != nil {
+		b.Logger.Info("Using prepared statement for inserting a book")
+		err = tx.StmtContext(ctx, b.insertBookStmt).QueryRowContext(ctx,
+			book.Title,
+			book.Subtitle,
+			book.Description,
+			book.Language,
+			book.PageCount,
+			formattedPublishDate,
+			imageLinksJSON,
+			book.Notes,
+			tagsJSON,
+			time.Now(),
+			time.Now(),
+			book.ISBN10,
+			book.ISBN13,
+		).Scan(&newId)
+	} else {
+		// Fallback to using raw SQL query if prepared statement unavailable
+		b.Logger.Warn("Prepared statement for inserting a book is not available. Falling back to raw SQL query")
+		statement := `INSERT INTO books (title, subtitle, description, language, page_count, publish_date, image_links, notes, tags, created_at, last_updated, isbn_10, isbn_13)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id`
+		err = tx.QueryRowContext(ctx, statement,
+			book.Title,
+			book.Subtitle,
+			book.Description,
+			book.Language,
+			book.PageCount,
+			formattedPublishDate,
+			imageLinksJSON,
+			book.Notes,
+			tagsJSON,
+			time.Now(),
+			time.Now(),
+			book.ISBN10,
+			book.ISBN13,
+		).Scan(&newId)
+	}
 
 	if err != nil {
 		b.Logger.Error("Book Model - Error inserting book", "error", err)
 		return 0, err
 	}
 
-	// Use sets to eliminate duplicates
+	// Insert authors + genres
 	authorsSet := collections.NewSet()
 	genresSet := collections.NewSet()
 
@@ -113,7 +328,7 @@ func (b *BookModel) InsertBook(book Book, userID int) (int, error) {
 		genresSet.Add(genre)
 	}
 
-	// Batch insert authors and associate them with the book
+	// Batch insert authors, associate them with the book
 	for _, author := range authorsSet.Elements() {
 		var authorID int
 		err = tx.QueryRowContext(ctx, `SELECT id FROM authors WHERE name = $1`, author).Scan(&authorID)
@@ -137,7 +352,7 @@ func (b *BookModel) InsertBook(book Book, userID int) (int, error) {
 		}
 	}
 
-	// Batch insert genres and associate them with the book
+	// Batch insert genres, associate them with the book
 	for _, genre := range genresSet.Elements() {
 		var genreID int
 		err = tx.QueryRowContext(ctx, `SELECT id FROM genres WHERE name = $1`, genre).Scan(&genreID)
@@ -161,7 +376,7 @@ func (b *BookModel) InsertBook(book Book, userID int) (int, error) {
 		}
 	}
 
-	// Associate the book with the user
+	// Associate book with user
 	if err := b.AddBookToUser(tx, userID, newId); err != nil {
 		b.Logger.Error("Error adding book to user", "error", err)
 		return 0, err
@@ -175,13 +390,39 @@ func (b *BookModel) InsertBook(book Book, userID int) (int, error) {
 	return newId, nil
 }
 
-func (b *BookModel) AddBookToUser(tx *sql.Tx, userID, bookID int) error {
-	statement := `INSERT INTO user_books (user_id, book_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`
-	_, err := tx.ExecContext(context.Background(), statement, userID, bookID)
-	if err != nil {
-		b.Logger.Error("Error adding book to user", "error", err)
-		return err
+// Helper fn function for Insert Book to format publish date
+func formatPublishDate(dateStr string) string {
+	// If publish date only lists year, append "-01-01"
+	if len(dateStr) == 4 {
+		return dateStr + "-01-01"
 	}
+	return dateStr
+}
+
+
+func (b *BookModel) AddBookToUser(tx *sql.Tx, userID, bookID int) error {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	// Check if prepared statement is available
+	if b.addBookToUserStmt != nil {
+		b.Logger.Info("Using prepared statement for adding a book to user")
+		_, err := tx.StmtContext(ctx, b.addBookToUserStmt).ExecContext(ctx, userID, bookID)
+		if err != nil {
+			b.Logger.Error("Error adding book to user using prepared statement", "error", err)
+			return err
+		}
+	} else {
+		// Fallback to using raw SQL query if prepared statement is unavailable
+		b.Logger.Warn("Prepared statement for adding a book to user is not available. Falling back to raw SQL query")
+		statement := `INSERT INTO user_books (user_id, book_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`
+		_, err := tx.ExecContext(ctx, statement, userID, bookID)
+		if err != nil {
+			b.Logger.Error("Error adding book to user using raw SQL query", "error", err)
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -189,8 +430,17 @@ func (b *BookModel) GetBookByID(id int) (*Book, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
 
-	// Batch query to fetch book, authors, genres, and formats
-	query := `
+	// Check if prepared statement is available
+	var rows *sql.Rows
+	var err error
+
+	if b.getBookByIDStmt != nil {
+		b.Logger.Info("Using prepared statement for fetching book by ID")
+		rows, err = b.getBookByIDStmt.QueryContext(ctx, id)
+	} else {
+		// Fallback to raw SQL query if prepared statement is unavailable
+		b.Logger.Warn("Prepared statement for fetching book by ID is not available. Falling back to raw SQL query")
+		query := `
 		WITH book_data AS (
 			SELECT
 				b.id, b.title, b.subtitle, b.description, b.language, b.page_count, b.publish_date,
@@ -224,11 +474,12 @@ func (b *BookModel) GetBookByID(id int) (*Book, error) {
 		LEFT JOIN authors_data a ON true
 		LEFT JOIN genres_data g ON true
 		LEFT JOIN formats_data f ON true
-	`
+		`
+		rows, err = b.DB.QueryContext(ctx, query, id)
+	}
 
-	rows, err := b.DB.QueryContext(ctx, query, id)
 	if err != nil {
-		b.Logger.Error("Error fetching book by ID with batch queries", "error", err)
+		b.Logger.Error("Error fetching book by ID", "error", err)
 		return nil, err
 	}
 	defer rows.Close()
@@ -300,15 +551,25 @@ func (b *BookModel) GetBookIdByTitle(title string) (int, error) {
 	defer cancel()
 
 	var bookID int
-	statement := `SELECT id FROM books WHERE title = $1`
-	err := b.DB.QueryRowContext(ctx, statement, title).Scan(&bookID)
+	var err error
+
+	if b.getBookIdByTitleStmt != nil {
+		b.Logger.Info("Using prepared statement for fetching book ID by title")
+		err = b.getBookIdByTitleStmt.QueryRowContext(ctx, title).Scan(&bookID)
+	} else {
+		// Fallback to raw SQL query if prepared statement is unavailable
+		b.Logger.Warn("Prepared statement for fetching book ID by title is not available. Falling back to raw SQL query")
+		statement := `SELECT id FROM books WHERE title = $1`
+		err = b.DB.QueryRowContext(ctx, statement, title).Scan(&bookID)
+	}
+
 	if err != nil {
-			if err == sql.ErrNoRows {
-					b.Logger.Error("Book Model - No book found with the given title", "title", title)
-					return 0, nil
-			}
-			b.Logger.Error("Book Model - Error fetching book ID by title", "error", err)
-			return 0, err
+		if err == sql.ErrNoRows {
+			b.Logger.Warn("No book found with the given title", "title", title)
+			return 0, nil
+		}
+		b.Logger.Error("Error fetching book ID by title", "error", err)
+		return 0, err
 	}
 
 	return bookID, nil
@@ -318,16 +579,29 @@ func (b *BookModel) GetAuthorsForBooks(bookIDs []int) (map[int][]string, error) 
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
 
-	query := `
-	SELECT ba.book_id, a.name
-	FROM authors a
-	JOIN book_authors ba ON a.id = ba.author_id
-	WHERE ba.book_id = ANY($1)`
+	var rows *sql.Rows
+	var err error
 
-	rows, err := b.DB.QueryContext(ctx, query, pq.Array(bookIDs))
-	if err != nil {
-		b.Logger.Error("Error fetching authors for books", "error", err)
-		return nil, err
+	// Use prepared statement if available
+	if b.getAuthorsForBooksStmt != nil {
+		rows, err = b.getAuthorsForBooksStmt.QueryContext(ctx, pq.Array(bookIDs))
+		if err != nil {
+			b.Logger.Error("Error fetching authors for books using prepared statement", "error", err)
+			return nil, err
+		}
+	} else {
+		// Fallback if the prepared statement is unavailable
+		query := `
+		SELECT ba.book_id, a.name
+		FROM authors a
+		JOIN book_authors ba ON a.id = ba.author_id
+		WHERE ba.book_id = ANY($1)`
+
+		rows, err = b.DB.QueryContext(ctx, query, pq.Array(bookIDs))
+		if err != nil {
+			b.Logger.Error("Error fetching authors for books using fallback query", "error", err)
+			return nil, err
+		}
 	}
 	defer rows.Close()
 
@@ -347,12 +621,27 @@ func (b *BookModel) GetAuthorsForBooks(bookIDs []int) (map[int][]string, error) 
 }
 
 func (b *BookModel) IsUserBookOwner(userID, bookID int) (bool, error) {
-	var exists bool
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
 
-	query := `SELECT EXISTS(SELECT 1 FROM user_books WHERE user_id = $1 AND book_id = $2)`
-	err := b.DB.QueryRow(query, userID, bookID).Scan(&exists)
-	if err != nil {
-		return false, err
+	var exists bool
+	var err error
+
+	// Use prepared statement if unavailable
+	if b.isUserBookOwnerStmt != nil {
+		err = b.isUserBookOwnerStmt.QueryRowContext(ctx, userID, bookID).Scan(&exists)
+		if err != nil {
+			b.Logger.Error("Error checking book ownership using prepared statement", "error", err)
+			return false, err
+		}
+	} else {
+		// Fallback if prepared statement is unavailable
+		query := `SELECT EXISTS(SELECT 1 FROM user_books WHERE user_id = $1 AND book_id = $2)`
+		err = b.DB.QueryRowContext(ctx, query, userID, bookID).Scan(&exists)
+		if err != nil {
+			b.Logger.Error("Error checking book ownership using fallback query", "error", err)
+			return false, err
+		}
 	}
 
 	return exists, nil
@@ -362,15 +651,23 @@ func (b *BookModel) GetAllBooksByUserID(userID int) ([]Book, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
 
-	// Fetch the list of books for the user
-	bookQuery := `
-		SELECT b.id, b.title, b.subtitle, b.description, b.language, b.page_count, b.publish_date,
-					 b.image_links, b.notes, b.created_at, b.last_updated, b.isbn_10, b.isbn_13
-		FROM books b
-		INNER JOIN user_books ub ON b.id = ub.book_id
-		WHERE ub.user_id = $1`
+	var rows *sql.Rows
+	var err error
 
-	rows, err := b.DB.QueryContext(ctx, bookQuery, userID)
+	if b.getAllBooksByUserIDStmt != nil {
+		b.Logger.Info("Using prepared statement for retrieving books by user ID")
+		rows, err = b.getAllBooksByUserIDStmt.QueryContext(ctx, userID)
+	} else {
+		b.Logger.Warn("Prepared statement for retrieving books by user ID not initialized, using fallback query")
+		query := `
+			SELECT b.id, b.title, b.subtitle, b.description, b.language, b.page_count, b.publish_date,
+						 b.image_links, b.notes, b.created_at, b.last_updated, b.isbn_10, b.isbn_13
+			FROM books b
+			INNER JOIN user_books ub ON b.id = ub.book_id
+			WHERE ub.user_id = $1`
+		rows, err = b.DB.QueryContext(ctx, query, userID)
+	}
+
 	if err != nil {
 		b.Logger.Error("Error retrieving books for user", "error", err)
 		return nil, err
@@ -414,12 +711,12 @@ func (b *BookModel) GetAllBooksByUserID(userID int) ([]Book, error) {
 		bookIDs = append(bookIDs, book.ID)
 	}
 
-	// Fetch authors, formats, genres, and tags in batches
+	// Batch Fetch authors, formats, genres, and tags
 	if err := b.batchFetchBookDetails(ctx, bookIDs, bookIDMap); err != nil {
 		return nil, err
 	}
 
-	// Collect books from the map into a slice, check for empty fields
+	// Collect books from map into a slice, check for empty fields
 	var books []Book
 	for _, book := range bookIDMap {
 		book.EmptyFields, book.HasEmptyFields = b.findEmptyFields(book)
@@ -428,6 +725,7 @@ func (b *BookModel) GetAllBooksByUserID(userID int) ([]Book, error) {
 
 	return books, nil
 }
+
 
 // Helper fn for GetAllBooksByUserID
 func (b *BookModel) findEmptyFields(book *Book) ([]string, bool) {
@@ -865,26 +1163,35 @@ func (b *BookModel) GetAllBooksByAuthors(userID int) (map[string]interface{}, er
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
 
-	// Batch all books and their authors for a user in a single query
-	query := `
-	SELECT b.id, b.title, b.subtitle, b.description, b.language, b.page_count, b.publish_date,
-				 b.image_links, b.notes, b.created_at, b.last_updated, b.isbn_10, b.isbn_13,
-				 a.name AS author_name,
-				 json_agg(DISTINCT g.name) AS genres,
-				 json_agg(DISTINCT f.format_type) AS formats,
-				 b.tags
-	FROM books b
-	INNER JOIN book_authors ba ON b.id = ba.book_id
-	INNER JOIN authors a ON ba.author_id = a.id
-	INNER JOIN user_books ub ON b.id = ub.book_id
-	LEFT JOIN book_genres bg ON b.id = bg.book_id
-	LEFT JOIN genres g ON bg.genre_id = g.id
-	LEFT JOIN book_formats bf ON b.id = bf.book_id
-	LEFT JOIN formats f ON bf.format_id = f.id
-	WHERE ub.user_id = $1
-	GROUP BY b.id, a.name`
+	var rows *sql.Rows
+	var err error
 
-	rows, err := b.DB.QueryContext(ctx, query, userID)
+	// Use the prepared statement if available, otherwise fall back to raw query
+	if b.getAllBooksByAuthorsStmt != nil {
+		b.Logger.Info("Using prepared statement for retrieving books by authors")
+		rows, err = b.getAllBooksByAuthorsStmt.QueryContext(ctx, userID)
+	} else {
+		b.Logger.Warn("Prepared statement for retrieving books by authors not initialized, using fallback query")
+		query := `
+			SELECT b.id, b.title, b.subtitle, b.description, b.language, b.page_count, b.publish_date,
+						 b.image_links, b.notes, b.created_at, b.last_updated, b.isbn_10, b.isbn_13,
+						 a.name AS author_name,
+						 json_agg(DISTINCT g.name) AS genres,
+						 json_agg(DISTINCT f.format_type) AS formats,
+						 b.tags
+			FROM books b
+			INNER JOIN book_authors ba ON b.id = ba.book_id
+			INNER JOIN authors a ON ba.author_id = a.id
+			INNER JOIN user_books ub ON b.id = ub.book_id
+			LEFT JOIN book_genres bg ON b.id = bg.book_id
+			LEFT JOIN genres g ON bg.genre_id = g.id
+			LEFT JOIN book_formats bf ON b.id = bf.book_id
+			LEFT JOIN formats f ON bf.format_id = f.id
+			WHERE ub.user_id = $1
+			GROUP BY b.id, a.name`
+		rows, err = b.DB.QueryContext(ctx, query, userID)
+	}
+
 	if err != nil {
 		b.Logger.Error("Error retrieving books by authors", "error", err)
 		return nil, err
@@ -925,9 +1232,6 @@ func (b *BookModel) GetAllBooksByAuthors(userID int) (map[string]interface{}, er
 			b.Logger.Error("Error scanning book by author", "error", err)
 			return nil, err
 		}
-
-		// Debugging: Log the retrieved author name
-		b.Logger.Info("Retrieved author", "authorName", authorName)
 
 		// Unmarshal JSON fields
 		if err := json.Unmarshal(imageLinksJSON, &book.ImageLinks); err != nil {
@@ -985,6 +1289,7 @@ func (b *BookModel) GetAllBooksByAuthors(userID int) (map[string]interface{}, er
 
 	return result, nil
 }
+
 
 
 // Helper function to get the last name from a full name
@@ -1240,27 +1545,35 @@ func (b *BookModel) GetAllBooksByFormat(userID int) (map[string][]Book, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
 
-	query := `
-	SELECT
-		b.id, b.title, b.subtitle, b.description, b.language, b.page_count, b.publish_date,
-		b.image_links, b.notes, b.created_at, b.last_updated, b.isbn_10, b.isbn_13,
-		f.format_type,
-		array_to_json(array_agg(DISTINCT a.name)) as authors,
-		array_to_json(array_agg(DISTINCT g.name)) as genres,
-		b.tags
-	FROM books b
-	INNER JOIN book_formats bf ON b.id = bf.book_id
-	INNER JOIN formats f ON bf.format_id = f.id
-	INNER JOIN user_books ub ON b.id = ub.book_id
-	LEFT JOIN book_authors ba ON b.id = ba.book_id
-	LEFT JOIN authors a ON ba.author_id = a.id
-	LEFT JOIN book_genres bg ON b.id = bg.book_id
-	LEFT JOIN genres g ON bg.genre_id = g.id
-	WHERE ub.user_id = $1
-	GROUP BY b.id, f.format_type
-	`
+	var rows *sql.Rows
+	var err error
 
-	rows, err := b.DB.QueryContext(ctx, query, userID)
+	if b.getAllBooksByFormatStmt != nil {
+		b.Logger.Info("Using prepared statement for retrieving books by format")
+		rows, err = b.getAllBooksByFormatStmt.QueryContext(ctx, userID)
+	} else {
+		b.Logger.Warn("Prepared statement for retrieving books by format is not available. Falling back to raw SQL query")
+		query := `
+		SELECT
+			b.id, b.title, b.subtitle, b.description, b.language, b.page_count, b.publish_date,
+			b.image_links, b.notes, b.created_at, b.last_updated, b.isbn_10, b.isbn_13,
+			f.format_type,
+			array_to_json(array_agg(DISTINCT a.name)) as authors,
+			array_to_json(array_agg(DISTINCT g.name)) as genres,
+			b.tags
+		FROM books b
+		INNER JOIN book_formats bf ON b.id = bf.book_id
+		INNER JOIN formats f ON bf.format_id = f.id
+		INNER JOIN user_books ub ON b.id = ub.book_id
+		LEFT JOIN book_authors ba ON b.id = ba.book_id
+		LEFT JOIN authors a ON ba.author_id = a.id
+		LEFT JOIN book_genres bg ON b.id = bg.book_id
+		LEFT JOIN genres g ON bg.genre_id = g.id
+		WHERE ub.user_id = $1
+		GROUP BY b.id, f.format_type`
+		rows, err = b.DB.QueryContext(ctx, query, userID)
+	}
+
 	if err != nil {
 		b.Logger.Error("Error retrieving books by format", "error", err)
 		return nil, err
@@ -1343,16 +1656,24 @@ func (b *BookModel) GetAllBooksByFormat(userID int) (map[string][]Book, error) {
 	return booksByFormat, nil
 }
 
-
 func (b *BookModel) GetFormats(ctx context.Context, bookID int) ([]string, error) {
+	var rows *sql.Rows
+	var err error
 
-	query := `
-	SELECT f.format_type
-	FROM formats f
-	JOIN book_formats bf ON f.id = bf.format_id
-	WHERE bf.book_id = $1`
+	// Use prepared statement if available
+	if b.getFormatsStmt != nil {
+		b.Logger.Info("Using prepared statement for fetching formats")
+		rows, err = b.getFormatsStmt.QueryContext(ctx, bookID)
+	} else {
+		b.Logger.Warn("Prepared statement for fetching formats is not available. Falling back to raw SQL query")
+		query := `
+		SELECT f.format_type
+		FROM formats f
+		JOIN book_formats bf ON f.id = bf.format_id
+		WHERE bf.book_id = $1`
+		rows, err = b.DB.QueryContext(ctx, query, bookID)
+	}
 
-	rows, err := b.DB.QueryContext(ctx, query, bookID)
 	if err != nil {
 		b.Logger.Error("Book Model - Error fetching formats", "error", err)
 		return nil, err
@@ -1493,15 +1814,23 @@ func (b *BookModel) AddGenre(ctx context.Context, bookID, genreID int) error {
 }
 
 func (b *BookModel) GetGenres(ctx context.Context, bookID int) ([]string, error) {
+	var rows *sql.Rows
+	var err error
 
-	query := `
-	SELECT g.name
-	FROM genres g
-	JOIN book_genres bg ON g.id = bg.genre_id
-	WHERE bg.book_id = $1`
+	// Use prepared statement if available
+	if b.getGenresStmt != nil {
+		b.Logger.Info("Using prepared statement for fetching genres")
+		rows, err = b.getGenresStmt.QueryContext(ctx, bookID)
+	} else {
+		b.Logger.Warn("Prepared statement for fetching genres is not available. Falling back to raw SQL query")
+		query := `
+		SELECT g.name
+		FROM genres g
+		JOIN book_genres bg ON g.id = bg.genre_id
+		WHERE bg.book_id = $1`
+		rows, err = b.DB.QueryContext(ctx, query, bookID)
+	}
 
-	// Execute the query with the provided context
-	rows, err := b.DB.QueryContext(ctx, query, bookID)
 	if err != nil {
 		b.Logger.Error("Error fetching genres", "error", err)
 		return nil, err
@@ -1521,145 +1850,148 @@ func (b *BookModel) GetGenres(ctx context.Context, bookID int) ([]string, error)
 
 	// Check for errors after looping through the rows
 	if err = rows.Err(); err != nil {
-		b.Logger.Error("Error with rows", "error", err)
+		b.Logger.Error("Error with rows during genres fetch", "error", err)
 		return nil, err
 	}
 
 	return genres, nil
 }
 
-func (b *BookModel) GetAllBooksByGenres(ctx context.Context, userID int) (map[string]interface{}, error) {
-	// Batch get all books and genres for a user's books
-	query := `
-	SELECT
-		b.id, b.title, b.subtitle, b.description, b.language, b.page_count,
-		b.publish_date, b.image_links, b.notes, b.created_at, b.last_updated,
-		b.isbn_10, b.isbn_13, b.genres, json_agg(DISTINCT f.format_type) AS formats, -- Aggregate formats as JSON
-		a.name AS author_name, b.tags
-	FROM books b
-	INNER JOIN book_genres bg ON b.id = bg.book_id
-	INNER JOIN genres g ON bg.genre_id = g.id
-	INNER JOIN user_books ub ON b.id = ub.book_id
-	LEFT JOIN book_authors ba ON b.id = ba.book_id
-	LEFT JOIN authors a ON ba.author_id = a.id
-	LEFT JOIN book_formats bf ON b.id = bf.book_id -- Join book_formats table
-	LEFT JOIN formats f ON bf.format_id = f.id     -- Join formats table
-	WHERE ub.user_id = $1
-	GROUP BY b.id, a.name, b.genres`  // Group by necessary fields
 
-	rows, err := b.DB.QueryContext(ctx, query, userID)
+func (b *BookModel) GetAllBooksByGenres(ctx context.Context, userID int) (map[string]interface{}, error) {
+	var rows *sql.Rows
+	var err error
+
+	if b.getAllBooksByGenresStmt != nil {
+			b.Logger.Info("Using prepared statement for retrieving books by genres")
+			rows, err = b.getAllBooksByGenresStmt.QueryContext(ctx, userID)
+	} else {
+			b.Logger.Info("Prepared statement unavailable, using fallback query for retrieving books by genres")
+			query := `
+			SELECT b.id, b.title, b.subtitle, b.description, b.language, b.page_count, b.publish_date,
+						 b.image_links, b.notes, b.created_at, b.last_updated, b.isbn_10, b.isbn_13,
+						 g.name AS genre_name,
+						 json_agg(DISTINCT a.name) AS authors,
+						 json_agg(DISTINCT f.format_type) AS formats,
+						 b.tags
+			FROM books b
+			INNER JOIN book_genres bg ON b.id = bg.book_id
+			INNER JOIN genres g ON bg.genre_id = g.id
+			INNER JOIN user_books ub ON b.id = ub.book_id
+			LEFT JOIN book_authors ba ON b.id = ba.book_id
+			LEFT JOIN authors a ON ba.author_id = a.id
+			LEFT JOIN book_formats bf ON b.id = bf.book_id
+			LEFT JOIN formats f ON bf.format_id = f.id
+			WHERE ub.user_id = $1
+			GROUP BY b.id, g.name`
+			rows, err = b.DB.QueryContext(ctx, query, userID)
+	}
+
 	if err != nil {
-		b.Logger.Error("Error retrieving books by genres", "error", err)
-		return nil, err
+			b.Logger.Error("Error retrieving books by genres", "error", err)
+			return nil, err
 	}
 	defer rows.Close()
 
-	// Store genres and books
-	genres := []string{}
+	genresSet := make(map[string]struct{}) // To keep track of unique genres
 	booksByGenre := map[string][]Book{}
 
 	for rows.Next() {
-		var book Book
-		var authorName string
-		var imageLinksJSON, genresJSON, formatsJSON, tagsJSON []byte
+			var book Book
+			var genre string
+			var authorName string
+			var imageLinksJSON, formatsJSON, tagsJSON []byte
 
-		// Scan the row
-		if err := rows.Scan(
-			&book.ID, &book.Title, &book.Subtitle, &book.Description, &book.Language, &book.PageCount,
-			&book.PublishDate, &imageLinksJSON, &book.Notes, &book.CreatedAt, &book.LastUpdated,
-			&book.ISBN10, &book.ISBN13, &genresJSON, &formatsJSON, &authorName, &tagsJSON,
-		); err != nil {
-			b.Logger.Error("Error scanning book by genre", "error", err)
-			return nil, err
-		}
-
-		// Unmarshal image links
-		if err := json.Unmarshal(imageLinksJSON, &book.ImageLinks); err != nil {
-			b.Logger.Error("Error unmarshalling image links JSON", "error", err)
-			return nil, err
-		}
-
-		// Unmarshal genres
-		if len(genresJSON) > 0 {
-			if err := json.Unmarshal(genresJSON, &book.Genres); err != nil {
-				b.Logger.Error("Error unmarshalling genres JSON", "error", err)
-				return nil, err
+			if err := rows.Scan(
+					&book.ID, &book.Title, &book.Subtitle, &book.Description, &book.Language, &book.PageCount,
+					&book.PublishDate, &imageLinksJSON, &book.Notes, &book.CreatedAt, &book.LastUpdated,
+					&book.ISBN10, &book.ISBN13, &genre, &formatsJSON, &authorName, &tagsJSON,
+			); err != nil {
+					b.Logger.Error("Error scanning book by genre", "error", err)
+					return nil, err
 			}
-		}
 
-		// Unmarshal formats
-		if len(formatsJSON) > 0 {
-			if err := json.Unmarshal(formatsJSON, &book.Formats); err != nil {
-				b.Logger.Error("Error unmarshalling formats JSON", "error", err)
-				return nil, err
+			// Handle image links
+			if err := json.Unmarshal(imageLinksJSON, &book.ImageLinks); err != nil {
+					b.Logger.Error("Error unmarshalling image links JSON", "error", err)
+					return nil, err
 			}
-		}
 
-		// Unmarshal tags
-		if len(tagsJSON) > 0 {
-			if err := json.Unmarshal(tagsJSON, &book.Tags); err != nil {
-				b.Logger.Error("Error unmarshalling tags JSON", "error", err)
-				return nil, err
+			// Handle formats
+			var formats []string
+			if err := json.Unmarshal(formatsJSON, &formats); err != nil {
+					b.Logger.Info("FormatsJSON is not valid JSON, treating as plain text", "formatsJSON", string(formatsJSON))
+					formats = append(formats, string(formatsJSON))
 			}
-		}
+			book.Formats = formats
 
-		// Assign the author
-		if authorName != "" {
-			book.Authors = append(book.Authors, authorName)
-		}
+			// Handle tags
+			var tags []string
+			if err := json.Unmarshal(tagsJSON, &tags); err != nil {
+					b.Logger.Info("TagsJSON is not valid JSON, treating as plain text", "tagsJSON", string(tagsJSON))
+					tags = append(tags, string(tagsJSON))
+			}
+			book.Tags = tags
 
-		// Add genres to the list
-		for _, genre := range book.Genres {
-			if _, found := booksByGenre[genre]; !found {
-				genres = append(genres, genre)
+			// Assign the author
+			if authorName != "" {
+					book.Authors = append(book.Authors, authorName)
+			}
+
+			// Add genre to the set of genres
+			if _, found := genresSet[genre]; !found {
+					genresSet[genre] = struct{}{} // Add genre to the set
 			}
 
 			// Add book to the genre's list
 			booksByGenre[genre] = append(booksByGenre[genre], book)
-		}
 	}
 
-	// Check for row errors
 	if err = rows.Err(); err != nil {
-		b.Logger.Error("Error with rows", "error", err)
-		return nil, err
+			b.Logger.Error("Error with rows", "error", err)
+			return nil, err
 	}
 
-	// Sort genres alphabetically
+	// Convert the set to a sorted list of genres
+	var genres []string
+	for genre := range genresSet {
+			genres = append(genres, genre)
+	}
 	sort.Strings(genres)
 
-	// Create the result map with index keys for genres
 	result := map[string]interface{}{
-		"allGenres": genres,
+			"allGenres": genres,
 	}
 
 	for i, genre := range genres {
-		key := strconv.Itoa(i)
+			key := strconv.Itoa(i)
 
-		// Sort the books for each genre by author's last name
-		sort.Slice(booksByGenre[genre], func(i, j int) bool {
-			if len(booksByGenre[genre][i].Authors) > 0 && len(booksByGenre[genre][j].Authors) > 0 {
-				return getLastName(booksByGenre[genre][i].Authors[0]) < getLastName(booksByGenre[genre][j].Authors[0])
+			// Sort the books for each genre by author's last name
+			sort.Slice(booksByGenre[genre], func(i, j int) bool {
+					if len(booksByGenre[genre][i].Authors) > 0 && len(booksByGenre[genre][j].Authors) > 0 {
+							return getLastName(booksByGenre[genre][i].Authors[0]) < getLastName(booksByGenre[genre][j].Authors[0])
+					}
+					return false
+			})
+
+			genreImgs := make([]string, len(booksByGenre[genre]))
+			for j, book := range booksByGenre[genre] {
+					if len(book.ImageLinks) > 0 {
+							genreImgs[j] = book.ImageLinks[0]
+					}
 			}
-			return false
-		})
 
-		// Prepare genreImgs array
-		genreImgs := make([]string, len(booksByGenre[genre]))
-		for j, book := range booksByGenre[genre] {
-			if len(book.ImageLinks) > 0 {
-				genreImgs[j] = book.ImageLinks[0]
+			result[key] = map[string]interface{}{
+					"genreImgs": genreImgs,
+					"bookList":  booksByGenre[genre],
 			}
-		}
-
-		result[key] = map[string]interface{}{
-			"genreImgs": genreImgs,
-			"bookList":  booksByGenre[genre],
-		}
 	}
 
+	b.Logger.Info("Final result being sent to the frontend", "result", result)
 	return result, nil
 }
+
+
 
 // Helper fn for UpdateBook
 func (b *BookModel) updateGenres(ctx context.Context, bookID int, newGenres []string) error {

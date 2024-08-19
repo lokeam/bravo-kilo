@@ -29,8 +29,8 @@ type Category struct {
 	Name string  `json:"name"`
 }
 
-func New(db *sql.DB, logger *slog.Logger) Models {
-	return Models{
+func New(db *sql.DB, logger *slog.Logger) (Models, error) {
+	models := Models{
 		User:      UserModel{DB: db, Logger: logger},
 		Token:     TokenModel{DB: db, Logger: logger},
 		Book:      BookModel{DB: db, Logger: logger, Author: &AuthorModel{DB: db, Logger: logger}},
@@ -39,6 +39,16 @@ func New(db *sql.DB, logger *slog.Logger) Models {
 		Author:    AuthorModel{DB: db, Logger: logger},
 		Genre:     GenreModel{DB: db, Logger: logger},
 	}
+
+	// Init prepared statements for BookModel
+	if err := models.Book.InitPreparedStatements(); err != nil {
+		logger.Error("Error initializing prepared statements for BookModel", "error", err)
+		return Models{}, err
+	}
+
+	// Init additional models for prepared statements below:
+
+	return models, nil
 }
 
 // Category
@@ -73,7 +83,7 @@ func (c *CategoryModel) GetByID(id int) (*Category, error) {
 			return nil, nil
 		} else {
 			c.Logger.Error("Category Model - Error fetching category by ID", "error", err)
-			return nil ,err
+			return nil, err
 		}
 	}
 

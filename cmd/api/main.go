@@ -57,10 +57,16 @@ func main() {
 
 	defer db.SQL.Close()
 
+	models, err := data.New(db.SQL, log)
+	if err != nil {
+		log.Error("Error initializing data models", "error", err)
+		os.Exit(1)
+	}
+
 	app := &application{
 		config:   cfg,
 		logger:   log,
-		models:   data.New(db.SQL, log),
+		models:   models,
 	}
 
 	// Initialize the config package with the logger

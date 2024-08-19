@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/go-chi/chi"
+	"github.com/go-chi/chi/v5"
 )
 
 // Validate Ownership
@@ -114,6 +114,7 @@ func (h *Handlers) HandleGetBookByID(response http.ResponseWriter, request *http
 
 	bookIDStr := chi.URLParam(request, "bookID")
 	bookID, err := strconv.Atoi(bookIDStr)
+
 	if err != nil {
 		http.Error(response, "Invalid book ID", http.StatusBadRequest)
 		return
@@ -172,8 +173,6 @@ func (h *Handlers) HandleGetBookIDByTitle(response http.ResponseWriter, request 
 			http.Error(response, "Book not found", http.StatusNotFound)
 			return
 	}
-
-	h.logger.Info("GetBookIDByTitle handler, bookID: ", "bookID", bookID)
 
 	response.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(response).Encode(map[string]interface{}{"bookID": bookID}); err != nil {
