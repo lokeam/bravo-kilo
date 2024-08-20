@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/lib/pq"
@@ -61,6 +62,12 @@ type Book struct {
 	HasEmptyFields  bool       `json:"hasEmptyFields"`
 	EmptyFields     []string   `json:"emptyFields"`
 }
+
+var isbn10Cache   sync.Map
+var isbn13Cache   sync.Map
+var titleCache    sync.Map
+var formatsCache  sync.Map
+var genresCache   sync.Map
 
 // Prepared Statements
 func (b *BookModel) InitPreparedStatements() error {
@@ -877,6 +884,14 @@ func (b *BookModel) batchFetchBookDetails(ctx context.Context, bookIDs []int, bo
 }
 
 func (b *BookModel) Update(book Book) error {
+	// Invalidate caches
+	isbn10Cache.Delete(book.ID)
+	isbn13Cache.Delete(book.ID)
+	titleCache.Delete(book.ID)
+	formatsCache.Delete(book.ID)
+	genresCache.Delete(book.ID)
+	b.Logger.Info("Cache invalidated for book", "book", book.ID)
+
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
 
@@ -1347,6 +1362,12 @@ func (b *BookModel) updateAuthors(ctx context.Context, bookID int, authors []str
 
 // ISBN10 + ISBN13 (Returns a HashSet)
 func (b *BookModel) GetAllBooksISBN10(userID int) (*collections.Set, error) {
+	// Check cache
+	if cache, found := isbn10Cache.Load(userID); found {
+		b.Logger.Info("Fetching ISBN10 from cache")
+		return cache.(*collections.Set), nil
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
 
@@ -1380,11 +1401,21 @@ func (b *BookModel) GetAllBooksISBN10(userID int) (*collections.Set, error) {
 		return nil, err
 	}
 
+	// Cache the result
+	isbn10Cache.Store(userID, isbnSet)
+	b.Logger.Info("Caching ISBN10 for user", "userID", userID)
+
 	return isbnSet, nil
 }
 
 // (Returns a HashSet)
 func (b *BookModel) GetAllBooksISBN13(userID int) (*collections.Set, error) {
+	// Check cache
+	if cache, found := isbn13Cache.Load(userID); found {
+		b.Logger.Info("Fetching ISBN13 from cache")
+		return cache.(*collections.Set), nil
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
 
@@ -1418,11 +1449,21 @@ func (b *BookModel) GetAllBooksISBN13(userID int) (*collections.Set, error) {
 		return nil, err
 	}
 
+	// Cache the result
+	isbn13Cache.Store(userID, isbnSet)
+	b.Logger.Info("Caching ISBN13 for user", "userID", userID)
+
 	return isbnSet, nil
 }
 
 // (Returns a HashSet)
 func (b *BookModel) GetAllBooksTitles(userID int) (*collections.Set, error) {
+	// Check cache
+	if cache, found := titleCache.Load(userID); found {
+		b.Logger.Info("Fetching Title info from cache")
+		return cache.(*collections.Set), nil
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
 
@@ -1454,6 +1495,10 @@ func (b *BookModel) GetAllBooksTitles(userID int) (*collections.Set, error) {
 		b.Logger.Error("Error with rows", "error", err)
 		return nil, err
 	}
+
+	// Cache result
+	titleCache.Store(userID, titleSet)
+	b.Logger.Info("Caching Title info for user", "userID", userID)
 
 	return titleSet, nil
 }
@@ -1527,19 +1572,20 @@ func (b *BookModel) AddFormats(ctx context.Context, bookID int, formatIDs []int)
 
 func (b *BookModel) addOrGetFormatID(ctx context.Context, format string) (int, error) {
 	var formatID int
-	err := b.DB.QueryRowContext(ctx, "SELECT id FROM formats WHERE format_type = $1", format).Scan(&formatID)
+	statement := `
+		INSERT INTO formats (format_type)
+		VALUES ($1)
+		ON CONFLICT (format_type) DO UPDATE
+		SET format_type = EXCLUDED.format_type
+		RETURNING id`
+	err := b.DB.QueryRowContext(ctx, statement, format).Scan(&formatID)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			err = b.DB.QueryRowContext(ctx, "INSERT INTO formats (format_type) VALUES ($1) RETURNING id", format).Scan(&formatID)
-			if err != nil {
-				return 0, err
-			}
-		} else {
-			return 0, err
-		}
+		b.Logger.Error("Error inserting or updating format", "error", err)
+		return 0, err
 	}
 	return formatID, nil
 }
+
 
 func (b *BookModel) GetAllBooksByFormat(userID int) (map[string][]Book, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
@@ -1657,6 +1703,13 @@ func (b *BookModel) GetAllBooksByFormat(userID int) (map[string][]Book, error) {
 }
 
 func (b *BookModel) GetFormats(ctx context.Context, bookID int) ([]string, error) {
+	// Check cache
+	if cache, found := formatsCache.Load(bookID); found {
+		b.Logger.Info("Fetching formats book info from cache", "bookID", bookID)
+		cachedFormats := cache.([]string)
+		return append([]string(nil), cachedFormats...), nil
+	}
+
 	var rows *sql.Rows
 	var err error
 
@@ -1697,12 +1750,20 @@ func (b *BookModel) GetFormats(ctx context.Context, bookID int) ([]string, error
 		return nil, err
 	}
 
+	// Cache result
+	formatsCache.Store(bookID, formats)
+	b.Logger.Info("Caching formats for book", "bookID", bookID)
+
 	return formats, nil
 }
 
 
 // Helper fn for UpdateBook
 func (b *BookModel) updateFormats(ctx context.Context, bookID int, newFormats []string) error {
+	// Invalidate cache for bookID
+	formatsCache.Delete(bookID)
+	b.Logger.Info("Invalidating formats cache for book", "bookID", bookID)
+
 	// Fetch current formats for the book, passing context
 	currentFormats, err := b.GetFormats(ctx, bookID)
 	if err != nil {
@@ -1765,6 +1826,8 @@ func (b *BookModel) RemoveSpecificFormats(ctx context.Context, bookID int, forma
 
 // DEBUG - to possibly remove
 func (b *BookModel) RemoveFormats(bookID int) error {
+	formatsCache.Delete(bookID)
+
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
 
@@ -1782,25 +1845,20 @@ func (b *BookModel) RemoveFormats(bookID int) error {
 // Genres
 func (b *BookModel) addOrGetGenreID(ctx context.Context, genreName string) (int, error) {
 	var genreID int
-	// Check if the genre already exists
-	statement := `SELECT id FROM genres WHERE name = $1`
+	statement := `
+		INSERT INTO genres (name)
+		VALUES ($1)
+		ON CONFLICT (name) DO UPDATE
+		SET name = EXCLUDED.name
+		RETURNING id`
 	err := b.DB.QueryRowContext(ctx, statement, genreName).Scan(&genreID)
-	if err != nil && err != sql.ErrNoRows {
-		b.Logger.Error("Error checking genre existence", "error", err)
+	if err != nil {
+		b.Logger.Error("Error inserting or updating genre", "error", err)
 		return 0, err
 	}
-
-	if genreID == 0 { // If the genre does not exist, insert it
-		statement := `INSERT INTO genres (name) VALUES ($1) RETURNING id`
-		err = b.DB.QueryRowContext(ctx, statement, genreName).Scan(&genreID)
-		if err != nil {
-			b.Logger.Error("Error inserting new genre", "error", err)
-			return 0, err
-		}
-	}
-
 	return genreID, nil
 }
+
 
 func (b *BookModel) AddGenre(ctx context.Context, bookID, genreID int) error {
 	statement := `INSERT INTO book_genres (book_id, genre_id) VALUES ($1, $2)`
@@ -1814,6 +1872,13 @@ func (b *BookModel) AddGenre(ctx context.Context, bookID, genreID int) error {
 }
 
 func (b *BookModel) GetGenres(ctx context.Context, bookID int) ([]string, error) {
+	// Check cache
+	if cache, found := genresCache.Load(bookID); found {
+		b.Logger.Info("Fetching genres from cache for book", "bookID", bookID)
+		cachedGenres := cache.([]string)
+		return append([]string(nil), cachedGenres...), nil
+	}
+
 	var rows *sql.Rows
 	var err error
 
@@ -1853,6 +1918,10 @@ func (b *BookModel) GetGenres(ctx context.Context, bookID int) ([]string, error)
 		b.Logger.Error("Error with rows during genres fetch", "error", err)
 		return nil, err
 	}
+
+	// Cache the result
+	genresCache.Store(bookID, genres)
+	b.Logger.Info("Caching genres for book", "bookID", bookID)
 
 	return genres, nil
 }
@@ -1995,6 +2064,9 @@ func (b *BookModel) GetAllBooksByGenres(ctx context.Context, userID int) (map[st
 
 // Helper fn for UpdateBook
 func (b *BookModel) updateGenres(ctx context.Context, bookID int, newGenres []string) error {
+	genresCache.Delete(bookID)
+	b.Logger.Info("Invalidating genres cache for book", "bookID", bookID)
+
 	// Fetch current genres for the book with context
 	currentGenres, err := b.GetGenres(ctx, bookID)
 	if err != nil {
@@ -2087,6 +2159,8 @@ func (b *BookModel) GetTagsForBook(ctx context.Context, bookID int) ([]string, e
 
 // DEBUG - to possibly remove
 func (b *BookModel) RemoveGenres(bookID int) error {
+	genresCache.Delete(bookID)
+
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
 
