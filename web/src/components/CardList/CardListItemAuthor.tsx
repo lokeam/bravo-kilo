@@ -1,7 +1,6 @@
-//import { useNavigate } from 'react-router-dom';
-import { BsPerson } from "react-icons/bs";
 import { useNavigate } from "react-router-dom";
 import { Book } from "../../pages/Library";
+import { BsPerson } from "react-icons/bs";
 
 interface CardListItemAuthorProps {
   authorName: string;
@@ -18,11 +17,10 @@ export default function CardListItemAuthor({ authorName, books }: CardListItemAu
 
   const navigate = useNavigate();
 
-
   return (
       <li
         key={authorName}
-        onClick={() => navigate(`/library/${authorID}`, { state: books })}
+        onClick={() => navigate(`/library/${authorID}?page=author`, { state: books })}
         className="py-3 flex items-start justify-between"
       >
         <div className="flex gap-3 cursor-pointer">

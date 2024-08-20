@@ -1,3 +1,4 @@
+import { useNavigate } from 'react-router-dom';
 import { Book } from "../../pages/Library";
 
 interface CardListItemGenreProps {
@@ -37,12 +38,16 @@ export default function CardListItemGenre({ genreName, genreImgs, books }: CardL
         </div>
       );
     }
-  }
+  };
+
+  const genreID = encodeURIComponent(genreName.split(' ').join('-'));
+  const navigate = useNavigate();
 
   return (
       <li
         key={genreName}
         className="py-3 flex items-start justify-between"
+        onClick={() => navigate(`/library/${genreID}`, { state: books })}
       >
         <div className="flex gap-3 cursor-pointer">
           <div className="flex flex-row items-center justify-center rounded w-16 h-16 bg-dark-gunmetal">

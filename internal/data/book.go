@@ -185,21 +185,21 @@ func (b *BookModel) InitPreparedStatements() error {
 	// Prepared statment for GetAllBooksByGenres
 	b.getAllBooksByGenresStmt, err = b.DB.Prepare(`
 	SELECT b.id, b.title, b.subtitle, b.description, b.language, b.page_count, b.publish_date,
-		   b.image_links, b.notes, b.created_at, b.last_updated, b.isbn_10, b.isbn_13,
-		   g.name AS genre_name,
-		   json_agg(DISTINCT a.name) AS authors,
-		   json_agg(DISTINCT f.format_type) AS formats,
-		   b.tags
-	FROM books b
-	INNER JOIN book_genres bg ON b.id = bg.book_id
-	INNER JOIN genres g ON bg.genre_id = g.id
-	INNER JOIN user_books ub ON b.id = ub.book_id
-	LEFT JOIN book_authors ba ON b.id = ba.book_id
-	LEFT JOIN authors a ON ba.author_id = a.id
-	LEFT JOIN book_formats bf ON b.id = bf.book_id
-	LEFT JOIN formats f ON bf.format_id = f.id
-	WHERE ub.user_id = $1
-	GROUP BY b.id, g.name`)
+								 b.image_links, b.notes, b.created_at, b.last_updated, b.isbn_10, b.isbn_13,
+								 json_agg(DISTINCT g.name) AS genres,
+								 json_agg(DISTINCT a.name) AS authors,
+								 json_agg(DISTINCT f.format_type) AS formats,
+								 b.tags
+					FROM books b
+					INNER JOIN user_books ub ON b.id = ub.book_id
+					LEFT JOIN book_genres bg ON b.id = bg.book_id
+					LEFT JOIN genres g ON bg.genre_id = g.id
+					LEFT JOIN book_authors ba ON b.id = ba.book_id
+					LEFT JOIN authors a ON ba.author_id = a.id
+					LEFT JOIN book_formats bf ON b.id = bf.book_id
+					LEFT JOIN formats f ON bf.format_id = f.id
+					WHERE ub.user_id = $1
+					GROUP BY b.id`)
 	if err != nil {
 		return err
 	}
@@ -1926,33 +1926,33 @@ func (b *BookModel) GetGenres(ctx context.Context, bookID int) ([]string, error)
 	return genres, nil
 }
 
-
 func (b *BookModel) GetAllBooksByGenres(ctx context.Context, userID int) (map[string]interface{}, error) {
 	var rows *sql.Rows
 	var err error
 
+	// Use the prepared statement if available, else fall back to a raw query
 	if b.getAllBooksByGenresStmt != nil {
 			b.Logger.Info("Using prepared statement for retrieving books by genres")
 			rows, err = b.getAllBooksByGenresStmt.QueryContext(ctx, userID)
 	} else {
 			b.Logger.Info("Prepared statement unavailable, using fallback query for retrieving books by genres")
 			query := `
-			SELECT b.id, b.title, b.subtitle, b.description, b.language, b.page_count, b.publish_date,
-						 b.image_links, b.notes, b.created_at, b.last_updated, b.isbn_10, b.isbn_13,
-						 g.name AS genre_name,
-						 json_agg(DISTINCT a.name) AS authors,
-						 json_agg(DISTINCT f.format_type) AS formats,
-						 b.tags
-			FROM books b
-			INNER JOIN book_genres bg ON b.id = bg.book_id
-			INNER JOIN genres g ON bg.genre_id = g.id
-			INNER JOIN user_books ub ON b.id = ub.book_id
-			LEFT JOIN book_authors ba ON b.id = ba.book_id
-			LEFT JOIN authors a ON ba.author_id = a.id
-			LEFT JOIN book_formats bf ON b.id = bf.book_id
-			LEFT JOIN formats f ON bf.format_id = f.id
-			WHERE ub.user_id = $1
-			GROUP BY b.id, g.name`
+					SELECT b.id, b.title, b.subtitle, b.description, b.language, b.page_count, b.publish_date,
+								 b.image_links, b.notes, b.created_at, b.last_updated, b.isbn_10, b.isbn_13,
+								 json_agg(DISTINCT g.name) AS genres,
+								 json_agg(DISTINCT a.name) AS authors,
+								 json_agg(DISTINCT f.format_type) AS formats,
+								 b.tags
+					FROM books b
+					INNER JOIN user_books ub ON b.id = ub.book_id
+					LEFT JOIN book_genres bg ON b.id = bg.book_id
+					LEFT JOIN genres g ON bg.genre_id = g.id
+					LEFT JOIN book_authors ba ON b.id = ba.book_id
+					LEFT JOIN authors a ON ba.author_id = a.id
+					LEFT JOIN book_formats bf ON b.id = bf.book_id
+					LEFT JOIN formats f ON bf.format_id = f.id
+					WHERE ub.user_id = $1
+					GROUP BY b.id`
 			rows, err = b.DB.QueryContext(ctx, query, userID)
 	}
 
@@ -1962,58 +1962,55 @@ func (b *BookModel) GetAllBooksByGenres(ctx context.Context, userID int) (map[st
 	}
 	defer rows.Close()
 
-	genresSet := make(map[string]struct{}) // To keep track of unique genres
-	booksByGenre := map[string][]Book{}
+	genresSet := make(map[string]struct{}) // Track unique genres
+	booksByGenre := map[string][]Book{}    // Store books by genre
 
+	// Iterate through the rows and process the results
 	for rows.Next() {
 			var book Book
-			var genre string
-			var authorName string
-			var imageLinksJSON, formatsJSON, tagsJSON []byte
+			var genresJSON, authorsJSON, formatsJSON, imageLinksJSON, tagsJSON []byte
 
+			// Ensure the scan order matches the SQL query's column order
 			if err := rows.Scan(
 					&book.ID, &book.Title, &book.Subtitle, &book.Description, &book.Language, &book.PageCount,
 					&book.PublishDate, &imageLinksJSON, &book.Notes, &book.CreatedAt, &book.LastUpdated,
-					&book.ISBN10, &book.ISBN13, &genre, &formatsJSON, &authorName, &tagsJSON,
+					&book.ISBN10, &book.ISBN13, &genresJSON, &authorsJSON, &formatsJSON, &tagsJSON,
 			); err != nil {
 					b.Logger.Error("Error scanning book by genre", "error", err)
 					return nil, err
 			}
 
-			// Handle image links
+			// Unmarshal JSON fields into the respective slices
+			if err := json.Unmarshal(genresJSON, &book.Genres); err != nil {
+					b.Logger.Error("Error unmarshalling genres JSON", "error", err)
+					return nil, err
+			}
+			if err := json.Unmarshal(authorsJSON, &book.Authors); err != nil {
+					b.Logger.Error("Error unmarshalling authors JSON", "error", err)
+					return nil, err
+			}
+			if err := json.Unmarshal(formatsJSON, &book.Formats); err != nil {
+					b.Logger.Error("Error unmarshalling formats JSON", "error", err)
+					return nil, err
+			}
 			if err := json.Unmarshal(imageLinksJSON, &book.ImageLinks); err != nil {
 					b.Logger.Error("Error unmarshalling image links JSON", "error", err)
 					return nil, err
 			}
-
-			// Handle formats
-			var formats []string
-			if err := json.Unmarshal(formatsJSON, &formats); err != nil {
-					b.Logger.Info("FormatsJSON is not valid JSON, treating as plain text", "formatsJSON", string(formatsJSON))
-					formats = append(formats, string(formatsJSON))
-			}
-			book.Formats = formats
-
-			// Handle tags
-			var tags []string
-			if err := json.Unmarshal(tagsJSON, &tags); err != nil {
-					b.Logger.Info("TagsJSON is not valid JSON, treating as plain text", "tagsJSON", string(tagsJSON))
-					tags = append(tags, string(tagsJSON))
-			}
-			book.Tags = tags
-
-			// Assign the author
-			if authorName != "" {
-					book.Authors = append(book.Authors, authorName)
+			if err := json.Unmarshal(tagsJSON, &book.Tags); err != nil {
+					b.Logger.Error("Error unmarshalling tags JSON", "error", err)
+					return nil, err
 			}
 
-			// Add genre to the set of genres
-			if _, found := genresSet[genre]; !found {
-					genresSet[genre] = struct{}{} // Add genre to the set
+			// Add genres to the genres set
+			for _, genre := range book.Genres {
+					genresSet[genre] = struct{}{}
 			}
 
-			// Add book to the genre's list
-			booksByGenre[genre] = append(booksByGenre[genre], book)
+			// Add book to the booksByGenre map
+			for _, genre := range book.Genres {
+					booksByGenre[genre] = append(booksByGenre[genre], book)
+			}
 	}
 
 	if err = rows.Err(); err != nil {
@@ -2021,13 +2018,14 @@ func (b *BookModel) GetAllBooksByGenres(ctx context.Context, userID int) (map[st
 			return nil, err
 	}
 
-	// Convert the set to a sorted list of genres
+	// Convert the genres set to a sorted list
 	var genres []string
 	for genre := range genresSet {
 			genres = append(genres, genre)
 	}
 	sort.Strings(genres)
 
+	// Prepare the final result with genres and their associated books
 	result := map[string]interface{}{
 			"allGenres": genres,
 	}
@@ -2043,6 +2041,7 @@ func (b *BookModel) GetAllBooksByGenres(ctx context.Context, userID int) (map[st
 					return false
 			})
 
+			// Extract the first image for each book in the genre
 			genreImgs := make([]string, len(booksByGenre[genre]))
 			for j, book := range booksByGenre[genre] {
 					if len(book.ImageLinks) > 0 {
@@ -2056,7 +2055,7 @@ func (b *BookModel) GetAllBooksByGenres(ctx context.Context, userID int) (map[st
 			}
 	}
 
-	b.Logger.Info("Final result being sent to the frontend", "result", result)
+	//b.Logger.Info("Final result being sent to the frontend", "result", result)
 	return result, nil
 }
 

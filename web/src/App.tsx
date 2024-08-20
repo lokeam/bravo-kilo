@@ -29,6 +29,7 @@ function App() {
             <Route path="/home" element={<Home />} />
             <Route path="/library" element={<Library />} />
             <Route path="/library/:authorID" element={<AuthorGenre />} />
+            <Route path="/library/:genreID" element={<AuthorGenre /> }/>
             <Route path="/library/books/add/gateway" element={<AddBookGateway />} />
             <Route path="/library/books/add/manual" element={<AddManual /> }/>
             <Route path="/library/books/add/search" element={<AddManual /> }/>

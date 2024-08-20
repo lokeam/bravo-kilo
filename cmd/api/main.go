@@ -46,10 +46,6 @@ func main() {
 	cfg.port = 8081
 
 	dataSrcName := os.Getenv("DSN")
-	fmt.Println("-----------------------------")
-	fmt.Println("DSN:", dataSrcName) // Print DSN for verification
-	fmt.Println("DSN from environment:", os.Getenv("DSN"))
-
 	db, err := driver.ConnectPostgres(dataSrcName, log)
 	if err != nil {
 		log.Error("Cannot connect to database", "error", err)

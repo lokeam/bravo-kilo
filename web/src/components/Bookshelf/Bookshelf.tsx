@@ -15,7 +15,7 @@ const Bookshelf = ({ books, category, isLoading }: BookShelfProps) => {
   });
 
   return (
-    <section className="bookshelf_wrapper pb-20 md:pb-4 flex flex-col relative w-full max-w-7xl">
+    <section className="bookshelf_wrapper pb-4 md:pb-4 flex flex-col relative w-full max-w-7xl">
       <BookshelfHeader heading={category} />
       <BookshelfCardList cardData={lastUpdatedBooks} isLoading={isLoading} />
     </section>

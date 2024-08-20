@@ -27,7 +27,7 @@ const BookshelfCard = ({ book }: CardProps) => {
           />
         </div>
       </div>
-      <div className="card_copy flex flex-col gap-x-4 items-baseline truncate">
+      <div className="card_copy flex flex-col gap-x-4 items-baseline truncate mt-2">
         <div className="copy_container flex flex-col text-left">
           <a href="/" className="title text-white w-full truncate">{title}</a>
           <div className="author_container">
