@@ -378,3 +378,84 @@ func (h *Handlers) HandleGetBooksByGenres(response http.ResponseWriter, request 
 		http.Error(response, "Error encoding response", http.StatusInternalServerError)
 	}
 }
+
+// Build Homepage Analytics Data Response
+func (h *Handlers) HandleGetHomepageData(response http.ResponseWriter, request *http.Request) {
+	// Set Content Security Policy headers
+	utils.SetCSPHeaders(response)
+
+	// Extract user ID from JWT
+	userID, err := utils.ExtractUserIDFromJWT(request)
+	if err != nil {
+		h.logger.Error("Error extracting user ID", "error", err)
+		http.Error(response, err.Error(), http.StatusUnauthorized)
+		return
+	}
+
+	// Channels to receive data from goroutines
+	userTagsChan := make(chan map[string]interface{}, 1)
+	userLangChan := make(chan map[string]interface{}, 1)
+	userGenresChan := make(chan map[string]interface{}, 1)
+	errorChan := make(chan error, 1)
+
+	// Goroutine for GetUserTags
+	go func() {
+		tags, err := h.models.Book.GetUserTags(request.Context(), userID)
+		if err != nil {
+			errorChan <- err
+			return
+		}
+		userTagsChan <- tags
+	}()
+
+	// Goroutine for GetBooksByLanguage
+	go func() {
+		langs, err := h.models.Book.GetBooksByLanguage(request.Context(), userID)
+		if err != nil {
+			errorChan <- err
+			return
+		}
+		userLangChan <- langs
+	}()
+
+	// Goroutine for GetBooksListByGenre
+	go func() {
+		genres, err := h.models.Book.GetBooksListByGenre(request.Context(), userID)
+		if err != nil {
+			errorChan <- err
+			return
+		}
+		userGenresChan <- genres
+	}()
+
+	// Collect results from channels
+	var userTags, userBkLang, userBkGenres interface{}
+
+	for i := 0; i < 3; i++ {
+		select {
+		case tags := <-userTagsChan:
+			userTags = tags
+		case langs := <-userLangChan:
+			userBkLang = langs
+		case genres := <-userGenresChan:
+			userBkGenres = genres
+		case err := <-errorChan:
+			h.logger.Error("Error fetching homepage data", "error", err)
+			http.Error(response, "Error fetching homepage data", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	// Prepare the JSON response
+	responseData := map[string]interface{}{
+		"userTags":    userTags,
+		"userBkLang":  userBkLang,
+		"userBkGenres": userBkGenres,
+	}
+
+	response.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(response).Encode(responseData); err != nil {
+		http.Error(response, "Error encoding response", http.StatusInternalServerError)
+		return
+	}
+}

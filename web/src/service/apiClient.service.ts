@@ -72,13 +72,18 @@ export const fetchBookIDByTitle = async (bookTitle: string) => {
     const response = await apiClient.get('/api/v1/books/by-title', {
       params: { title: bookTitle }
     });
-    console.log('API response:', response.data);
+    //console.log('API response:', response.data);
     return response.data.bookID; // Ensure the structure matches
   } catch (error) {
     console.error('Error fetching book ID:', error);
     throw new Error('Failed to fetch book ID');
   }
 };
+
+export const fetchHomepageData = async (userID: number) => {
+  const { data } = await apiClient.get(`/api/v1/user/books/homepage?userID=${userID}`);
+  return data || [];
+}
 
 export const verifyUserToken = async () => {
   const { data } = await apiClient.get('/auth/token/verify');
@@ -90,7 +95,9 @@ export const signOutUser = async () => {
 };
 
 export const updateBook = async (book: Book, bookID: string) => {
+  console.log('apiClient service, update book before trycatch');
   try {
+    console.log('apiClient.service, updateBook, data - ', bookID);
     const { data } = await apiClient.put(`/api/v1/books/${bookID}`, book);
     return data;
   } catch (error) {

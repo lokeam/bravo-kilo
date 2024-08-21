@@ -34,6 +34,7 @@ func (app *application) routes(h *handlers.Handlers) http.Handler {
 		r.Get("/books/authors", h.HandleGetBooksByAuthors)
 		r.Get("/books/format", h.HandleGetBooksByFormat)
 		r.Get("/books/genres", h.HandleGetBooksByGenres)
+		r.Get("/books/homepage", h.HandleGetHomepageData)
 
 		// Apply rate limiting on uploads
 		r.With(middleware.RateLimiter).Post("/upload", h.UploadCSV)
