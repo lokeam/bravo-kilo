@@ -30,6 +30,7 @@ export default {
         'night': '#111827', // potential dark bg
         'charcoal': '#334155', // top nav/other border color
         'hepatica': '#6366F1', // bright purple, cta btn
+        'hepatica-lt': '#8470ff', // light purple
         'majorelle': '#4F46E5', // dark purple, cta btn, white text (#fff)
         'margorelle-d1': '#423ABF', // 1 shade darker than margorelle
         'margorelle-d2': '#352F99', // 2 shades darker than margorelle
@@ -51,11 +52,14 @@ export default {
         'nevada-gray': '#606d79',
         'dark-ebony': '#0c0c0c',
         'dark-clay': '#1f2937',
+        'maya-blue': '#67bfff33',
+        'midnight-navy': '#374151',
       }
     },
     screens: {
       'lgMobile': '600px',
       'mdTablet': '940px',
+      'mdDesktop': '1280px',
     }
   },
   plugins: [],
