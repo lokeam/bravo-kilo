@@ -8,13 +8,9 @@ import BarChartCard from '../components/Statistics/BarChartCard';
 import TableCard from '../components/Statistics/TableCard';
 import DonutChartCard from '../components/Statistics/DonutChartCard';
 
-
-
 const Home = () => {
   const { user } = useAuth();
   const userID = user?.id || 0;
-
-  console.log('Home component - userID: ', userID);
 
   const { data: books, isLoading: isLoadingBooks, isError: isErrorBooks } = useFetchBooks(userID, true);
   const { data: booksFormat, isLoading: isLoadingFormat, isError: isErrorFormat } = useFetchBooksFormat(userID, true)
@@ -23,7 +19,7 @@ const Home = () => {
 
   const booksByLang = booksHp?.userBkLang?.booksByLang || [];
   const booksByGenre = booksHp?.userBkGenres?.booksByGenre || [];
-  const totalBooks = booksHp?.userBkLang?.totalBooks || 0;
+  const totalBooks = books && books.length || 0;
   const userTags = booksHp?.userTags?.userTags || [];
   const bookFormats = [
     { label: "Physical", count: physical.length },
@@ -31,14 +27,7 @@ const Home = () => {
     { label: "Audio", count: audioBook.length },
   ];
 
-  const labelsArr = bookFormats.map((book) => book.label);
-  const formatCountArr = bookFormats.map((book) => book.count);
-  console.log('deconstructed labels arr: ', labelsArr);
-  console.log('deconstructed format count arr: ', formatCountArr);
-
-  //console.log('dashboard home - books: ', books);
-  //console.log('dashboard home == booksCount: ', booksFormat);
-  console.log('homepage fetch data: ', booksHp);
+  console.log('testing books: ', books);
 
   if (isLoadingBooks || isLoadingFormat || isLoadingHp ) return <div>Loading...</div>;
   if (isErrorBooks || isErrorFormat) return <div>Error loading data</div>;
@@ -56,7 +45,6 @@ const Home = () => {
 
         {/* ------------------- Stat Cards ------------------- */}
         <div className="grid grid-cols-12 gap-6">
-
           {/* Format data */}
           <DonutChartCard bookFormats={bookFormats}/>
 

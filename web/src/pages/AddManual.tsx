@@ -23,7 +23,7 @@ const bookSchema = z.object({
   formats: z.array(z.enum(['physical', 'eBook', 'audioBook'])),
   language: z.string().min(1, 'Please enter a language'),
   pageCount: z.number().min(1, 'Please enter a total page count'),
-  imageLinks: z.array(z.string()).min(1, 'At least one image link is required'),
+  imageLink: z.string().min(1, 'Please enter an image link'),
   description: z.string().min(1, 'Please enter a description'),
   notes: z.string().optional(),
 });
@@ -59,7 +59,7 @@ const {
     formats: [],
     language: '',
     pageCount: 0,
-    imageLinks: [''],
+    imageLink: '',
     description: '',
     notes: '',
     ...bookData, // Merge with any existing data
@@ -93,15 +93,6 @@ const {
     name: 'tags' as const,
   });
 
-  const {
-    fields: imageLinkFields,
-    append: appendImageLink,
-    remove: removeImageLink
-  } = useFieldArray({
-    control,
-    name: 'imageLinks' as const,
-  });
-
   useEffect(() => {
     // Only reset if bookData is actually different
     if (bookData && Object.keys(bookData).length > 0) {
@@ -116,7 +107,7 @@ const {
     const book: Book = {
       ...data,
       subtitle: data.subtitle || '',
-      imageLinks: data.imageLinks.map(link => link.trim()), // Ensure imageLinks is an array of trimmed strings
+      imageLink: data.imageLink.trim(),
       createdAt: defaultDate,
       lastUpdated: defaultDate,
     };
@@ -278,30 +269,12 @@ const {
             {errors.pageCount && <p className="text-red-500">{errors.pageCount.message}</p>}
           </div>
 
-          {/* Image Links Field Array */}
+          {/* Image Link */}
           <div className="col-span-2">
             <label className="block mb-2 text-base font-medium text-gray-900 dark:text-white">Image Link<span className="text-red-600 ml-px">*</span></label>
-            <div className="border border-cadet-gray rounded p-4">
-                {imageLinkFields.map((item, index) => (
-                  <div key={item.id} className="flex w-full items-center mb-4 col-span-2">
-                    <Controller
-                      render={({ field }) => <input {...field} className="bg-maastricht border border-gray-300 text-gray-900 text-base rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5  dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500" />}
-                      name={`imageLinks.${index}`}
-                      control={control}
-                    />
-                    <button type="button" onClick={() => imageLinkFields.length > 1 && removeImageLink(index)} className="ml-5 bg-dark-clay">
-                      <IoClose size={20}/>
-                    </button>
-                  </div>
-                ))}
-              <button type="button" onClick={() => appendImageLink('')} className="flex flex-row justify-between items-center bg-dark-clay py-2 px-3">
-                <IoAddOutline size={20} className="mr-1"/>
-                Add Image Link
-              </button>
-            </div>
-            {errors.imageLinks && <p className="text-red-500">{errors.imageLinks.message}</p>}
+            <input className="bg-maastricht border border-gray-00 text-gray-900 text-base rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500" id="imageLink" {...register('imageLink')} />
+            {errors.imageLink && <p className="text-red-500">{errors.imageLink.message}</p>}
           </div>
-
 
           {/* Description */}
           <div className="col-span-2">

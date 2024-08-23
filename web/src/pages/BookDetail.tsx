@@ -86,7 +86,7 @@ const BookDetail = () => {
   const authors = book.authors?.join(', ') || 'Unknown Author';
   const genres = book.genres?.join(', ') || ['Unknown Genre'];
 
-  const bookCover = book?.imageLinks[0];
+  const bookCover = book?.imageLink;
   console.log('testing bookCover: ', bookCover);
 
   return (
@@ -95,12 +95,12 @@ const BookDetail = () => {
 
       <div className="bk_edit_book_page max-w-screen-mdTablet py-20 md:pb-4 flex flex-col relative w-full">
         <div className="bk_book_thumb relative flex justify-center align-center rounded w-full">
-          {book.imageLinks && book.imageLinks.length > 0 ? (
+          {book.imageLink && book.imageLink !== "" ? (
             <img
               alt={`Thumbnail for ${book.title}`}
               className="bk_book_thumb_img object-contain rounded w-52"
               loading="lazy"
-              src={book.imageLinks[0]}
+              src={book.imageLink}
               ref={imageRef}
               onLoad={() => console.log('Image loaded, ref: ', imageRef.current)}
             />

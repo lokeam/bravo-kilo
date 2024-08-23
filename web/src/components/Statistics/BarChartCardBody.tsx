@@ -1,16 +1,19 @@
 import { convertToPercent } from '../../utils/stats';
 import { BookStatObj } from './BarChartCard';
+import { languageCodes } from '../../consts/languageCodes';
 
 interface BarChartCardBodyProps {
   barColor: string;
   bookData: BookStatObj[];
   totalBooks: number;
+  isLanguageCard?: boolean;
 }
 
 const BarChartCardBody = ({
   bookData = [],
   totalBooks = 0,
-  barColor = "bg-margorelle-comp1-r"
+  barColor = "bg-margorelle-comp1-r",
+  isLanguageCard = false,
 }: BarChartCardBodyProps) => {
 
   return (
@@ -28,7 +31,9 @@ const BarChartCardBody = ({
                   ></div>
                   <div className="relative h-full flex flex-row place-content-between items-center px-2">
                     <div className="z-10 text-white text-base text-left flex flex-row gap-2">
-                      <div className="text-white">{book.label}</div>
+                      <div className="text-white">
+                        { isLanguageCard ? languageCodes[book.label] : book.label }
+                      </div>
                     </div>
                     <div className="text-base text-right">{book.count}&nbsp; /&nbsp; {totalBooks}</div>
                   </div>

@@ -43,7 +43,7 @@ export default function BarChartCard(props: BarChartCardProps) {
     return (
       <div className="language_card col-span-full lgMobile:col-span-6 mdTablet:col-span-4 bg-maastricht shadow-sm rounded-xl">
         <ChartCardHeader topic="Language" />
-        <BarChartCardBody bookData={props.booksByLang} barColor="bg-maya-blue/[0.2]" totalBooks={props.totalBooks} />
+        <BarChartCardBody bookData={props.booksByLang} barColor="bg-maya-blue/[0.2]" totalBooks={props.totalBooks} isLanguageCard />
       </div>
     )
   }

@@ -20,7 +20,7 @@ export interface Book {
   pageCount: number;
   publishDate?: string;
   authors: string[];
-  imageLinks: string[];
+  imageLink: string;
   genres: string[];
   notes?: string;
   formats?: ('physical' | 'eBook' | 'audioBook')[];

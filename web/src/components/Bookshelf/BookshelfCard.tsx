@@ -7,7 +7,7 @@ interface CardProps {
 }
 
 const BookshelfCard = ({ book }: CardProps) => {
-  const { authors, imageLinks, title } = book
+  const { authors, imageLink, title } = book
   const navigate = useNavigate();
   const titleSubdomain = encodeURIComponent(title);
 
@@ -23,7 +23,7 @@ const BookshelfCard = ({ book }: CardProps) => {
             alt={`Book cover thumbnail for ${title}`}
             className="thumbnail absolute block top-0 left-0 h-full w-full rounded-md object-cover object-center cursor-pointer"
             loading="lazy"
-            src={imageLinks[0]}
+            src={imageLink}
           />
         </div>
       </div>
