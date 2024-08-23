@@ -3,7 +3,6 @@ import CardListItemAuthor from './CardListItemAuthor';
 import CardListItemGenre from './CardListItemGenre';
 import { Book } from '../../pages/Library';
 
-
 interface CardListItemDefault {
   books: Book[];
   isSearchPage?: boolean;

@@ -76,3 +76,16 @@
   top: -570px;
   left: 15%;
 }
+
+.genre_card,
+.tags_card {
+    overflow-y: scroll;
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none;  /* Internet Explorer 10+ */
+}
+
+.genre_card::-webkit-scrollbar,
+.tags_card::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+}

@@ -68,17 +68,12 @@ type Book struct {
 	EmptyFields     []string   `json:"emptyFields"`
 }
 
-type CacheEntry struct {
+type UserTagsCacheEntry struct {
 	data      map[string]interface{}
 	timestamp time.Time
 }
 
-type cacheEntry struct {
-	data      map[string]interface{}
-	timestamp time.Time
-}
-
-type TagCacheEntry struct {
+type BooksByGenresCacheEntry struct {
 	data      map[string]interface{}
 	timestamp time.Time
 }
@@ -283,15 +278,14 @@ func (b *BookModel) InitPreparedStatements() error {
 	}
 
 	b.getBookListByGenreStmt, err = b.DB.Prepare(`
-	SELECT g.name, COUNT(b.id) AS total_books
+	SELECT g.name, COUNT(DISTINCT b.id) AS total_books
 		FROM books b
 		INNER JOIN book_genres bg ON b.id = bg.book_id
 		INNER JOIN genres g ON bg.genre_id = g.id
 		INNER JOIN user_books ub ON b.id = ub.book_id
 		WHERE ub.user_id = $1
 		GROUP BY g.name
-		ORDER BY total_books DESC
-	`)
+		ORDER BY total_books DESC`)
 	if err != nil {
 		return err
 	}
@@ -2119,18 +2113,16 @@ func (b *BookModel) GetAllBooksByGenres(ctx context.Context, userID int) (map[st
 }
 
 func (b *BookModel) GetBooksListByGenre(ctx context.Context, userID int) (map[string]interface{}, error) {
-	// Define TTL (e.g., 1 hour)
 	const cacheTTL = time.Hour
 
 	// Check cache with TTL
 	if cacheEntry, found := booksByGenresCache.Load(userID); found {
-		entry := cacheEntry.(CacheEntry)
-		if time.Since(entry.timestamp) < cacheTTL {
-			b.Logger.Info("Fetching genres info from cache for user", "userID", userID)
-			return entry.data, nil
-		}
-		// Cache entry expired, delete it
-		booksByGenresCache.Delete(userID)
+			entry := cacheEntry.(BooksByGenresCacheEntry)
+			if time.Since(entry.timestamp) < cacheTTL {
+					b.Logger.Info("Fetching genres info from cache for user", "userID", userID)
+					return entry.data, nil
+			}
+			booksByGenresCache.Delete(userID) // Cache entry expired, delete it
 	}
 
 	var rows *sql.Rows
@@ -2138,64 +2130,65 @@ func (b *BookModel) GetBooksListByGenre(ctx context.Context, userID int) (map[st
 
 	// Use prepared statement if available
 	if b.getBookListByGenreStmt != nil {
-		b.Logger.Info("Using prepared statement for fetching genres")
-		rows, err = b.getBookListByGenreStmt.QueryContext(ctx, userID)
+			b.Logger.Info("Using prepared statement for fetching genres")
+			rows, err = b.getBookListByGenreStmt.QueryContext(ctx, userID)
 	} else {
-		b.Logger.Warn("Prepared statement for fetching genres unavailable. Falling back to raw SQL query")
-		query := `
-		SELECT g.name, COUNT(b.id) AS total_books
-		FROM books b
-		INNER JOIN book_genres bg ON b.id = bg.book_id
-		INNER JOIN genres g ON bg.genre_id = g.id
-		INNER JOIN user_books ub ON b.id = ub.book_id
-		WHERE ub.user_id = $1
-		GROUP BY g.name
-		ORDER BY total_books DESC`
-		rows, err = b.DB.QueryContext(ctx, query, userID)
+			b.Logger.Warn("Prepared statement for fetching genres unavailable. Falling back to raw SQL query")
+			query := `
+					SELECT g.name, COUNT(DISTINCT b.id) AS total_books
+					FROM books b
+					INNER JOIN book_genres bg ON b.id = bg.book_id
+					INNER JOIN genres g ON bg.genre_id = g.id
+					INNER JOIN user_books ub ON b.id = ub.book_id
+					WHERE ub.user_id = $1
+					GROUP BY g.name
+					ORDER BY total_books DESC`
+			rows, err = b.DB.QueryContext(ctx, query, userID)
 	}
 
 	if err != nil {
-		b.Logger.Error("Error fetching books by genre", "error", err)
-		return nil, err
+			b.Logger.Error("Error fetching books by genre", "error", err)
+			return nil, err
 	}
 	defer rows.Close()
 
 	// Collect genres and total book count
-	var totalBooks int
-	booksByGenre := []map[string]int{}
+	var booksByGenre []map[string]interface{}
 
 	for rows.Next() {
-		var genre string
-		var count int
-		if err := rows.Scan(&genre, &count); err != nil {
-			b.Logger.Error("Error scanning genre data", "error", err)
-			return nil, err
-		}
-		booksByGenre = append(booksByGenre, map[string]int{genre: count})
-		totalBooks += count
+			var genre string
+			var count int
+			if err := rows.Scan(&genre, &count); err != nil {
+					b.Logger.Error("Error scanning genre data", "error", err)
+					return nil, err
+			}
+
+			booksByGenre = append(booksByGenre, map[string]interface{}{
+					"label": genre,
+					"count": count,
+			})
 	}
 
-	// Check for any errors encountered during iteration
 	if err = rows.Err(); err != nil {
-		b.Logger.Error("Error iterating rows", "error", err)
-		return nil, err
+			b.Logger.Error("Error iterating rows", "error", err)
+			return nil, err
 	}
 
 	// Prepare the result
 	result := map[string]interface{}{
-		"booksByGenre": booksByGenre,
-		"totalBooks":   totalBooks,
+			"booksByGenre": booksByGenre,
 	}
 
 	// Cache the result with TTL
-	booksByGenresCache.Store(userID, cacheEntry{
-		data:      result,
-		timestamp: time.Now(),
+	booksByGenresCache.Store(userID, BooksByGenresCacheEntry{
+			data:      result,
+			timestamp: time.Now(),
 	})
 	b.Logger.Info("Caching genres info for user", "userID", userID)
 
 	return result, nil
 }
+
 
 // Helper fn for UpdateBook
 func (b *BookModel) updateGenres(ctx context.Context, bookID int, newGenres []string) error {
@@ -2314,8 +2307,8 @@ func (b *BookModel) GetBooksByLanguage(ctx context.Context, userID int) (map[str
 	// Check cache
 	cacheKey := fmt.Sprintf("booksByLang:%d", userID)
 	if cache, found := booksByLangCache.Load(cacheKey); found {
-		b.Logger.Info("Fetching books by language from cache", "userID", userID)
-		return cache.(map[string]interface{}), nil
+			b.Logger.Info("Fetching books by language from cache", "userID", userID)
+			return cache.(map[string]interface{}), nil
 	}
 
 	// Use prepared statement if available
@@ -2323,51 +2316,51 @@ func (b *BookModel) GetBooksByLanguage(ctx context.Context, userID int) (map[str
 	var err error
 
 	if b.getAllLangStmt != nil {
-		b.Logger.Info("Using prepared statement for fetching books by language")
-		rows, err = b.getAllLangStmt.QueryContext(ctx, userID)
+			b.Logger.Info("Using prepared statement for fetching books by language")
+			rows, err = b.getAllLangStmt.QueryContext(ctx, userID)
 	} else {
-		b.Logger.Warn("Prepared statement for fetching books by language is unavailable. Falling back to raw query")
-		query := `
-		SELECT language, COUNT(*) AS total
-		FROM books
-		INNER JOIN user_books ub ON books.id = ub.book_id
-		WHERE ub.user_id = $1
-		GROUP BY language
-		ORDER BY total DESC`
-		rows, err = b.DB.QueryContext(ctx, query, userID)
+			b.Logger.Warn("Prepared statement for fetching books by language is unavailable. Falling back to raw query")
+			query := `
+			SELECT language, COUNT(*) AS total
+			FROM books
+			INNER JOIN user_books ub ON books.id = ub.book_id
+			WHERE ub.user_id = $1
+			GROUP BY language
+			ORDER BY total DESC`
+			rows, err = b.DB.QueryContext(ctx, query, userID)
 	}
 
 	if err != nil {
-		b.Logger.Error("Error fetching books by language", "error", err)
-		return nil, err
+			b.Logger.Error("Error fetching books by language", "error", err)
+			return nil, err
 	}
 	defer rows.Close()
 
-	booksByLang := []map[string]int{}
-	var totalBooks int
+	var booksByLang []map[string]interface{}
 
 	// Process the results
 	for rows.Next() {
-		var language string
-		var total int
+			var language string
+			var total int
 
-		if err := rows.Scan(&language, &total); err != nil {
-			b.Logger.Error("Error scanning books by language", "error", err)
-			return nil, err
-		}
+			if err := rows.Scan(&language, &total); err != nil {
+					b.Logger.Error("Error scanning books by language", "error", err)
+					return nil, err
+			}
 
-		booksByLang = append(booksByLang, map[string]int{language: total})
-		totalBooks += total
+			booksByLang = append(booksByLang, map[string]interface{}{
+					"label": language,
+					"count": total,
+			})
 	}
 
 	if err = rows.Err(); err != nil {
-		b.Logger.Error("Error finalizing rows", "error", err)
-		return nil, err
+			b.Logger.Error("Error finalizing rows", "error", err)
+			return nil, err
 	}
 
 	result := map[string]interface{}{
-		"booksByLang": booksByLang,
-		"totalBooks":  totalBooks,
+			"booksByLang": booksByLang,
 	}
 
 	// Cache the result
@@ -2381,13 +2374,13 @@ func (b *BookModel) GetBooksByLanguage(ctx context.Context, userID int) (map[str
 func (b *BookModel) GetUserTags(ctx context.Context, userID int) (map[string]interface{}, error) {
 	// Check cache with TTL
 	if cacheEntry, found := userTagsCache.Load(userID); found {
-		entry := cacheEntry.(TagCacheEntry)
-		if time.Since(entry.timestamp) < time.Hour {
-			b.Logger.Info("Fetching user tags from cache for user", "userID", userID)
-			return entry.data, nil
-		}
-		// Cache entry expired, delete it
-		userTagsCache.Delete(userID)
+			entry := cacheEntry.(UserTagsCacheEntry)
+			if time.Since(entry.timestamp) < time.Hour {
+					b.Logger.Info("Fetching user tags from cache for user", "userID", userID)
+					return entry.data, nil
+			}
+			// Cache entry expired, delete it
+			userTagsCache.Delete(userID)
 	}
 
 	var rows *sql.Rows
@@ -2395,50 +2388,48 @@ func (b *BookModel) GetUserTags(ctx context.Context, userID int) (map[string]int
 
 	// Use prepared statement if available
 	if b.getUserTagsStmt != nil {
-		b.Logger.Info("Using prepared statement for fetching user tags")
-		rows, err = b.getUserTagsStmt.QueryContext(ctx, userID)
+			b.Logger.Info("Using prepared statement for fetching user tags")
+			rows, err = b.getUserTagsStmt.QueryContext(ctx, userID)
 	} else {
-		b.Logger.Warn("Prepared statement for fetching user tags unavailable. Falling back to raw SQL query")
-		query := `
-		SELECT b.tags
-		FROM books b
-		INNER JOIN user_books ub ON b.id = ub.book_id
-		WHERE ub.user_id = $1`
-		rows, err = b.DB.QueryContext(ctx, query, userID)
+			b.Logger.Warn("Prepared statement for fetching user tags unavailable. Falling back to raw SQL query")
+			query := `
+			SELECT b.tags
+			FROM books b
+			INNER JOIN user_books ub ON b.id = ub.book_id
+			WHERE ub.user_id = $1`
+			rows, err = b.DB.QueryContext(ctx, query, userID)
 	}
 
 	if err != nil {
-		b.Logger.Error("Error fetching user tags", "error", err)
-		return nil, err
+			b.Logger.Error("Error fetching user tags", "error", err)
+			return nil, err
 	}
 	defer rows.Close()
 
 	// Process the tags and count occurrences
 	tagCount := make(map[string]int)
-	var totalUniqueTags int
 
 	for rows.Next() {
-		var tagsJSON []byte
-		if err := rows.Scan(&tagsJSON); err != nil {
-			b.Logger.Error("Error scanning tags", "error", err)
-			return nil, err
-		}
+			var tagsJSON []byte
+			if err := rows.Scan(&tagsJSON); err != nil {
+					b.Logger.Error("Error scanning tags", "error", err)
+					return nil, err
+			}
 
-		var tags []string
-		if err := json.Unmarshal(tagsJSON, &tags); err != nil {
-			b.Logger.Error("Error unmarshalling tags JSON", "error", err)
-			return nil, err
-		}
+			var tags []string
+			if err := json.Unmarshal(tagsJSON, &tags); err != nil {
+					b.Logger.Error("Error unmarshalling tags JSON", "error", err)
+					return nil, err
+			}
 
-		// Convert spaces to underscores and count occurrences
-		for _, tag := range tags {
-			formattedTag := strings.ReplaceAll(tag, " ", "_")
-			tagCount[formattedTag]++
-			totalUniqueTags++
-		}
+			// Convert spaces to underscores and count occurrences
+			for _, tag := range tags {
+					formattedTag := strings.ReplaceAll(tag, " ", "_")
+					tagCount[formattedTag]++
+			}
 	}
 
-	// Create a max-heap for efficient sorting
+	// Create a max heap for more efficient sorting
 	h := &customheap.TagHeap{}
 	heap.Init(h)
 
@@ -2446,21 +2437,23 @@ func (b *BookModel) GetUserTags(ctx context.Context, userID int) (map[string]int
 		heap.Push(h, customheap.TagCount{Tag: tag, Count: count})
 	}
 
-	// Collect the sorted tags from the heap
-	userTags := make([]map[string]int, 0, len(tagCount))
+	// Create the result array with the new format
+	userTags := make([]map[string]interface{}, 0, len(tagCount))
 	for h.Len() > 0 {
 		tagCount := heap.Pop(h).(customheap.TagCount)
-		userTags = append(userTags, map[string]int{tagCount.Tag: tagCount.Count})
+		userTags = append(userTags, map[string]interface{}{
+					"label":   tagCount.Tag,
+					"count": tagCount.Count,
+			})
 	}
 
 	// Prepare the result
 	result := map[string]interface{}{
-		"userTags":       userTags,
-		"totalUniqueTags": totalUniqueTags,
+			"userTags":       userTags,
 	}
 
 	// Cache the result
-	userTagsCache.Store(userID, TagCacheEntry{data: result, timestamp: time.Now()})
+	userTagsCache.Store(userID, UserTagsCacheEntry{data: result, timestamp: time.Now()})
 	b.Logger.Info("Caching user tags for user", "userID", userID)
 
 	return result, nil
