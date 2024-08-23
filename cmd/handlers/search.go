@@ -70,14 +70,17 @@ func (h *Handlers) formatGoogleBooksResponse(response http.ResponseWriter, books
 			PublishDate: utils.GetStringValOrDefault(volumeInfo, "publishedDate", ""),
 		}
 
-		// Handle image links, ensuring it's always an array
-		formattedBook.ImageLinks = []string{}
+		// Handle image link, selecting the largest available thumbnail
 		if imageLinks, ok := volumeInfo["imageLinks"].(map[string]interface{}); ok {
-			formattedBook.ImageLinks = append(formattedBook.ImageLinks,
-				utils.GetStringValOrDefault(imageLinks, "thumbnail", ""),
-				utils.GetStringValOrDefault(imageLinks, "smallThumbnail", ""),
-			)
+			if largeThumbnail, ok := imageLinks["thumbnail"].(string); ok {
+					formattedBook.ImageLink = utils.CleanImageLink(largeThumbnail)
+			} else if smallThumbnail, ok := imageLinks["smallThumbnail"].(string); ok {
+					formattedBook.ImageLink = utils.CleanImageLink(smallThumbnail)
+			} else {
+					formattedBook.ImageLink = "" // Handle cases where no image link is available
+			}
 		}
+
 
 		// Handle ISBN numbers
 		if industryIdentifiers, ok := volumeInfo["industryIdentifiers"].([]interface{}); ok {

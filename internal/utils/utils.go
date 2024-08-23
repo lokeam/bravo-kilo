@@ -15,7 +15,7 @@ import (
 // Book struct to hold simplified structure for Books
 type Book struct {
 	Authors     []string    `json:"authors"`
-	ImageLinks  []string    `json:"imageLinks"`
+	ImageLink   string      `json:"imageLink"`
 	Title       string      `json:"title"`
 	Subtitle    string      `json:"subtitle"`
 	Details     BookDetails `json:"details"`
@@ -203,4 +203,9 @@ func FindDifference(a, b []string) []string {
 		}
 	}
 	return diff
+}
+
+// Scrub "\" chars from image links
+func CleanImageLink(link string) string {
+	return strings.Trim(link, "\"")
 }

@@ -54,7 +54,7 @@ type Book struct {
 	PageCount       int        `json:"pageCount"`
 	PublishDate     string     `json:"publishDate"`
 	Authors         []string   `json:"authors"`
-	ImageLinks      []string   `json:"imageLinks"`
+	ImageLink       string     `json:"imageLink"`
 	Genres          []string   `json:"genres"`
 	Notes           string     `json:"notes"`
 	Formats         []string   `json:"formats"`
@@ -93,7 +93,7 @@ func (b *BookModel) InitPreparedStatements() error {
 
 	// Prepared insert statement for books
 	b.insertBookStmt, err = b.DB.Prepare(`
-		INSERT INTO books (title, subtitle, description, language, page_count, publish_date, image_links, notes, tags, created_at, last_updated, isbn_10, isbn_13)
+		INSERT INTO books (title, subtitle, description, language, page_count, publish_date, image_link, notes, tags, created_at, last_updated, isbn_10, isbn_13)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id`)
 	if err != nil {
 		return err
@@ -104,7 +104,7 @@ func (b *BookModel) InitPreparedStatements() error {
 		WITH book_data AS (
 			SELECT
 				b.id, b.title, b.subtitle, b.description, b.language, b.page_count, b.publish_date,
-				b.image_links, b.notes, b.tags, b.created_at, b.last_updated, b.isbn_10, b.isbn_13
+				b.image_link, b.notes, b.tags, b.created_at, b.last_updated, b.isbn_10, b.isbn_13
 			FROM books b
 			WHERE b.id = $1
 		),
@@ -128,7 +128,7 @@ func (b *BookModel) InitPreparedStatements() error {
 		)
 		SELECT
 			b.id, b.title, b.subtitle, b.description, b.language, b.page_count, b.publish_date,
-			b.image_links, b.notes, b.tags, b.created_at, b.last_updated, b.isbn_10, b.isbn_13,
+			b.image_link, b.notes, b.tags, b.created_at, b.last_updated, b.isbn_10, b.isbn_13,
 			a.name AS author_name, g.name AS genre_name, f.format_type AS format_type
 		FROM book_data b
 		LEFT JOIN authors_data a ON true
@@ -170,7 +170,7 @@ func (b *BookModel) InitPreparedStatements() error {
 	// Prepared select statement for GetAllBooksByUserID
 	b.getAllBooksByUserIDStmt, err = b.DB.Prepare(`
 		SELECT b.id, b.title, b.subtitle, b.description, b.language, b.page_count, b.publish_date,
-					 b.image_links, b.notes, b.created_at, b.last_updated, b.isbn_10, b.isbn_13
+					 b.image_link, b.notes, b.created_at, b.last_updated, b.isbn_10, b.isbn_13
 		FROM books b
 		INNER JOIN user_books ub ON b.id = ub.book_id
 		WHERE ub.user_id = $1`)
@@ -181,7 +181,7 @@ func (b *BookModel) InitPreparedStatements() error {
 	// Prepared select statement for GetAllBooksByAuthors
 	b.getAllBooksByAuthorsStmt, err = b.DB.Prepare(`
 	SELECT b.id, b.title, b.subtitle, b.description, b.language, b.page_count, b.publish_date,
-				 b.image_links, b.notes, b.created_at, b.last_updated, b.isbn_10, b.isbn_13,
+				 b.image_link, b.notes, b.created_at, b.last_updated, b.isbn_10, b.isbn_13,
 				 a.name AS author_name,
 				 json_agg(DISTINCT g.name) AS genres,
 				 json_agg(DISTINCT f.format_type) AS formats,
@@ -203,7 +203,7 @@ func (b *BookModel) InitPreparedStatements() error {
 	// Prepared statment for GetAllBooksByGenres
 	b.getAllBooksByGenresStmt, err = b.DB.Prepare(`
 	SELECT b.id, b.title, b.subtitle, b.description, b.language, b.page_count, b.publish_date,
-								 b.image_links, b.notes, b.created_at, b.last_updated, b.isbn_10, b.isbn_13,
+								 b.image_link, b.notes, b.created_at, b.last_updated, b.isbn_10, b.isbn_13,
 								 json_agg(DISTINCT g.name) AS genres,
 								 json_agg(DISTINCT a.name) AS authors,
 								 json_agg(DISTINCT f.format_type) AS formats,
@@ -226,7 +226,7 @@ func (b *BookModel) InitPreparedStatements() error {
 	b.getAllBooksByFormatStmt, err = b.DB.Prepare(`
 	SELECT
 		b.id, b.title, b.subtitle, b.description, b.language, b.page_count, b.publish_date,
-		b.image_links, b.notes, b.created_at, b.last_updated, b.isbn_10, b.isbn_13,
+		b.image_link, b.notes, b.created_at, b.last_updated, b.isbn_10, b.isbn_13,
 		f.format_type,
 		array_to_json(array_agg(DISTINCT a.name)) as authors,
 		array_to_json(array_agg(DISTINCT g.name)) as genres,
@@ -317,11 +317,6 @@ func (b *BookModel) InsertBook(book Book, userID int) (int, error) {
 
 	var newId int
 
-	imageLinksJSON, err := json.Marshal(book.ImageLinks)
-	if err != nil {
-		b.Logger.Error("Error marshalling image links to JSON", "error", err)
-		return 0, err
-	}
 	tagsJSON, err := json.Marshal(book.Tags)
 	if err != nil {
 		b.Logger.Error("Error marshalling tags to JSON", "error", err)
@@ -341,7 +336,7 @@ func (b *BookModel) InsertBook(book Book, userID int) (int, error) {
 			book.Language,
 			book.PageCount,
 			formattedPublishDate,
-			imageLinksJSON,
+			book.ImageLink,
 			book.Notes,
 			tagsJSON,
 			time.Now(),
@@ -352,7 +347,7 @@ func (b *BookModel) InsertBook(book Book, userID int) (int, error) {
 	} else {
 		// Fallback to using raw SQL query if prepared statement unavailable
 		b.Logger.Warn("Prepared statement for inserting a book is not available. Falling back to raw SQL query")
-		statement := `INSERT INTO books (title, subtitle, description, language, page_count, publish_date, image_links, notes, tags, created_at, last_updated, isbn_10, isbn_13)
+		statement := `INSERT INTO books (title, subtitle, description, language, page_count, publish_date, image_link, notes, tags, created_at, last_updated, isbn_10, isbn_13)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id`
 		err = tx.QueryRowContext(ctx, statement,
 			book.Title,
@@ -361,7 +356,7 @@ func (b *BookModel) InsertBook(book Book, userID int) (int, error) {
 			book.Language,
 			book.PageCount,
 			formattedPublishDate,
-			imageLinksJSON,
+			book.ImageLink,
 			book.Notes,
 			tagsJSON,
 			time.Now(),
@@ -504,7 +499,7 @@ func (b *BookModel) GetBookByID(id int) (*Book, error) {
 		WITH book_data AS (
 			SELECT
 				b.id, b.title, b.subtitle, b.description, b.language, b.page_count, b.publish_date,
-				b.image_links, b.notes, b.tags, b.created_at, b.last_updated, b.isbn_10, b.isbn_13
+				b.image_link, b.notes, b.tags, b.created_at, b.last_updated, b.isbn_10, b.isbn_13
 			FROM books b
 			WHERE b.id = $1
 		),
@@ -528,7 +523,7 @@ func (b *BookModel) GetBookByID(id int) (*Book, error) {
 		)
 		SELECT
 			b.id, b.title, b.subtitle, b.description, b.language, b.page_count, b.publish_date,
-			b.image_links, b.notes, b.tags, b.created_at, b.last_updated, b.isbn_10, b.isbn_13,
+			b.image_link, b.notes, b.tags, b.created_at, b.last_updated, b.isbn_10, b.isbn_13,
 			a.name AS author_name, g.name AS genre_name, f.format_type AS format_type
 		FROM book_data b
 		LEFT JOIN authors_data a ON true
@@ -545,7 +540,7 @@ func (b *BookModel) GetBookByID(id int) (*Book, error) {
 	defer rows.Close()
 
 	var book Book
-	var imageLinksJSON, tagsJSON []byte
+	var tagsJSON []byte
 	authorsSet := collections.NewSet()
 	genresSet := collections.NewSet()
 	formatsSet := collections.NewSet()
@@ -561,7 +556,7 @@ func (b *BookModel) GetBookByID(id int) (*Book, error) {
 			&book.Language,
 			&book.PageCount,
 			&book.PublishDate,
-			&imageLinksJSON,
+			&book.ImageLink,
 			&book.Notes,
 			&tagsJSON,
 			&book.CreatedAt,
@@ -587,11 +582,7 @@ func (b *BookModel) GetBookByID(id int) (*Book, error) {
 		}
 	}
 
-	// Unmarshal JSON fields
-	if err := json.Unmarshal(imageLinksJSON, &book.ImageLinks); err != nil {
-		b.Logger.Error("Error unmarshalling image links JSON", "error", err)
-		return nil, err
-	}
+	// Unmarshal JSON field
 	if err := json.Unmarshal(tagsJSON, &book.Tags); err != nil {
 		b.Logger.Error("Error unmarshalling tags JSON", "error", err)
 		return nil, err
@@ -721,7 +712,7 @@ func (b *BookModel) GetAllBooksByUserID(userID int) ([]Book, error) {
 		b.Logger.Warn("Prepared statement for retrieving books by user ID not initialized, using fallback query")
 		query := `
 			SELECT b.id, b.title, b.subtitle, b.description, b.language, b.page_count, b.publish_date,
-						 b.image_links, b.notes, b.created_at, b.last_updated, b.isbn_10, b.isbn_13
+						 b.image_link, b.notes, b.created_at, b.last_updated, b.isbn_10, b.isbn_13
 			FROM books b
 			INNER JOIN user_books ub ON b.id = ub.book_id
 			WHERE ub.user_id = $1`
@@ -738,7 +729,6 @@ func (b *BookModel) GetAllBooksByUserID(userID int) ([]Book, error) {
 	var bookIDs []int
 	for rows.Next() {
 		var book Book
-		var imageLinksJSON []byte
 
 		if err := rows.Scan(
 			&book.ID,
@@ -748,7 +738,7 @@ func (b *BookModel) GetAllBooksByUserID(userID int) ([]Book, error) {
 			&book.Language,
 			&book.PageCount,
 			&book.PublishDate,
-			&imageLinksJSON,
+			&book.ImageLink,
 			&book.Notes,
 			&book.CreatedAt,
 			&book.LastUpdated,
@@ -757,13 +747,6 @@ func (b *BookModel) GetAllBooksByUserID(userID int) ([]Book, error) {
 		); err != nil {
 			b.Logger.Error("Error scanning book", "error", err)
 			return nil, err
-		}
-
-		if len(imageLinksJSON) > 0 {
-			if err := json.Unmarshal(imageLinksJSON, &book.ImageLinks); err != nil {
-				b.Logger.Error("Error unmarshalling image links JSON", "error", err)
-				return nil, err
-			}
 		}
 
 		book.IsInLibrary = true
@@ -786,7 +769,6 @@ func (b *BookModel) GetAllBooksByUserID(userID int) ([]Book, error) {
 	return books, nil
 }
 
-
 // Helper fn for GetAllBooksByUserID
 func (b *BookModel) findEmptyFields(book *Book) ([]string, bool) {
 	// Define a slice of field checks
@@ -801,7 +783,7 @@ func (b *BookModel) findEmptyFields(book *Book) ([]string, bool) {
 		{book.PageCount == 0, "pageCount"},
 		{book.PublishDate == "", "publishDate"},
 		{len(book.Authors) == 0, "authors"},
-		{len(book.ImageLinks) == 0, "imageLinks"},
+		{book.ImageLink == "", "imageLink"},
 		{len(book.Genres) == 0, "genres"},
 		{len(book.Formats) == 0, "formats"},
 		{len(book.Tags) == 0, "tags"},
@@ -948,18 +930,13 @@ func (b *BookModel) Update(book Book) error {
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
 
-	imageLinksJSON, err := json.Marshal(book.ImageLinks)
-	if err != nil {
-		b.Logger.Error("Error marshalling image links to JSON", "error", err)
-		return err
-	}
 	tagsJSON, err := json.Marshal(book.Tags)
 	if err != nil {
 		b.Logger.Error("Error marshalling tags to JSON", "error", err)
 		return err
 	}
 
-	statement := `UPDATE books SET title=$1, subtitle=$2, description=$3, language=$4, page_count=$5, publish_date=$6, image_links=$7, notes=$8, tags=$9, last_updated=$10, isbn_10=$11, isbn_13=$12 WHERE id=$13`
+	statement := `UPDATE books SET title=$1, subtitle=$2, description=$3, language=$4, page_count=$5, publish_date=$6, image_link=$7, notes=$8, tags=$9, last_updated=$10, isbn_10=$11, isbn_13=$12 WHERE id=$13`
 	_, err = b.DB.ExecContext(ctx, statement,
 		book.Title,
 		book.Subtitle,
@@ -967,7 +944,7 @@ func (b *BookModel) Update(book Book) error {
 		book.Language,
 		book.PageCount,
 		book.PublishDate,
-		imageLinksJSON,
+		book.ImageLink,
 		book.Notes,
 		tagsJSON,
 		time.Now(),
@@ -1093,7 +1070,7 @@ func (b *BookModel) GetBooksByAuthor(authorName string) ([]Book, error) {
 	// Fetch all books by the author
 	query := `
 	SELECT b.id, b.title, b.subtitle, b.description, b.language, b.page_count, b.publish_date,
-	       b.image_links, b.notes, b.created_at, b.last_updated, b.isbn_10, b.isbn_13
+	       b.image_link, b.notes, b.created_at, b.last_updated, b.isbn_10, b.isbn_13
 	FROM books b
 	INNER JOIN book_authors ba ON b.id = ba.book_id
 	INNER JOIN authors a ON ba.author_id = a.id
@@ -1112,7 +1089,7 @@ func (b *BookModel) GetBooksByAuthor(authorName string) ([]Book, error) {
 
 	for rows.Next() {
 		var book Book
-		var imageLinksJSON []byte
+
 		if err := rows.Scan(
 			&book.ID,
 			&book.Title,
@@ -1121,7 +1098,7 @@ func (b *BookModel) GetBooksByAuthor(authorName string) ([]Book, error) {
 			&book.Language,
 			&book.PageCount,
 			&book.PublishDate,
-			&imageLinksJSON,
+			&book.ImageLink,
 			&book.Notes,
 			&book.CreatedAt,
 			&book.LastUpdated,
@@ -1129,12 +1106,6 @@ func (b *BookModel) GetBooksByAuthor(authorName string) ([]Book, error) {
 			&book.ISBN13,
 		); err != nil {
 			b.Logger.Error("Error scanning book", "error", err)
-			return nil, err
-		}
-
-		// Unmarshal JSONB fields
-		if err := json.Unmarshal(imageLinksJSON, &book.ImageLinks); err != nil {
-			b.Logger.Error("Error unmarshalling image links JSON", "error", err)
 			return nil, err
 		}
 
@@ -1242,7 +1213,7 @@ func (b *BookModel) GetAllBooksByAuthors(userID int) (map[string]interface{}, er
 		b.Logger.Warn("Prepared statement for retrieving books by authors not initialized, using fallback query")
 		query := `
 			SELECT b.id, b.title, b.subtitle, b.description, b.language, b.page_count, b.publish_date,
-						 b.image_links, b.notes, b.created_at, b.last_updated, b.isbn_10, b.isbn_13,
+						 b.image_link, b.notes, b.created_at, b.last_updated, b.isbn_10, b.isbn_13,
 						 a.name AS author_name,
 						 json_agg(DISTINCT g.name) AS genres,
 						 json_agg(DISTINCT f.format_type) AS formats,
@@ -1273,9 +1244,7 @@ func (b *BookModel) GetAllBooksByAuthors(userID int) (map[string]interface{}, er
 	for rows.Next() {
 		var book Book
 		var authorName string
-		var imageLinksJSON []byte
-		var genresJSON, formatsJSON []byte
-		var tagsJSON []byte
+		var genresJSON, formatsJSON, tagsJSON []byte
 
 		// Scan the result
 		if err := rows.Scan(
@@ -1286,7 +1255,7 @@ func (b *BookModel) GetAllBooksByAuthors(userID int) (map[string]interface{}, er
 			&book.Language,
 			&book.PageCount,
 			&book.PublishDate,
-			&imageLinksJSON,
+			&book.ImageLink,
 			&book.Notes,
 			&book.CreatedAt,
 			&book.LastUpdated,
@@ -1302,10 +1271,6 @@ func (b *BookModel) GetAllBooksByAuthors(userID int) (map[string]interface{}, er
 		}
 
 		// Unmarshal JSON fields
-		if err := json.Unmarshal(imageLinksJSON, &book.ImageLinks); err != nil {
-			b.Logger.Error("Error unmarshalling image links JSON", "error", err)
-			return nil, err
-		}
 		if err := json.Unmarshal(genresJSON, &book.Genres); err != nil {
 			b.Logger.Error("Error unmarshalling genres JSON", "error", err)
 			return nil, err
@@ -1358,8 +1323,6 @@ func (b *BookModel) GetAllBooksByAuthors(userID int) (map[string]interface{}, er
 	return result, nil
 }
 
-
-
 // Helper function to get the last name from a full name
 func getLastName(fullName string) string {
 	parts := strings.Fields(fullName)
@@ -1411,7 +1374,6 @@ func (b *BookModel) updateAuthors(ctx context.Context, bookID int, authors []str
 
 	return nil
 }
-
 
 // ISBN10 + ISBN13 (Returns a HashSet)
 func (b *BookModel) GetAllBooksISBN10(userID int) (*collections.Set, error) {
@@ -1655,7 +1617,7 @@ func (b *BookModel) GetAllBooksByFormat(userID int) (map[string][]Book, error) {
 		query := `
 		SELECT
 			b.id, b.title, b.subtitle, b.description, b.language, b.page_count, b.publish_date,
-			b.image_links, b.notes, b.created_at, b.last_updated, b.isbn_10, b.isbn_13,
+			b.image_link, b.notes, b.created_at, b.last_updated, b.isbn_10, b.isbn_13,
 			f.format_type,
 			array_to_json(array_agg(DISTINCT a.name)) as authors,
 			array_to_json(array_agg(DISTINCT g.name)) as genres,
@@ -1685,7 +1647,7 @@ func (b *BookModel) GetAllBooksByFormat(userID int) (map[string][]Book, error) {
 
 	for rows.Next() {
 		var book Book
-		var imageLinksJSON, authorsJSON, genresJSON, tagsJSON []byte
+		var authorsJSON, genresJSON, tagsJSON []byte
 		var formatType string
 
 		if err := rows.Scan(
@@ -1696,7 +1658,7 @@ func (b *BookModel) GetAllBooksByFormat(userID int) (map[string][]Book, error) {
 			&book.Language,
 			&book.PageCount,
 			&book.PublishDate,
-			&imageLinksJSON,
+			&book.ImageLink,
 			&book.Notes,
 			&book.CreatedAt,
 			&book.LastUpdated,
@@ -1712,10 +1674,6 @@ func (b *BookModel) GetAllBooksByFormat(userID int) (map[string][]Book, error) {
 		}
 
 		// Unmarshal JSON fields
-		if err := json.Unmarshal(imageLinksJSON, &book.ImageLinks); err != nil {
-			b.Logger.Error("Error unmarshalling image links JSON", "error", err)
-			return nil, err
-		}
 		if err := json.Unmarshal(authorsJSON, &book.Authors); err != nil {
 			b.Logger.Error("Error unmarshalling authors JSON", "error", err)
 			return nil, err
@@ -1991,7 +1949,7 @@ func (b *BookModel) GetAllBooksByGenres(ctx context.Context, userID int) (map[st
 			b.Logger.Info("Prepared statement unavailable, using fallback query for retrieving books by genres")
 			query := `
 					SELECT b.id, b.title, b.subtitle, b.description, b.language, b.page_count, b.publish_date,
-								 b.image_links, b.notes, b.created_at, b.last_updated, b.isbn_10, b.isbn_13,
+								 b.image_link, b.notes, b.created_at, b.last_updated, b.isbn_10, b.isbn_13,
 								 json_agg(DISTINCT g.name) AS genres,
 								 json_agg(DISTINCT a.name) AS authors,
 								 json_agg(DISTINCT f.format_type) AS formats,
@@ -2021,12 +1979,12 @@ func (b *BookModel) GetAllBooksByGenres(ctx context.Context, userID int) (map[st
 	// Iterate through the rows and process the results
 	for rows.Next() {
 			var book Book
-			var genresJSON, authorsJSON, formatsJSON, imageLinksJSON, tagsJSON []byte
+			var genresJSON, authorsJSON, formatsJSON, tagsJSON []byte
 
 			// Ensure the scan order matches the SQL query's column order
 			if err := rows.Scan(
 					&book.ID, &book.Title, &book.Subtitle, &book.Description, &book.Language, &book.PageCount,
-					&book.PublishDate, &imageLinksJSON, &book.Notes, &book.CreatedAt, &book.LastUpdated,
+					&book.PublishDate, &book.ImageLink, &book.Notes, &book.CreatedAt, &book.LastUpdated,
 					&book.ISBN10, &book.ISBN13, &genresJSON, &authorsJSON, &formatsJSON, &tagsJSON,
 			); err != nil {
 					b.Logger.Error("Error scanning book by genre", "error", err)
@@ -2044,10 +2002,6 @@ func (b *BookModel) GetAllBooksByGenres(ctx context.Context, userID int) (map[st
 			}
 			if err := json.Unmarshal(formatsJSON, &book.Formats); err != nil {
 					b.Logger.Error("Error unmarshalling formats JSON", "error", err)
-					return nil, err
-			}
-			if err := json.Unmarshal(imageLinksJSON, &book.ImageLinks); err != nil {
-					b.Logger.Error("Error unmarshalling image links JSON", "error", err)
 					return nil, err
 			}
 			if err := json.Unmarshal(tagsJSON, &book.Tags); err != nil {
@@ -2097,8 +2051,8 @@ func (b *BookModel) GetAllBooksByGenres(ctx context.Context, userID int) (map[st
 			// Extract the first image for each book in the genre
 			genreImgs := make([]string, len(booksByGenre[genre]))
 			for j, book := range booksByGenre[genre] {
-					if len(book.ImageLinks) > 0 {
-							genreImgs[j] = book.ImageLinks[0]
+					if book.ImageLink != "" {
+							genreImgs[j] = book.ImageLink
 					}
 			}
 
