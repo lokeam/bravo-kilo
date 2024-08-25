@@ -54,6 +54,9 @@ export default {
         'dark-clay': '#1f2937',
         'maya-blue': '#67bfff33',
         'midnight-navy': '#374151',
+        'seljuk': '#4285f4',
+        'lilac' :'#9b72cb',
+        'carmine': '#d96570',
       }
     },
     screens: {

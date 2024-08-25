@@ -52,14 +52,23 @@ export const fetchBooksAuthors = async (userID: number) => {
 export const fetchBooksGenres = async (userID: number) => {
   const { data } = await apiClient.get(`/api/v1/user/books/genres?userID=${userID}`);
   return data || {};
-}
+};
 
 export const searchBookAPI = async (query: string) => {
-  const { data } = await apiClient.get(`/api/v1/books/search`, {
+  const { data } = await apiClient.get('/api/v1/books/search', {
     params: { query },
   });
   console.log('searchBookAPI:', data); // Log the response
   return data || [];
+};
+
+export const geminiQueryAPI = async (prompt: string) => {
+  console.log('apiClient.service - geminiQueryAPI get req fired');
+  const { data } = await apiClient.get('/api/v1/books/summary', {
+    params: { prompt },
+  })
+  console.log('geminiQueryAPI response: ', data);
+  return data || {};
 };
 
 export const fetchBookByID = async (bookID: string) => {
@@ -83,7 +92,7 @@ export const fetchBookIDByTitle = async (bookTitle: string) => {
 export const fetchHomepageData = async (userID: number) => {
   const { data } = await apiClient.get(`/api/v1/user/books/homepage?userID=${userID}`);
   return data || [];
-}
+};
 
 export const verifyUserToken = async () => {
   const { data } = await apiClient.get('/auth/token/verify');
@@ -111,7 +120,7 @@ export const addBook = async (book: Book) => {
   const { data } = await apiClient.post('/api/v1/books/add', book);
   console.log('apiClient.service, received response from addBook:', data);
   return data;
-}
+};
 
 export const deleteBook = async(bookID: string) => {
   try {

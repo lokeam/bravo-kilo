@@ -3,19 +3,21 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { Controller, useForm, useFieldArray, SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import Markdown from 'react-markdown';
 
 import useUpdateBook from '../hooks/useUpdateBook';
 import useDeleteBook from '../hooks/useDeleteBook';
 import useFetchBookById from '../hooks/useFetchBookById';
 
 import Modal from '../components/Modal/ModalRoot';
+import BookSummaryBtn from '../components/BookSummaryBtn/BookSummaryBtn';
 import { Book } from './Library';
 
 import { IoClose } from 'react-icons/io5';
 import { IoAddOutline } from 'react-icons/io5';
 import { IoIosWarning } from "react-icons/io";
 import { MdDeleteForever } from "react-icons/md";
-import { deleteBook } from '../service/apiClient.service';
+import { RiFileCopyLine } from "react-icons/ri";
 
 
 const bookSchema = z.object({
@@ -39,7 +41,14 @@ const bookSchema = z.object({
 type BookFormData = z.infer<typeof bookSchema>;
 
 const EditBook = () => {
+  // Delete Modal state
   const [opened, setOpened] = useState(false);
+
+  // AI Preview + Modal state
+  // setAiSummaryPreview
+  const [aiSummaryPreview, setAiSummaryPreview] = useState("");
+  const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
+  const [isManualTrigger, setIsManualTrigger] = useState(false);
 
   const { bookID } = useParams();
 
@@ -88,10 +97,16 @@ const EditBook = () => {
     console.log(`useEffect fetched book data: ${book}`);
   }, [book, reset]);
 
+  // Debug useEffect for Preview Modal
+  useEffect(() => {
+    console.log('isPreviewModalOpen state changed:', isPreviewModalOpen);
+  }, [isPreviewModalOpen]);
+
   if (isLoading) return <div>Loading...</div>;
 
   if (isError) return <div>Error loading book data</div>;
 
+  // Form Submittal
   const onSubmit: SubmitHandler<BookFormData> = (data) => {
     console.log(`Form submitted with data ${data}`);
     const defaultDate = new Date().toISOString();
@@ -108,6 +123,24 @@ const EditBook = () => {
     navigate('/library');
   };
 
+  const copyTextContent = () => {
+    const element = document.getElementById("prompt_response");
+
+    if (element) {
+      // Get the text content with appropriate handling for line breaks
+      const textContent = Array.from(element.childNodes)
+        .map(node => (node.textContent || '').trim())
+        .join('\n\n'); // Use double newline for clearer formatting
+
+      // Copy the content using the Clipboard API
+      navigator.clipboard.writeText(textContent).then(
+        () => alert("Text copied to clipboard!"),
+        (err) => console.error("Failed to copy text: ", err)
+      );
+    }
+  };
+
+  // Delete Modal
   const openModal = () => setOpened(true);
   const closeModal = () => setOpened(false);
   const handleDelete = (event: React.MouseEvent<HTMLButtonElement>) => {
@@ -115,7 +148,30 @@ const EditBook = () => {
     deleteBook(bookID as string)
   };
 
+  // Preview Modal
+  const openPreviewModal = () => {
+    console.log('openPreviewModal fired');
+
+    setIsManualTrigger(true);
+    setIsPreviewModalOpen(true)
+  };
+
+  const closePreviewModal = () => {
+    console.log('closePreviewModal fired');
+
+    setIsManualTrigger(false);
+    setIsPreviewModalOpen(false);
+
+    console.log('state check within closePreviewModal handler: setIsPreviewModalOpen: ', isPreviewModalOpen);
+  };
+
   console.log('RHF Errors: ', errors);
+  console.log('state check OUTSIDE of closePreviewModal handler: setIsPreviewModalOpen: ', isPreviewModalOpen);
+
+  const promptTitle = book?.title || "";
+  const promptAuthors = book?.authors || [""];
+  console.log('Testing title: ', book?.title);
+  console.log('Testing authors: ', book?.authors);
 
   return (
     <section className="bg-black relative flex flex-col items-center place-content-around px-5 antialiased mdTablet:pr-5 mdTablet:ml-24 h-screen">
@@ -278,7 +334,22 @@ const EditBook = () => {
           {/* Description */}
           <div className="col-span-2">
             <label htmlFor="description" className="block mb-2 text-base font-medium text-gray-900 dark:text-white">Description<span className="text-red-600 ml-px">*</span></label>
-            <textarea id="description" rows={4} {...register('description')} className="block p-2.5 w-full text-base text-gray-900 bg-maastricht rounded border border-gray-300 focus:ring-primary-500 focus:border-primary-500  dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500" />
+            <div className="border border-cadet-gray rounded p-4">
+              <textarea id="description" rows={8} {...register('description')} className="block p-2.5 w-full text-base text-gray-900 bg-maastricht rounded border border-gray-300 focus:ring-primary-500 focus:border-primary-500  dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500 mb-4" />
+              <div className="grid w-full gap-6 lgMobile:grid-cols-3">
+              <BookSummaryBtn
+                title={promptTitle}
+                authors={promptAuthors}
+                setAiSummaryPreview={setAiSummaryPreview}
+                openPreviewModal={openPreviewModal}
+                isPreviewModalOpen={isPreviewModalOpen}
+                isManualTrigger={isManualTrigger}
+                setIsManualTrigger={setIsManualTrigger}
+              />
+
+              </div>
+            </div>
+
             {errors.description && <p className="text-red-500">{errors.description.message}</p>}
           </div>
 
@@ -292,6 +363,8 @@ const EditBook = () => {
           <button className="bg-majorelle hover:bg-hepatica" type="submit">Update Book</button>
           <button type="button" onClick={openModal} className="border-red-500 text-red-500 hover:text-white hover:bg-red-600 focus:ring-red-900">Delete Book</button>
         </form>
+
+        {/* Delete Modal */}
         <Modal opened={opened} onClose={closeModal} title="Danger zone">
           <div className="flex items-center justify-center">
             <IoIosWarning size={30} />
@@ -305,7 +378,31 @@ const EditBook = () => {
             <span>Yes, I want to delete this book</span>
             <MdDeleteForever size={30}/>
           </button>
+        </Modal>
+
+        {/* Gemini Modal */}
+        {isPreviewModalOpen && (
+          <Modal opened={isPreviewModalOpen} onClose={closePreviewModal}>
+            <div className="summary_modal p-4">
+              <h3 className="mb-2 text-2xl font-semibold text-indigo-900 dark:text-white">AI-Generated Summary Preview</h3>
+              <div id="prompt_response" className="prompt_response break-words">
+                <Markdown>{aiSummaryPreview}</Markdown>
+              </div>
+              <div className="flex justify-end space-x-4">
+                <button
+                  className="flex flex-row justify-between bg-transparent border border-gray-600"
+                  onClick={copyTextContent}>
+                    <RiFileCopyLine size={22} className="pt-1 mr-2" color="white"/>
+                  <span>Copy text</span>
+                </button>
+                <button onClick={() => {
+                  console.log('Summary Modal close button clicked');
+                  closePreviewModal();
+                }}>Close Modal</button>
+              </div>
+            </div>
           </Modal>
+        )}
       </div>
     </section>
   );
