@@ -21,7 +21,7 @@ type Claims struct {
 }
 
 // Set limiter to 1 req/second w/ burst of 5
-var limiter = rate.NewLimiter(1, 6)
+var limiter = rate.NewLimiter(1, 5)
 
 func RateLimiter(next http.Handler) http.Handler {
     return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

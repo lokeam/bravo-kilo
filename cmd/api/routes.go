@@ -44,6 +44,7 @@ func (app *application) routes(h *handlers.Handlers) http.Handler {
 		r.Use(middleware.VerifyJWT)
 		r.Get("/by-id/{bookID}", h.HandleGetBookByID)
 		r.Get("/search", h.HandleSearchBooks)
+		r.With(middleware.RateLimiter).Get("/summary", h.HandleGetGeminiBookSummary)
 		r.Get("/by-title", h.HandleGetBookIDByTitle)
 		r.Put("/{bookID}", h.HandleUpdateBook)
 		r.Post("/add", h.HandleInsertBook)
