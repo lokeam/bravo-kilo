@@ -9,6 +9,7 @@ import AddBookGateway from './pages/AddBookGateway';
 import AddManual from './pages/AddManual';
 import AddUpload from './pages/AddUpload';
 import Search from './pages/Search';
+import Settings from './pages/Settings';
 import Login from './pages/Login';
 import Library from './pages/Library';
 import AuthorGenre from './pages/AuthorGenre';
@@ -37,6 +38,7 @@ function App() {
             <Route path="/library/books/search" element={<Search />} />
             <Route path="/library/books/:bookTitle" element={<BookDetail />} />
             <Route path="/library/books/:bookID/edit" element={<EditBook />} />
+            <Route path="/settings" element={<Settings />} />
           </Route>
           <Route path="*" element={<NotFound />}/>
         </Routes>
