@@ -1,4 +1,4 @@
-import { Suspense } from 'react';
+import { Suspense, useEffect } from 'react';
 import { Route, Routes } from 'react-router-dom';
 import { AppProvider } from './components/AuthContext';
 import AuthenticatedLayout from './pages/AuthLayout';
@@ -16,10 +16,20 @@ import AuthorGenre from './pages/AuthorGenre';
 import BookDetail from './pages/BookDetail';
 import NotFound from './pages/NotFound';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
+import { useThemeStore } from './store/useThemeStote';
+
 
 import './App.css'
 
 function App() {
+  const { theme, loadTheme } = useThemeStore();
+
+  // Load theme from localStorage or system preference
+  useEffect(() => loadTheme(), [loadTheme]);
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', theme === 'dark');
+  }, [theme]);
+
   return (
     <AppProvider>
       <Suspense fallback={<h1>Loading...</h1>}>
