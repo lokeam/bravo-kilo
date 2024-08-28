@@ -36,8 +36,9 @@ func (app *application) routes(h *handlers.Handlers) http.Handler {
 		r.Get("/books/genres", h.HandleGetBooksByGenres)
 		r.Get("/books/homepage", h.HandleGetHomepageData)
 
-		// Apply rate limiting on uploads
+		// Apply rate limiting on uploads and exports"
 		r.With(middleware.RateLimiter).Post("/upload", h.UploadCSV)
+		r.With(middleware.RateLimiter).Get("/export", h.HandleExportUserBooks)
 	})
 
 	mux.Route("/api/v1/books", func(r chi.Router) {

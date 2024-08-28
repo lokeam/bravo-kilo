@@ -5,6 +5,7 @@ import (
 	"log/slog"
 
 	"github.com/golang-jwt/jwt/v5"
+	"golang.org/x/time/rate"
 )
 
 var jwtKey = []byte("extra-super-secret-256-bit-key")
@@ -18,6 +19,7 @@ type Claims struct {
 type Handlers struct {
 	logger *slog.Logger
 	models data.Models
+	exportLimiter *rate.Limiter
 }
 
 type jsonResponse struct {
