@@ -62,7 +62,7 @@ const BookSummaryBtn = (
     event.preventDefault();
     setError(null);
     refetch();
-  }, 1000);
+  }, 2000);
 
   console.log('Book Summary Button - prompt to send: ', prompt);
 
