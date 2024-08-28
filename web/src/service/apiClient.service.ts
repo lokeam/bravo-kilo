@@ -94,6 +94,38 @@ export const fetchHomepageData = async (userID: number) => {
   return data || [];
 };
 
+export const exportUserBooks = async (userID: number) => {
+  try {
+    // Fetch csv file from backend as a blob, treat it as a binary
+    const response = await apiClient.get(`/api/v1/user/export?userID=${userID}`, {
+      responseType: 'blob',
+    });
+
+    // Create blob url for file
+    const blobURL = window.URL.createObjectURL(new Blob([response.data]));
+
+    // Create invisible anchor element to trigger download
+    const invisiLink = document.createElement('a');
+    invisiLink.href = blobURL;
+    invisiLink.setAttribute('download', 'books.csv');
+
+    // Firefox - append link to body
+    document.body.appendChild(invisiLink);
+
+    // Trigger download by simulating click
+    invisiLink.click();
+
+    // Clean up side effect, remove link and revoke blob url
+    invisiLink.parentNode?.removeChild(invisiLink);
+    window.URL.revokeObjectURL(blobURL);
+  } catch (error) {
+    console.error("Error exporting user books: ", error);
+    throw error;
+  }
+};
+
+
+
 export const verifyUserToken = async () => {
   const { data } = await apiClient.get('/auth/token/verify');
   return data.user;
