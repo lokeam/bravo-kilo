@@ -1,4 +1,4 @@
-import { useThemeStore } from '../../store/useThemeStote';
+import { useThemeStore } from '../../store/useThemeStore';
 
 const SettingsItemThemeBtn = () => {
   const { theme, toggleTheme } = useThemeStore();
