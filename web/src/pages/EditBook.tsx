@@ -11,7 +11,7 @@ import useFetchBookById from '../hooks/useFetchBookById';
 
 import Modal from '../components/Modal/ModalRoot';
 import BookSummaryBtn from '../components/BookSummaryBtn/BookSummaryBtn';
-import { Book } from './Library';
+import { Book } from '../types/api';
 
 import { IoClose } from 'react-icons/io5';
 import { IoAddOutline } from 'react-icons/io5';

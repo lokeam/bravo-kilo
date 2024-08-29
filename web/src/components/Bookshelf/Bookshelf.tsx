@@ -1,6 +1,7 @@
 import BookshelfHeader from './BookshelfHeader';
 import BookshelfCardList from './BookshelfCardList';
-import { Book } from '../../pages/Library';
+import { Book } from '../../types/api';
+
 import './Bookshelf.css';
 
 interface BookShelfProps {

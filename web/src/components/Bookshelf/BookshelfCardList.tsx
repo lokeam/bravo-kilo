@@ -1,6 +1,6 @@
 import React from 'react';
 import BookshelfCard from './BookshelfCard';
-import { Book } from '../../pages/Library';
+import { Book } from '../../types/api';
 
 interface BookshelfListProps {
   cardData: Book[];

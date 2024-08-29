@@ -1,6 +1,6 @@
 import { useParams, useLocation, useSearchParams } from "react-router-dom";
-import { Book } from "./Library";
 import CardList from "../components/CardList/CardList";
+import { Book } from "../types/api";
 
 const AuthorGenre = () => {
   const { authorID = "" } = useParams<{ authorID: string }>();

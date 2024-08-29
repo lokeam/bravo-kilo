@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { Book } from '../pages/Library';
+import { Book } from '../types/api';
 
 const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_ENDPOINT,

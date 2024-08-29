@@ -2,7 +2,7 @@ import { useState } from 'react';
 import Modal from '../Modal/ModalRoot';
 import ImagePlaceholder from './ImagePlaceholder';
 import { useNavigate } from 'react-router-dom';
-import { Book } from '../../pages/Library';
+import { Book } from '../../types/api';
 
 import { BsThreeDotsVertical } from "react-icons/bs";
 import { MdMenuBook } from "react-icons/md";
@@ -30,7 +30,7 @@ export default function CardListItem({ book, isSearchPage }: CardListItemProps) 
   const { authors, id, imageLink, title } = book;
   const titleSubdomain = encodeURIComponent(title);
 
-  console.log('card list item, book: ', book);
+  //console.log('card list item, book: ', book);
 
   const handleBookClick = () => {
     navigate(`/library/books/${titleSubdomain}`, { state: { book } });

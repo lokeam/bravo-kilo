@@ -5,7 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useNavigate, useLocation } from 'react-router-dom';
 
 import useAddBook from '../hooks/useAddBook';
-import { Book } from './Library';
+import { Book } from '../types/api';
 
 import { IoClose } from 'react-icons/io5';
 import { IoAddOutline } from 'react-icons/io5';

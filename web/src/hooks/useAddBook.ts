@@ -2,7 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { addBook } from '../service/apiClient.service';
 import useStore from '../store/useStore';
-import { Book } from '../pages/Library';
+import { Book } from '../types/api';
 
 const useAddBook = () => {
   const navigate = useNavigate();

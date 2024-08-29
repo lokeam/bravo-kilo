@@ -1,21 +1,21 @@
 import CardListItem from './CardListItem'
 import CardListItemAuthor from './CardListItemAuthor';
 import CardListItemGenre from './CardListItemGenre';
-import { Book } from '../../pages/Library';
+import { Book } from '../../types/api';
 
-interface CardListItemDefault {
+type CardListItemDefault = {
   books: Book[];
   isSearchPage?: boolean;
 }
 
-interface CardListItemAuthor {
+type CardListItemAuthor = {
   allAuthors: string[];
   authorBooks: {
     [index: string]: Book[]
   };
 }
 
-interface CardListItemGenre {
+export interface CardListItemGenre {
   allGenres: string[];
   genreBooks: {
     [index: string]: {

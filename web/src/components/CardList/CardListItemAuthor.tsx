@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { Book } from "../../pages/Library";
+import { Book } from "../../types/api";
 import { BsPerson } from "react-icons/bs";
 
 interface CardListItemAuthorProps {

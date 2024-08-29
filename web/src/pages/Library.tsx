@@ -10,44 +10,26 @@ import Snackbar from '../components/Snackbar/Snackbar';
 import '../components/Modal/Modal.css';
 import { PiArrowsDownUp } from 'react-icons/pi';
 import { fetchBooksAuthors, fetchBooksFormat, fetchBooksGenres } from '../service/apiClient.service';
+import { Book, BookAuthorsData, BookGenresData, GenreData } from '../types/api';
 
-export interface Book {
-  id?: number;
-  title: string;
-  subtitle?: string;
-  description?: string;
-  language: string;
-  pageCount: number;
-  publishDate?: string;
-  authors: string[];
-  imageLink: string;
-  genres: string[];
-  notes?: string;
-  formats?: ('physical' | 'eBook' | 'audioBook')[];
-  createdAt?: string;
-  lastUpdated?: string;
-  isbn10: string;
-  isbn13: string;
-  isInLibrary?: boolean;
-  hasEmptyFields?: boolean;
-  emptyFields?: string[];
+
+// Type guard for Book Genre
+function isBookGenresData(data: any): data is BookGenresData {
+  return (
+    data &&
+    Array.isArray(data.allGenres) &&
+    Object.values(data).some(
+      (value) => {
+        return (
+          value !== null &&
+          typeof value === 'object' &&
+          'bookList' in value &&
+          'genreImgs' in value
+        );
+      }
+    )
+  );
 }
-
-// Create Book Authors/Genres intersection types that combines both obj types, expect both types
-type BookAuthorsData = {
-  allAuthors: string[]
-} & {
-  [index: string]: Book[];
-};
-
-type BookGenresData = {
-  allGenres: string[]
-} & {
-  [index: string]: {
-    bookList: Book[];
-    genreImgs: string[];
-  };
-};
 
 const Library = () => {
   // Zustand storage
@@ -58,7 +40,7 @@ const Library = () => {
 
   const [opened, setOpened] = useState(false);
   const { user } = useAuth();
-  const userID = parseInt(user.id || 0, 10);
+  const userID = user && typeof user.id === 'string' ? parseInt(user.id, 10) : 0;
   const { data: books, isLoading, isError } = useFetchBooks(userID, true);
 
   const queryClient = useQueryClient();
@@ -86,6 +68,14 @@ const Library = () => {
     gcTime: 1000 * 60 * 60 * 24,
   });
 
+  const defaultBookGenres: BookGenresData = {
+    allGenres: [], // Correctly initialized as an array of strings
+    placeholder: {
+      bookList: [], // Matches `Book[]` type
+      genreImgs: [], // Matches `string[]` type
+    },
+  };
+
   // Use useQuery to get cached book genres
   const {
     data: bookGenres = { allGenres: [], },
@@ -98,19 +88,6 @@ const Library = () => {
     gcTime: 1000 * 60 * 60 * 24,
   });
 
-
-  // useEffect(() => {
-  //   if (bookAuthors) {
-  //     console.log('Authors data:', bookAuthors); // Log to verify authors data
-  //   }
-  // }, [bookAuthors]);
-
-  // useEffect(() => {
-  //   if (bookGenres) {
-  //     console.log('Genres data:', bookGenres); // Log to verify genres data
-  //   }
-  // }, [bookGenres]);
-
   // Retrieve cached books formats
   const bookFormats = queryClient.getQueryData<{
     audioBook: Book[],
@@ -119,9 +96,27 @@ const Library = () => {
   }>(['booksFormat', userID]);
 
 
-  // console.log('bookAuthors: ', bookAuthors);
-  // console.log('****************************************');
-  // console.log('bookGenres: ', bookGenres);
+
+  const safeBookGenres = isBookGenresData(bookGenres)
+  ? bookGenres
+  : defaultBookGenres;
+
+// Separate `allGenres` and retain the rest of the genres
+console.log('Initial bookGenres:', bookGenres);
+
+// Destructure `allGenres` from the rest of the data, keeping everything else intact
+const { allGenres, ...remainingGenres } = safeBookGenres;
+
+// Log `remainingGenres` before filtering to understand what's inside
+console.log('Remaining genres before filtering:', remainingGenres);
+
+// Directly use `remainingGenres` without further filtering
+const genreBooks = remainingGenres as { [key: string]: GenreData };
+
+// Log the final genreBooks object
+console.log('Final genreBooks:', genreBooks);
+
+
 
   // Memoize book sorting
   const getSortedBooks = useCallback(
@@ -135,10 +130,11 @@ const Library = () => {
           case "title":
             return order === "asc" ? a.title.localeCompare(b.title) : b.title.localeCompare(a.title);
 
-          case "publishDate":
+          case "publishDate": {
             const dateA = a.publishDate ? new Date(a.publishDate).getTime() : 0;
             const dateB = b.publishDate ? new Date(b.publishDate).getTime() : 0;
             return order === "asc" ? dateA - dateB : dateB - dateA;
+          }
 
           case "author": {
             const aSurname = a.authors?.[0]?.split(" ").pop() || "";
@@ -235,9 +231,6 @@ const Library = () => {
   console.log('Fetched genres:', bookGenres);
   //console.log('Fetched formats:', bookFormats);
   console.log('-----');
-  // console.log('testing snackbarMessage wired to state: ', snackbarMessage);
-  // console.log('testing snackbarOpen wired to state: ', snackbarOpen);
-  // console.log('testing snackbarVariant wired to state: ', snackbarVariant);
 
 
   return (
@@ -297,7 +290,7 @@ const Library = () => {
       {activeTab === 'Authors' && bookAuthors?.allAuthors.length > 0 ? (
         <CardList allAuthors={bookAuthors.allAuthors} authorBooks={bookAuthors} />
       ) : activeTab === 'Genres' && bookGenres?.allGenres.length > 0 ? (
-        <CardList allGenres={bookGenres.allGenres} genreBooks={bookGenres} />
+        <CardList allGenres={allGenres} genreBooks={genreBooks} />
       ) : (
         sortedBooks && sortedBooks.length > 0 && <CardList books={sortedBooks} isSearchPage={false} />
       )}
