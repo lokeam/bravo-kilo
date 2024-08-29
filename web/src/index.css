@@ -19,6 +19,27 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Always reserve space for the scrollbar */
+html {
+  overflow-y: scroll;
+}
+
+/* Hide the scrollbar visually */
+body::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+/* Alternative for Firefox */
+body {
+  scrollbar-width: none; /* Firefox */
+}
+
+/* Ensure body height doesn't change on modal open */
+body.modal-open {
+  overflow: hidden;
+}
+
 a {
   font-weight: 500;
   color: #646cff;

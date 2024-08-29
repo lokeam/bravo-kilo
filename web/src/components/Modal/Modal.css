@@ -4,9 +4,20 @@
   left: 0;
   width: 100%;
   height: 100%;
+  overflow-y: auto; /* Allow the modal content to scroll */
   background: rgba(0, 0, 0, 0.5);
   z-index: 1000;
   transition: opacity 0.3s ease;
+}
+
+/* Optional: Hide scrollbar for this container */
+.modal-overlay::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+.modal-container {
+  scrollbar-width: none; /* Firefox */
 }
 
 .modal-content {
@@ -30,6 +41,42 @@
   display: flex;
   flex-direction: column;
 }
+
+
+/* Preserve the scrollbar width */
+body.modal-open {
+  overflow: hidden;
+  padding-right: var(--scrollbar-width);
+}
+
+:root {
+  --scrollbar-width: 0px;
+}
+
+/* Detect scrollbar width and apply it */
+@media (min-width: 1024px) {
+  body.modal-open::before {
+    content: "";
+    display: block;
+    width: calc(100vw - 100%);
+    height: 100%;
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 9999;
+    pointer-events: none;
+    visibility: hidden;
+    --scrollbar-width: calc(100vw - 100%);
+  }
+}
+
+.modal-overlay {
+  /* Ensure modal takes care of scrolling within itself */
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
 
 /* Animation for larger viewports */
 @media (min-width: 769px) {
