@@ -2,7 +2,6 @@ import { createContext, useContext, useState, ReactNode, useEffect } from 'react
 import { useQuery, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import axios from 'axios';
 
-
 export interface User {
   id: number;
   email?: string;
@@ -23,7 +22,6 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-/* Temporary solution while debugging TanstackQuery infinite loop on login page JWT validation */
 const fetchUser = async() => {
   const { data } = await axios.get(`${import.meta.env.VITE_API_ENDPOINT}/auth/token/verify`, { withCredentials: true });
   console.log('AuthContext - fetch user data: ', data);
@@ -40,7 +38,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     queryKey: ['user'],
     queryFn: fetchUser,
     retry: false,
-    enabled: loading,
+    // Always fetch user data when AuthProvider mounts
+    enabled: true,
   });
 
   useEffect(() => {
@@ -82,6 +81,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   console.log('AuthContext value:', value);
+
+   // Stop children from rendering until user data is ready
+  if (loading) {
+    return <div>Loading...</div>;
+  }
 
   return (
     <AuthContext.Provider value={value}>

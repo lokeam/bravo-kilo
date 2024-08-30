@@ -34,7 +34,8 @@ apiClient.interceptors.response.use(
   }
 );
 
-export const fetchUserBooks = async (userID: number) => {
+export const fetchUserBooks = async (userID?: number) => {
+  if (userID === undefined) return [];
   const { data } = await apiClient.get(`/api/v1/user/books?userID=${userID}`);
   return data.books || [];
 };

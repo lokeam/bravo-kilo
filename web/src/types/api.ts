@@ -36,3 +36,34 @@ export type BookAuthorsData = {
 } & {
   [index: string]: Book[];
 };
+
+export type BookFormatData = {
+  audioBook: Book[];
+  eBook: Book[];
+  physical: Book[];
+};
+
+export function isBookGenresData(data: any): data is BookGenresData {
+  return (
+    data &&
+    Array.isArray(data.allGenres) &&
+    Object.values(data).some(
+      (value) => {
+        return (
+          value !== null &&
+          typeof value === 'object' &&
+          'bookList' in value &&
+          'genreImgs' in value
+        );
+      }
+    )
+  );
+}
+
+export const defaultBookGenres: BookGenresData = {
+  allGenres: [], // Correctly initialized as an array of strings
+  placeholder: {
+    bookList: [], // Matches `Book[]` type
+    genreImgs: [], // Matches `string[]` type
+  },
+};

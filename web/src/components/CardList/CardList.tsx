@@ -40,10 +40,7 @@ function isCardListItemGenre(props: CardListItemProps): props is CardListItemGen
   return 'allGenres' in props && 'genreBooks' in props;
 }
 
-
-
 export default function CardList(props: CardListItemProps) {
-  // console.log('CardList Props: ', props);
 
   // Author Card List
   if (isCardListItemAuthor(props)) {
