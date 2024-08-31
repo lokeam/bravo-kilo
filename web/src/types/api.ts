@@ -7,7 +7,7 @@ export type Book = {
   pageCount: number;
   publishDate?: string;
   authors: string[];
-  imageLink: string;
+  imageLink?: string;
   genres: string[];
   notes?: string;
   formats?: ('physical' | 'eBook' | 'audioBook')[];

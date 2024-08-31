@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
+import { persist, createJSONStorage, StateStorage } from 'zustand/middleware';
 
 export interface SearchResult {
   title: string;
@@ -28,7 +28,24 @@ interface SearchStoreState {
   getFilteredSearchHistory: () => { [query: string]: SearchResult[] };
 }
 
-const FIVE_MINUTES_MS_EVECTION_LIMIT = 30 * 60 * 1000; // 30 minutes in milliseconds
+const FIVE_MINUTES_MS_EVECTION_LIMIT = 30 * 60 * 1000;
+const customStorage: StateStorage = {
+  getItem: (key) => {
+    const value = localStorage.getItem(key);
+    return value ? JSON.parse(value) : null;
+  },
+  setItem: (key, value) => {
+    localStorage.setItem(key, JSON.stringify(value));
+  },
+  removeItem: (key) => {
+    localStorage.removeItem(key);
+  },
+};
+
+// Clear storage on app close
+window.addEventListener('beforeunload', () => {
+  localStorage.removeItem('search-history');
+});
 
 const useSearchStore = create<SearchStoreState>()(
   persist(
@@ -36,17 +53,15 @@ const useSearchStore = create<SearchStoreState>()(
       searchHistory: {},
       results: {},
       addSearchHistory: (query, results) => {
-        // Store the full SearchResult objects in the history
         set((state) => {
           const newState = {
             searchHistory: {
               ...state.searchHistory,
               [query]: {
                 timestamp: Date.now(),
-                results, // Store full results here
+                results,
               },
             },
-            // Optionally update the results cache if needed
             results: {
               ...state.results,
               ...results.reduce((acc, result) => {
@@ -83,10 +98,9 @@ const useSearchStore = create<SearchStoreState>()(
     }),
     {
       name: 'search-history',
-      storage: createJSONStorage(() => localStorage),
+      storage: createJSONStorage(() => customStorage),
     }
   )
 );
-
 
 export default useSearchStore;

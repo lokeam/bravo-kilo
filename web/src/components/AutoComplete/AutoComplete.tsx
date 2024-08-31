@@ -1,11 +1,10 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import useBookSearch from '../../hooks/useBookSearch';
 import useSearchStore from '../../store/useSearchStore';
 import { IoClose, IoSearchOutline } from 'react-icons/io5';
-import useBookSearch from '../../hooks/useBookSearch';
 
-
-const AutoComplete: React.FC = () => {
+function AutoComplete() {
   const [query, setQuery] = useState('');
   const [searchParams, setSearchParams] = useSearchParams();
   const [highlightedIndex, setHighlightedIndex] = useState<number | null>(null);
@@ -19,16 +18,6 @@ const AutoComplete: React.FC = () => {
 
   // Use hook to fetch data when the query is submitted
   const { data } = useBookSearch(searchParams.get('query') || '');
-
-  useEffect(() => {
-    // Update search history based on fetched data when form is submitted
-    if (data && query) {
-      console.log('AutoComplete.tsx: Search results:', data);
-      addSearchHistory(query, data.books);
-    } else {
-      console.log('AutoComplete.tsx: No books found');
-    }
-  }, [data, query, addSearchHistory]);
 
   // Handlers - Clicking outside suggestions list
   const handleClickOutside = useCallback((event: MouseEvent) => {
@@ -58,25 +47,25 @@ const AutoComplete: React.FC = () => {
   };
 
   // Handlers - Keyboard navigation
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (highlightedIndex !== null) {
-      if (e.key === 'ArrowDown') {
+      if (event.key === 'ArrowDown') {
         setHighlightedIndex((prevIndex) =>
           prevIndex === null || prevIndex === suggestions.length - 1 ? 0 : prevIndex + 1
         );
-      } else if (e.key === 'ArrowUp') {
+      } else if (event.key === 'ArrowUp') {
         setHighlightedIndex((prevIndex) =>
           prevIndex === null || prevIndex === 0 ? suggestions.length - 1 : prevIndex - 1
         );
-      } else if (e.key === 'Enter') {
+      } else if (event.key === 'Enter') {
         if (highlightedIndex !== null) {
           handleSuggestionClick(suggestions[highlightedIndex]);
         } else {
           // Submit the form if no suggestion is highlighted
-          e.preventDefault();
-          handleSubmit();
+          event.preventDefault();
+          handleSubmit(event);
         }
-      } else if (e.key === 'Escape') {
+      } else if (event.key === 'Escape') {
         setHighlightedIndex(null);
       }
     }
@@ -86,20 +75,21 @@ const AutoComplete: React.FC = () => {
   const handleSuggestionClick = (suggestion: string) => {
     setQuery(suggestion);
     setHighlightedIndex(null);
+    setSearchParams({ query: suggestion });
     inputRef.current?.focus();
   };
 
   // Handlers - Submitting query
-  const handleSubmit = (e?: React.FormEvent<HTMLFormElement>) => {
-    if (e) e.preventDefault();
+  const handleSubmit = useCallback((event: React.FormEvent<HTMLFormElement> | React.KeyboardEvent<HTMLInputElement>) => {
+    if (event) event.preventDefault();
+
     const trimmedQuery = query.trim();
 
     if (trimmedQuery !== '') {
       setSearchParams({ query: trimmedQuery });
-      onSubmit(trimmedQuery);
       setHighlightedIndex(null);
     }
-  };
+  }, [query, setSearchParams]);
 
   // Handlers - Clear input
   const handleClearInput = () => {
@@ -114,6 +104,13 @@ const AutoComplete: React.FC = () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [handleClickOutside]);
+
+  useEffect(() => {
+    if (data && data.books && searchParams.get('query')) {
+      console.log('Autocomplete.tsx: Search results: ', data);
+      addSearchHistory(searchParams.get('query')!, data.books);
+    }
+  }, [data, searchParams, addSearchHistory]);
 
   return (
     <div
@@ -173,6 +170,6 @@ const AutoComplete: React.FC = () => {
       )}
     </div>
   );
-};
+}
 
 export default AutoComplete;
