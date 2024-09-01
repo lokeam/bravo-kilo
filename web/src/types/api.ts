@@ -61,9 +61,40 @@ export function isBookGenresData(data: any): data is BookGenresData {
 }
 
 export const defaultBookGenres: BookGenresData = {
-  allGenres: [], // Correctly initialized as an array of strings
+  allGenres: [],
   placeholder: {
-    bookList: [], // Matches `Book[]` type
-    genreImgs: [], // Matches `string[]` type
+    bookList: [],
+    genreImgs: [],
   },
+};
+
+
+export type RawHomepageStats = {
+  userBkLang: Record<string, number>;
+  userBkGenres: Record<string, number>;
+  userTags: Record<string, number>;
+};
+
+export type BooksByFormat = {
+  physical: Book[];
+  eBook: Book[];
+  audioBook: Book[];
+};
+
+export type HomepageStatistics = {
+  userBkLang: {
+    booksByLang: Array<{ label: string; count: number }>;
+  };
+  userBkGenres: {
+    booksByGenre: Array<{ label: string; count: number }>;
+  };
+  userTags: {
+    userTags: Array<{ label: string; count: number }>;
+  };
+};
+
+export type AggregatedHomePageData = {
+  books: Book[];
+  booksByFormat: BooksByFormat;
+  homepageStats: HomepageStatistics;
 };
