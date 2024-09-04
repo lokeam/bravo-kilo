@@ -41,7 +41,11 @@ const DoughnutChart: React.FC<DoughnutChartProps> = ({ data, width, height }) =>
 
   return (
     <div className="flex justify-center px-5">
-      <canvas ref={canvas} width={width} height={height}></canvas>
+      <canvas
+        ref={canvas}
+        width={width}
+        height={height}
+      ></canvas>
     </div>
   );
 };

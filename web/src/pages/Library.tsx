@@ -11,7 +11,7 @@ import { Book } from '../types/api';
 import useStore from '../store/useStore';
 import useLibraryData from '../hooks/useLibraryData';
 
-const Library = () => {
+function Library() {
   const {
     activeTab,
     snackbarMessage,
@@ -29,11 +29,8 @@ const Library = () => {
     genres: bookGenres,
     formats: bookFormats,
     isLoading,
-    isError,
-    error
+    isError
   } = useLibraryData();
-
-  console.log('useLibraryData error: ', error);
 
   const sortedBooks = useMemo(() => {
     if (!books || books.length === 0) {

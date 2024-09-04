@@ -3,11 +3,11 @@ import DoughnutChart from '../Chart/DonutChart';
 import ErrorCard from './ErrorCard';
 import { BookStatObj } from './BarChartCard';
 
-interface DonutChartCardProps {
+type DonutChartCardProps = {
   bookFormats: BookStatObj[];
 }
 
-const DonutChartCard = ({ bookFormats = [] }: DonutChartCardProps) => {
+function DonutChartCard({ bookFormats = [] }: DonutChartCardProps) {
 
   const formatCountArr = bookFormats.map((book) => book.count);
   const chartData = {
@@ -29,7 +29,11 @@ const DonutChartCard = ({ bookFormats = [] }: DonutChartCardProps) => {
       { bookFormats && bookFormats.length > 0 ? (
         <div className="flex-grow pb-4">
           <div className="flex flex-col col-span-full sm:col-span-6 xl:col-span-4 bg-maastricht shadow-sm rounded-xl">
-            <DoughnutChart data={chartData} width={389} height={260} />
+            <DoughnutChart
+              data={chartData}
+              height={260}
+              width={389}
+            />
           </div>
         </div>
       ) : (

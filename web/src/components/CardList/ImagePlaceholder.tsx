@@ -9,7 +9,10 @@ const ImagePlaceholder = ({ isBookDetail }: ImagePlaceholderProps) => (
     {
       isBookDetail ? (
         <>
-          <MdMenuBook className="mb-3" size={60}/>
+          <MdMenuBook
+            className="mb-3"
+            size={60}
+          />
           <span>No book cover image available</span>
         </>
       ) : <MdMenuBook size={36}/>

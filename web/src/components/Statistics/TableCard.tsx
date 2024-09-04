@@ -7,21 +7,33 @@ interface TagsCardProps {
   userTags: BookStatObj[];
 }
 
-const TableCard = ({ userTags = [] }: TagsCardProps) => {
+function TableCard({ userTags = [] }: TagsCardProps) {
 
   return (
     <div className="tags_card col-span-full xl:col-span-6 bg-maastricht shadow-sm rounded-xl max-h-[465px]">
-      <ChartCardHeader topic="Tags" hasSubHeaderBg />
+      <ChartCardHeader
+        hasSubHeaderBg
+        topic="Tags"
+      />
         <ul className="p-3">
           { userTags && userTags.length > 0 ? userTags.map((userTag, index) => {
             const hasManyTags = userTag.count > 5;
 
             return (
-            <li key={`${index}-${userTag.label}-${userTag.count}`} className="flex px-2 border-b border-gray-700/60">
+            <li
+              className="flex px-2 border-b border-gray-700/60"
+              key={`${index}-${userTag.label}-${userTag.count}`}>
                 <div className={`flex flex-col content-center items-center justify-center w-9 h-9 rounded-full shrink-0 ${hasManyTags ? 'bg-green-600' : 'bg-red-500'} my-2 mr-3`}>
                 { hasManyTags ?
-                    <FaTags size={22} className="bg-transparent" color="text-white"/> :
-                    <FaTag size={22} className="bg-transparent" color="text-white" />
+                    <FaTags
+                      className="bg-transparent"
+                      color="text-white"
+                      size={22}
+                    /> :
+                    <FaTag
+                      className="bg-transparent"
+                      color="text-white"size={22}
+                    />
                 }
                 </div>
                 <div className="grow flex items-center text-sm py-2">

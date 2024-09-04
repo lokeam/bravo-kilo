@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import useDebounce from '../../hooks/useDebounceLD';
 import { exportUserBooks } from '../../service/apiClient.service';
 
-const SettingsItemExportBtn = () => {
+function SettingsItemExportBtn() {
   const { user } = useAuth();
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [ error, setError] = useState<string | null>(null);
@@ -49,6 +49,6 @@ const SettingsItemExportBtn = () => {
       {error && <p className="text-red-500 mt-2">{error}</p>}
     </div>
   );
-};
+}
 
 export default SettingsItemExportBtn;

@@ -9,12 +9,12 @@ interface BarChartCardBodyProps {
   isLanguageCard?: boolean;
 }
 
-const BarChartCardBody = ({
+function BarChartCardBody({
   bookData = [],
   totalBooks = 0,
   barColor = "bg-margorelle-comp1-r",
   isLanguageCard = false,
-}: BarChartCardBodyProps) => {
+}: BarChartCardBodyProps) {
 
   return (
     <div className="pb-3 px-3">
@@ -24,7 +24,10 @@ const BarChartCardBody = ({
               const bgBarWidth = convertToPercent(book.count, totalBooks);
 
               return (
-                <li key={`${index}-${book.label}-${book.count}`} className="relative border-none mb-2 p-1">
+                <li
+                  className="relative border-none mb-2 p-1"
+                  key={`${index}-${book.label}-${book.count}`}
+                >
                   <div
                     className={`horizontal_bar top-0 left-0 ${barColor} rounded absolute p-4`}
                     style={{width: `${bgBarWidth}`}}

@@ -3,7 +3,7 @@ import SettingsItemExportBtn from './SettingItemExportBtn';
 import SettingsItemAnimationBtn from './SettingItemAnimationBtn';
 import SettingsItemDeleteAcctBtn from './SettingItemDeleteAcctBtn';
 
-interface SettingsItemProps {
+type SettingsItemProps = {
   settingsData: {
     label: string;
     copy: string;

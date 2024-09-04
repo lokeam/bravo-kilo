@@ -4,6 +4,8 @@ interface SideNavListProps {
   children: React.ReactNode;
 }
 
-export const SideNavList = ({ children }: SideNavListProps) => {
+function SideNavList({ children }: SideNavListProps) {
   return <>{children}</>;
-};
+}
+
+export default SideNavList;

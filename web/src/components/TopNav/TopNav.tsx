@@ -10,7 +10,7 @@ import { IoMdSettings } from "react-icons/io";
 import { MdLogout } from "react-icons/md";
 import { ImArrowLeft2 } from "react-icons/im";
 
-export default function TopNavigation() {
+function TopNavigation() {
   const [opened, setOpened] = useState(false);
   const { logout } = useAuth();
   const location = useLocation();
@@ -28,12 +28,15 @@ export default function TopNavigation() {
 
   return (
     <header className="antialiased relative w-full h-auto">
-      <nav className={`${isBookDetailOrSettingsPage ? 'bg-transparent' : 'bg-black'} fixed border-none flex items-center content-between left-0 right-0 top-0 z-50 pl-6 pr-8 lg:pr-12 h-[67px] text-white w-full`}>
+      <nav className={`${isBookDetailOrSettingsPage ? 'opacity-75' : ''} bg-black fixed border-none flex items-center content-between left-0 right-0 top-0 z-50 pl-6 pr-8 lg:pr-12 h-[67px] text-white w-full`}>
         <Link
           className={`${isBookDetailOrSettingsPage ? 'block' : 'hidden'} h-13 w-13 px-3 mr-6 inline-block content-center cursor-pointer bg-transparent border-none`}
           to={"/library"}
         >
-          <ImArrowLeft2 className="text-white" size={20}/>
+          <ImArrowLeft2
+            className="text-white"
+            size={20}
+          />
         </Link>
         <div className={`relative flex flex-row  justify-items-center items-center w-full`}>
 
@@ -47,16 +50,29 @@ export default function TopNavigation() {
               </button>
           </div>
 
-          <Modal opened={opened} onClose={closeModal} title="">
+          <Modal
+            opened={opened}
+            onClose={closeModal}
+            title=""
+          >
             <button
               className="flex flex-row justify-items-start items-center bg-transparent mr-1"
               onClick={handleSettingsClick}
             >
-              <IoMdSettings className="mr-8" size={22} />
+              <IoMdSettings
+                className="mr-8"
+                size={22}
+              />
               <span>Settings</span>
             </button>
-            <button className="flex flex-row justify-items-start items-center bg-transparent mr-1" onClick={logout}>
-              <MdLogout className="mr-8" size={25}/>
+            <button
+              className="flex flex-row justify-items-start items-center bg-transparent mr-1"
+              onClick={logout}
+            >
+              <MdLogout
+                className="mr-8"
+                size={25}
+              />
               <span>Log out</span>
             </button>
           </Modal>
@@ -82,3 +98,5 @@ export default function TopNavigation() {
     </header>
   );
 }
+
+export default TopNavigation;

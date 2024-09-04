@@ -5,7 +5,7 @@ interface ThemeProviderProps {
   children: ReactNode;
 }
 
-export const ThemeProvider = ({ children }: ThemeProviderProps) => {
+function ThemeProvider({ children }: ThemeProviderProps) {
   const { theme, loadTheme } = useThemeStore();
 
   // Load theme from localStorage or system preference on mount
@@ -19,4 +19,6 @@ export const ThemeProvider = ({ children }: ThemeProviderProps) => {
   return (
     <>{children}</>
   );
-};
+}
+
+export default ThemeProvider;

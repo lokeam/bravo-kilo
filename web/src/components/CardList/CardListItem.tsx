@@ -24,7 +24,7 @@ const isWhitelistedImageURL = (imageURL: string): boolean => {
   }
 }
 
-export default function CardListItem({ book, isSearchPage }: CardListItemProps) {
+function CardListItem({ book, isSearchPage }: CardListItemProps) {
   const [opened, setOpened] = useState<boolean>(false);
   const navigate = useNavigate();
   const { authors, id, imageLink, title } = book;
@@ -47,11 +47,22 @@ export default function CardListItem({ book, isSearchPage }: CardListItemProps) 
   const mayRenderImage = hasImageLink && isWhitelistedImageURL(imageLink);
 
   return (
-      <li key={`${title}-${id}`} className="py-3 flex items-start justify-between">
-        <div className="flex gap-3 cursor-pointer" onClick={handleBookClick}>
+      <li
+        className="py-3 flex items-start justify-between"
+        key={`${title}-${id}`}
+      >
+        <div
+          className="flex gap-3 cursor-pointer"
+          onClick={handleBookClick}
+        >
           {
             mayRenderImage ? (
-              <img loading="lazy" src={imageLink} alt={`Book cover thumbnail for ${title}`} className="flex-none rounded w-16 h-16" />
+              <img
+                alt={`Book cover thumbnail for ${title}`}
+                className="flex-none rounded w-16 h-16"
+                loading="lazy"
+                src={imageLink}
+              />
             ) : (
               <ImagePlaceholder isBookDetail={false}/>
             )
@@ -64,19 +75,40 @@ export default function CardListItem({ book, isSearchPage }: CardListItemProps) 
             }
           </div>
         </div>
-        <button onClick={openModal} className="bg-transparent">
+        <button
+          onClick={openModal}
+          className="bg-transparent"
+        >
           <BsThreeDotsVertical color="white" />
         </button>
-        <Modal opened={opened} onClose={closeModal} title="">
-          <button onClick={handleBookClick} className="flex flex-row justify-items-start items-center bg-transparent w-full mr-1">
-            <MdMenuBook className="mr-8" size={25}/>
+        <Modal
+          opened={opened}
+          onClose={closeModal}
+          title=""
+        >
+          <button
+            className="flex flex-row justify-items-start items-center bg-transparent w-full mr-1"
+            onClick={handleBookClick}
+          >
+            <MdMenuBook
+              className="mr-8"
+              size={25}
+            />
             <span>Title Details</span>
           </button>
-          <button onClick={handleEditBookClick} className="flex flex-row justify-items-start items-center bg-transparent w-full mr-1">
-            <TbEdit className="mr-8" size={25}/>
+          <button
+            className="flex flex-row justify-items-start items-center bg-transparent w-full mr-1"
+            onClick={handleEditBookClick}
+            >
+            <TbEdit
+              className="mr-8"
+              size={25}
+            />
             <span>Edit Title Details</span>
           </button>
         </Modal>
       </li>
   );
 }
+
+export default CardListItem;

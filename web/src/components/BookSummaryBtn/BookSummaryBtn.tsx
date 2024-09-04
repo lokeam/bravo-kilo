@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import useDebounce from '../../hooks/useDebounceLD';
 import useGeminiPrompt from '../../hooks/useGeminiPrompt';
+import Loading from '../Loading/Loading';
 
 interface BookSummaryBtnProps {
   title: string;
@@ -34,7 +35,7 @@ const BookSummaryBtn = (
 
   Do not introduce yourself, do not remind me what I asked you for. Do not apologize. Do not self-reference.
 
-  Generate the output in markdown format.`;
+  Generate the output in markdown format. Make sure your response is no longer than four paragraphs `;
 
   const { data: promptResponse, isLoading, isError, refetch } = useGeminiPrompt(prompt);
 
@@ -75,12 +76,17 @@ const BookSummaryBtn = (
         <span className="book_summary_bg flex h-full w-full items-center justify-center rounded-lg bg-black transition duration-300 ease-in-out hover:bg-gray-700">
           {isLoading ? 'Generating...' : 'Summarize Book with AI'}
         </span>
+
       </button>
+      { isLoading && <Loading /> }
       {
         error && (
         <div className="text-red-500 mt-2">
           {error}
-          <button className="ml-2 text-blue-500" onClick={handleClick}>
+          <button
+            className="ml-2 text-blue-500"
+            onClick={handleClick}
+          >
             Retry
           </button>
         </div>)

@@ -19,8 +19,8 @@ const bookSchema = z.object({
   genres: z.array(z.string()).min(1, 'Please enter at least one genre'),
   tags: z.array(z.string()).min(1, 'At least one tag is required'),
   publishDate: z.string().min(1, 'Please enter a date of publication'),
-  isbn10: z.string().min(10).max(10),
-  isbn13: z.string().min(13).max(13),
+  isbn10: z.string().min(10).max(10, 'This field must contain 10 characters'),
+  isbn13: z.string().min(13).max(13,  'This field must contain 13 characters'),
   formats: z.array(z.enum(['physical', 'eBook', 'audioBook'])),
   language: z.string().min(1, 'Please enter a language'),
   pageCount: z.number().min(1, 'Please enter a total page count'),
@@ -39,33 +39,48 @@ const ManualAdd = () => {
   // Retrieve book data from navigation state
   const bookData = location.state?.book || {};
 
-// Use default values to ensure inputs are always controlled
-const {
-  control,
-  handleSubmit,
-  register,
-  reset,
-  formState: { errors },
-} = useForm<BookFormData>({
-  resolver: zodResolver(bookSchema),
-  defaultValues: {
-    title: '',
-    subtitle: '',
-    authors: [''],
-    genres: [''],
-    tags: [''],
-    publishDate: '',
-    isbn10: '',
-    isbn13: '',
-    formats: [],
-    language: '',
-    pageCount: 0,
-    imageLink: '',
-    description: '',
-    notes: '',
-    ...bookData, // Merge with any existing data
-  },
-});
+  // Use default values to ensure inputs are always controlled
+  const {
+    control,
+    handleSubmit,
+    register,
+    reset,
+    formState: { errors },
+  } = useForm<BookFormData>({
+    resolver: zodResolver(bookSchema),
+    defaultValues: {
+      title: '',
+      subtitle: '',
+      authors: [''],
+      genres: [''],
+      tags: [''],
+      publishDate: '',
+      isbn10: '',
+      isbn13: '',
+      formats: [],
+      language: '',
+      pageCount: 0,
+      imageLink: '',
+      description: '',
+      notes: '',
+      ...bookData, // Merge with any existing data
+    },
+  });
+
+  useEffect(() => {
+    if (errors) {
+      const firstErrorKey = Object.keys(errors)[0];
+
+      if (firstErrorKey) {
+        const errorElement = document.querySelector(`[name="${firstErrorKey}]`) as HTMLElement;
+
+        if (errorElement) {
+          errorElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          errorElement.focus();
+        }
+      }
+    }
+  }, [errors]);
 
   const {
     fields: authorFields,

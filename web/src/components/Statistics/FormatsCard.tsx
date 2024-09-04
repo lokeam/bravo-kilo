@@ -1,8 +1,6 @@
-import React from 'react';
 import DoughnutChart from '../Chart/DonutChart';
 
-
-const FormatsCard: React.FC = () => {
+function FormatsCard() {
   const chartData = {
     labels: ['Physical Books', 'eBooks', 'Audio Book'],
     datasets: [
@@ -18,9 +16,13 @@ const FormatsCard: React.FC = () => {
   return (
     <div className="flex flex-col col-span-full sm:col-span-6 xl:col-span-4 bg-maastricht shadow-sm rounded-xl">
 
-      <DoughnutChart data={chartData} width={389} height={260} />
+      <DoughnutChart
+        data={chartData}
+        height={260}
+        width={389}
+      />
     </div>
   );
-};
+}
 
 export default FormatsCard;

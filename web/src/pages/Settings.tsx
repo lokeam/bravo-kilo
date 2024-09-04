@@ -1,6 +1,6 @@
 import SettingsItem from '../components/SettingsItem/SettingsItem';
 
-const Settings = () => {
+function Settings() {
   const settingsData = [
     {
       label: "Appearance",
@@ -41,6 +41,6 @@ const Settings = () => {
       </div>
     </section>
   );
-};
+}
 
 export default Settings;

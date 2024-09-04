@@ -1,6 +1,6 @@
 import { useThemeStore } from '../../store/useThemeStore';
 
-const SettingsItemThemeBtn = () => {
+function SettingsItemThemeBtn() {
   const { theme, toggleTheme } = useThemeStore();
 
   return (
@@ -11,6 +11,6 @@ const SettingsItemThemeBtn = () => {
       { theme === 'light' ? 'Switch to Dark Mode' : 'Switch to Light Mode' }
     </button>
   );
-};
+}
 
 export default SettingsItemThemeBtn;

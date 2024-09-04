@@ -3,7 +3,7 @@ interface BarChartHeaderProps {
   hasSubHeaderBg?: boolean;
 }
 
-const ChartCardHeader = ({ topic = '', hasSubHeaderBg = false }: BarChartHeaderProps) => {
+function ChartCardHeader({ topic = '', hasSubHeaderBg = false }: BarChartHeaderProps) {
   const barChartHeaderText = `Books by ${topic}`;
   const tableHeaderText = `Personal ${topic}`;
 

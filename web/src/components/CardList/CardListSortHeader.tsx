@@ -36,23 +36,46 @@ function CardListSortHeader ({ sortedBooksCount }: CardListSortHeaderProps) {
       <div className="mt-1">{sortedBooksCount} volumes</div>
 
       <div className="flex flex-row">
-        <button className="flex flex-row justify-between bg-transparent border border-gray-600" onClick={openModal}>
-          <PiArrowsDownUp size={22} className="pt-1 mr-2" color="white" />
+        <button
+          className="flex flex-row justify-between bg-transparent border border-gray-600"
+          onClick={openModal}
+        >
+          <PiArrowsDownUp
+            className="pt-1 mr-2"
+            color="white"
+            size={22}
+          />
           <span>{sortButtonTitle[sortCriteria]}</span>
         </button>
       </div>
 
-      <Modal opened={isModalOpened} onClose={closeModal} title="">
-        <button onClick={() => handleSort("publishDate")} className="flex flex-row bg-transparent mr-1">
+      <Modal
+        opened={isModalOpened}
+        onClose={closeModal}
+        title=""
+      >
+        <button
+          className="flex flex-row bg-transparent mr-1"
+          onClick={() => handleSort("publishDate")}
+        >
           Release date: New to Old
         </button>
-        <button onClick={() => handleSort("pageCount")} className="flex flex-row bg-transparent mr-1">
+        <button
+          className="flex flex-row bg-transparent mr-1"
+          onClick={() => handleSort("pageCount")}
+        >
           Page count: Short to Long
         </button>
-        <button onClick={() => handleSort("title")} className="flex flex-row bg-transparent mr-1">
+        <button
+          className="flex flex-row bg-transparent mr-1"
+          onClick={() => handleSort("title")}
+        >
           Title: A to Z
         </button>
-        <button onClick={() => handleSort("author")} className="flex flex-row bg-transparent mr-1">
+        <button
+          className="flex flex-row bg-transparent mr-1"
+          onClick={() => handleSort("author")}
+        >
           Author: A to Z
         </button>
       </Modal>
