@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useNavigate, useLocation } from 'react-router-dom';
 
 import useAddBook from '../hooks/useAddBook';
+import { sanitizeFormData } from '../utils/sanitizeInput';
 import { Book } from '../types/api';
 
 import { IoClose } from 'react-icons/io5';
@@ -104,10 +105,18 @@ const {
     console.log('Submitted data:', data);
     const defaultDate = new Date().toISOString();
 
+    // Field sanitization
+    const fieldsToSanitize: (keyof BookFormData)[] = [
+      'title', 'subtitle', 'authors', 'genres', 'tags',
+      'formats', 'language', 'imageLink', 'description', 'notes'
+    ];
+    const fieldsToTrim: (keyof BookFormData)[] = ['imageLink'];
+    const sanitizedData = sanitizeFormData(data, fieldsToSanitize, fieldsToTrim);
+
+
     const book: Book = {
-      ...data,
-      subtitle: data.subtitle || '',
-      imageLink: data.imageLink.trim(),
+      ...sanitizedData,
+      subtitle: sanitizedData.subtitle || '',
       createdAt: defaultDate,
       lastUpdated: defaultDate,
     };

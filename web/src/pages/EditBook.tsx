@@ -4,10 +4,12 @@ import { Controller, useForm, useFieldArray, SubmitHandler } from 'react-hook-fo
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import Markdown from 'react-markdown';
+import DOMPurify from 'dompurify';
 
 import useUpdateBook from '../hooks/useUpdateBook';
 import useDeleteBook from '../hooks/useDeleteBook';
 import useFetchBookById from '../hooks/useFetchBookById';
+import { sanitizeFormData } from '../utils/sanitizeInput';
 
 import Modal from '../components/Modal/ModalRoot';
 import BookSummaryBtn from '../components/BookSummaryBtn/BookSummaryBtn';
@@ -45,11 +47,9 @@ const EditBook = () => {
   const [opened, setOpened] = useState(false);
 
   // AI Preview + Modal state
-  // setAiSummaryPreview
   const [aiSummaryPreview, setAiSummaryPreview] = useState("");
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
   const [isManualTrigger, setIsManualTrigger] = useState(false);
-
   const { bookID } = useParams();
 
   console.log('edit book');
@@ -111,10 +111,18 @@ const EditBook = () => {
     console.log(`Form submitted with data ${data}`);
     const defaultDate = new Date().toISOString();
 
+    // Field sanitization
+    const fieldsToSanitize: (keyof BookFormData)[] = [
+      'title', 'subtitle', 'authors', 'genres', 'tags',
+      'formats', 'language', 'imageLink', 'description', 'notes'
+    ];
+
+    const fieldsToTrim: (keyof BookFormData)[] = ['imageLink'];
+    const sanitizedData = sanitizeFormData(data, fieldsToSanitize, fieldsToTrim);
+
     const book: Book = {
-      ...data,
+      ...sanitizedData,
       id: Number(bookID),
-      imageLink: data.imageLink.trim(),
       createdAt: defaultDate,
       lastUpdated: defaultDate,
     };
@@ -324,7 +332,7 @@ const EditBook = () => {
             {errors.pageCount && <p className="text-red-500">{errors.pageCount.message}</p>}
           </div>
 
-          {/* Image Links Field Array */}
+          {/* Image Link Field Array */}
           <div className="col-span-2">
             <label className="block mb-2 text-base font-medium text-gray-900 dark:text-white">Image Link<span className="text-red-600 ml-px">*</span></label>
             <input className="bg-maastricht border border-gray-00 text-gray-900 text-base rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500" id="imageLink" {...register('imageLink')} />
@@ -386,7 +394,7 @@ const EditBook = () => {
             <div className="summary_modal p-4">
               <h3 className="mb-2 text-2xl font-semibold text-indigo-900 dark:text-white">AI-Generated Summary Preview</h3>
               <div id="prompt_response" className="prompt_response break-words">
-                <Markdown>{aiSummaryPreview}</Markdown>
+                <Markdown>{DOMPurify.sanitize(aiSummaryPreview)}</Markdown>
               </div>
               <div className="flex justify-end space-x-4">
                 <button
