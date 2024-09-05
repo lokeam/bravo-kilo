@@ -10,6 +10,7 @@ import (
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/go-playground/validator/v10"
 )
 
 // Validate Ownership
@@ -182,6 +183,10 @@ func (h *Handlers) HandleGetBookIDByTitle(response http.ResponseWriter, request 
 
 // Add Book
 func (h *Handlers) HandleInsertBook(response http.ResponseWriter, request *http.Request) {
+	// Register custom validations
+	h.validate.RegisterValidation("isbn10", validateISBN10)
+	h.validate.RegisterValidation("isbn13", validateISBN13)
+
 	// Grab book data
 	var book data.Book
 	err := json.NewDecoder(request.Body).Decode(&book)
@@ -189,6 +194,36 @@ func (h *Handlers) HandleInsertBook(response http.ResponseWriter, request *http.
 		h.logger.Error("Error decoding book data", "error", err)
 		http.Error(response, "Error decoding book data - invalid input", http.StatusBadRequest)
 		return
+	}
+
+	// Validate struct
+	err = h.validate.Struct(book)
+	if err != nil {
+		h.logger.Error("Validation error", "error", err)
+		http.Error(response, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Sanitize input
+	book.Title = h.sanitizer.Sanitize(book.Title)
+	book.Subtitle = h.sanitizer.Sanitize(book.Subtitle)
+	book.Description = h.sanitizer.Sanitize(book.Description)
+	book.Language = h.sanitizer.Sanitize(book.Language)
+	book.ImageLink = h.sanitizer.Sanitize(book.ImageLink)
+	book.Notes = h.sanitizer.Sanitize(book.Notes)
+	book.ISBN10 = h.sanitizer.Sanitize(book.ISBN10)
+	book.ISBN13 = h.sanitizer.Sanitize(book.ISBN13)
+	for i, author := range book.Authors {
+		book.Authors[i] = h.sanitizer.Sanitize(author)
+	}
+	for i, genre := range book.Genres {
+		book.Genres[i] = h.sanitizer.Sanitize(genre)
+	}
+	for i, tag := range book.Tags {
+		book.Tags[i] = h.sanitizer.Sanitize(tag)
+	}
+	for i, format := range book.Formats {
+		book.Formats[i] = h.sanitizer.Sanitize(format)
 	}
 
 	// Retrieve user ID from context
@@ -228,8 +263,51 @@ func (h *Handlers) HandleInsertBook(response http.ResponseWriter, request *http.
 	json.NewEncoder(response).Encode(map[string]int{"book_id": bookID})
 }
 
+// Helper fns for validation
+func validateISBN10(fl validator.FieldLevel) bool {
+	isbn := fl.Field().String()
+	if len(isbn) != 10 {
+		return false
+	}
+	sum := 0
+	for i := 0; i < 9; i++ {
+		digit := int(isbn[i] - '0')
+		if digit < 0 || digit > 9 {
+			return false
+		}
+		sum += digit * (10 - i)
+	}
+	checksum := (11 - sum%11) % 11
+	return (checksum == 10 && isbn[9] == 'X') || (int(isbn[9]-'0') == checksum)
+}
+
+func validateISBN13(fl validator.FieldLevel) bool {
+	isbn := fl.Field().String()
+	if len(isbn) != 13 {
+		return false
+	}
+	sum := 0
+	for i := 0; i < 12; i++ {
+		digit := int(isbn[i] - '0')
+		if digit < 0 || digit > 9 {
+			return false
+		}
+		if i%2 == 0 {
+			sum += digit
+		} else {
+			sum += 3 * digit
+		}
+	}
+	checksum := (10 - sum%10) % 10
+	return int(isbn[12]-'0') == checksum
+}
+
 // Update Book
 func (h *Handlers) HandleUpdateBook(response http.ResponseWriter, request *http.Request) {
+	// Register custom validations
+	h.validate.RegisterValidation("isbn10", validateISBN10)
+	h.validate.RegisterValidation("isbn13", validateISBN13)
+
 	// Validate book ownership
 	_, bookID, err := h.ValidateBookOwnership(request)
 	if err != nil {
@@ -248,6 +326,36 @@ func (h *Handlers) HandleUpdateBook(response http.ResponseWriter, request *http.
 	}
 
 	book.ID = bookID
+
+	// Validate struct
+	err = h.validate.Struct(book)
+	if err != nil {
+		h.logger.Error("Validation error", "error", err)
+		http.Error(response, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Sanitize input
+	book.Title = h.sanitizer.Sanitize(book.Title)
+	book.Subtitle = h.sanitizer.Sanitize(book.Subtitle)
+	book.Description = h.sanitizer.Sanitize(book.Description)
+	book.Language = h.sanitizer.Sanitize(book.Language)
+	book.ImageLink = h.sanitizer.Sanitize(book.ImageLink)
+	book.Notes = h.sanitizer.Sanitize(book.Notes)
+	book.ISBN10 = h.sanitizer.Sanitize(book.ISBN10)
+	book.ISBN13 = h.sanitizer.Sanitize(book.ISBN13)
+	for i, author := range book.Authors {
+		book.Authors[i] = h.sanitizer.Sanitize(author)
+	}
+	for i, genre := range book.Genres {
+		book.Genres[i] = h.sanitizer.Sanitize(genre)
+	}
+	for i, tag := range book.Tags {
+		book.Tags[i] = h.sanitizer.Sanitize(tag)
+	}
+	for i, format := range book.Formats {
+		book.Formats[i] = h.sanitizer.Sanitize(format)
+	}
 
 	// Update the book
 	err = h.models.Book.Update(book)
@@ -298,7 +406,6 @@ func (h *Handlers) HandleUpdateBook(response http.ResponseWriter, request *http.
 	response.WriteHeader(http.StatusOK)
 	json.NewEncoder(response).Encode(map[string]string{"message": "Book updated successfully"})
 }
-
 
 // Delete Book
 func (h *Handlers) HandleDeleteBook(response http.ResponseWriter, request *http.Request) {
