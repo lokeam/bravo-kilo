@@ -11,16 +11,21 @@ interface ModalProps {
   children: React.ReactNode;
 }
 
-const Modal: React.FC<ModalProps> = ({ opened, onClose, title, children }) => {
-  console.log('**** Modal fired --- ');
+function Modal({ opened, onClose, title, children }: ModalProps) {
   return (
-    <ModalRoot opened={opened} onClose={onClose}>
+    <ModalRoot
+      opened={opened}
+      onClose={onClose}
+    >
       <div className="modal-container flex flex-col-reverse h-auto">
-        <ModalHeader title={title} onClose={onClose} />
+        <ModalHeader
+          title={title}
+          onClose={onClose}
+        />
         <ModalBody>{children}</ModalBody>
       </div>
     </ModalRoot>
   );
-};
+}
 
 export default Modal;

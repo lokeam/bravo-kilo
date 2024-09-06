@@ -1,7 +1,5 @@
-import React from 'react';
-
-const ModalOverlay: React.FC = () => {
+function ModalOverlay() {
   return <div className="modal-overlay" />;
-};
+}
 
 export default ModalOverlay;

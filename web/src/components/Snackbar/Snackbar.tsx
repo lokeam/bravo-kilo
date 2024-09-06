@@ -3,7 +3,6 @@ import { FaCheckCircle } from "react-icons/fa";
 import { BsFillXCircleFill } from "react-icons/bs";
 import { MdDeleteForever } from "react-icons/md";
 
-
 interface SnackbarProps {
   message: string;
   open: boolean;
@@ -12,7 +11,7 @@ interface SnackbarProps {
   onClose: () => void;
 }
 
-const Snackbar = ({ message, open, duration = 6000, onClose, variant }: SnackbarProps) => {
+function Snackbar({ message, open, duration = 5000, onClose, variant }: SnackbarProps) {
   useEffect(() => {
     if (open) {
       const timer = setTimeout(() => {
@@ -43,18 +42,18 @@ const Snackbar = ({ message, open, duration = 6000, onClose, variant }: Snackbar
   console.log('Snackbar component');
   return (
     <div
+      aria-atomic="true"
+      aria-live="assertive"
       className={`
-        ${variantStyles[variant]} fixed bottom-36 transform -translate-x-1/2 text-white px-4 py-2 rounded shadow-lg flex items-center
+        ${variantStyles[variant]} fixed bottom-48 right-4 transform -translate-x-1/2 text-white px-10 py-4 rounded shadow-lg flex items-center justify-center w-full max-w-sm p-4 mb-4
         ${open ? 'animate-fade-in': 'animate-fade-out'}
       `}
       role="alert"
-      aria-live="assertive"
-      aria-atomic="true"
     >
       { variantIcons[variant] }
       <span>{ message }</span>
     </div>
   )
-};
+}
 
 export default Snackbar;

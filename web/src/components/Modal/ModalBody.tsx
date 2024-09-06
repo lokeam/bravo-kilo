@@ -5,8 +5,8 @@ interface ModalBodyProps {
   children: React.ReactNode;
 }
 
-const ModalBody: React.FC<ModalBodyProps> = ({ children }) => {
+function ModalBody({ children }: ModalBodyProps) {
   return <div className="modal-body flex flex-col p-5">{children}</div>;
-};
+}
 
 export default ModalBody;

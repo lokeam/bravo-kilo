@@ -7,7 +7,7 @@ interface ModalProps {
   children: React.ReactNode;
 }
 
-const Modal: React.FC<ModalProps> = ({ opened, onClose, children }) => {
+function Modal({ opened, onClose, children }: ModalProps) {
   const [closing, setClosing] = useState(false);
 
   useEffect(() => {
@@ -33,11 +33,9 @@ const Modal: React.FC<ModalProps> = ({ opened, onClose, children }) => {
 
   if (!opened && !closing) return null;
 
-// active
-// fixed bottom-0 left-0 right-0 z-40 w-full p-4 overflow-y-auto transition-transform bg-white dark:bg-gray-800 transform-none
   return (
     <div
-      className="modal-overlay overflow-hidden fixed inset-0 z-30"
+      className="modal-overlay overflow-hidden top-0 left-0 inset-0 z-30"
       data-closing={closing}
       onClick={handleClose}
     >
@@ -49,6 +47,6 @@ const Modal: React.FC<ModalProps> = ({ opened, onClose, children }) => {
       </div>
     </div>
   );
-};
+}
 
 export default Modal;
