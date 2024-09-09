@@ -17,20 +17,32 @@ type Format struct {
 	FormatType string `json:"format_type"`
 }
 
-func (f *FormatModel) Insert(bookID int, formatType string) (int, error) {
+func (f *FormatModel) Insert(formatType string) (int, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
 
 	var formatID int
-	statement := `INSERT INTO formats (book_id, format_type) VALUES ($1, $2) RETURNING id`
-	err := f.DB.QueryRowContext(ctx, statement, bookID, formatType).Scan(&formatID)
-	if err != nil {
-			f.Logger.Error("Format Model - Error inserting format", "error", err)
+
+	// First, check if the format already exists in the formats table
+	err := f.DB.QueryRowContext(ctx, `SELECT id FROM formats WHERE format_type = $1`, formatType).Scan(&formatID)
+
+	if err == sql.ErrNoRows {
+			// If it doesn't exist, insert the new format
+			statement := `INSERT INTO formats (format_type) VALUES ($1) RETURNING id`
+			err = f.DB.QueryRowContext(ctx, statement, formatType).Scan(&formatID)
+			if err != nil {
+					f.Logger.Error("Format Model - Error inserting new format", "error", err)
+					return 0, err
+			}
+	} else if err != nil {
+			f.Logger.Error("Format Model - Error retrieving format", "error", err)
 			return 0, err
 	}
 
+	// Return the formatID, either retrieved or newly inserted
 	return formatID, nil
 }
+
 
 func (f *FormatModel) GetByBookID(bookID int) ([]string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)

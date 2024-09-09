@@ -35,7 +35,7 @@ type jsonResponse struct {
 // NewHandlers creates a new Handlers instance
 func NewHandlers(logger *slog.Logger, models data.Models) *Handlers {
 	validate := validator.New()
-	sanitizer := bluemonday.UGCPolicy()
+	sanitizer := bluemonday.StrictPolicy()
 
 	return &Handlers{
 		logger:        logger,

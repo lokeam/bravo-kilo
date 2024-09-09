@@ -378,6 +378,8 @@ func (b *BookModel) InsertBook(book Book, userID int) (int, error) {
 	authorsSet := collections.NewSet()
 	genresSet := collections.NewSet()
 
+	b.Logger.Info("Authors received: ", "authors", book.Authors)
+
 	for _, author := range book.Authors {
 		authorsSet.Add(author)
 	}
@@ -387,28 +389,45 @@ func (b *BookModel) InsertBook(book Book, userID int) (int, error) {
 	}
 
 	// Batch insert authors, associate them with the book
+	// Batch insert authors, associate them with the book
 	for _, author := range authorsSet.Elements() {
+		if author == "" {
+				b.Logger.Error("Author name is empty, skipping insertion")
+				continue
+		}
+
+		b.Logger.Info("Inserting/Querying author", "author", author)
+
 		var authorID int
 		err = tx.QueryRowContext(ctx, `SELECT id FROM authors WHERE name = $1`, author).Scan(&authorID)
 		if err != nil {
-			if err == sql.ErrNoRows {
-				err = tx.QueryRowContext(ctx, `INSERT INTO authors (name) VALUES ($1) RETURNING id`, author).Scan(&authorID)
-				if err != nil {
-					b.Logger.Error("Error inserting author", "error", err)
-					return 0, err
+				if err == sql.ErrNoRows {
+						// Author doesn't exist, so insert it
+						b.Logger.Info("Author not found, inserting new author", "author", author)
+						err = tx.QueryRowContext(ctx, `INSERT INTO authors (name) VALUES ($1) RETURNING id`, author).Scan(&authorID)
+						if err != nil {
+								b.Logger.Error("Error inserting author", "error", err, "author", author)
+								return 0, err
+						}
+				} else {
+						b.Logger.Error("Error querying author", "error", err, "author", author)
+						return 0, err
 				}
-			} else {
-				b.Logger.Error("Error querying author", "error", err)
-				return 0, err
-			}
 		}
 
+		// Log successful author retrieval/insertion
+		b.Logger.Info("Successfully retrieved or inserted author", "authorID", authorID, "author", author)
+
+		// Insert the book-author association
 		_, err = tx.ExecContext(ctx, `INSERT INTO book_authors (book_id, author_id) VALUES ($1, $2)`, newId, authorID)
 		if err != nil {
-			b.Logger.Error("Error inserting book_author association", "error", err)
-			return 0, err
+				b.Logger.Error("Error inserting book_author association", "error", err, "bookID", newId, "authorID", authorID)
+				return 0, err
 		}
+
+		b.Logger.Info("Successfully inserted book-author association", "bookID", newId, "authorID", authorID)
 	}
+
 
 	// Batch insert genres, associate them with the book
 	for _, genre := range genresSet.Elements() {
@@ -1566,27 +1585,30 @@ func (b *BookModel) GetAllBooksPublishDate(userID int) ([]BookInfo, error) {
 // Formats
 func (b *BookModel) AddFormats(ctx context.Context, bookID int, formatIDs []int) error {
 	if len(formatIDs) == 0 {
-		return nil
+			return nil
 	}
 
-	// Build query dynamically based on number of formatIDs
-	valueStrings := make([]string, 0, len(formatIDs))
+	// Build query using parameter placeholders
+	valueStrings := make([]string, len(formatIDs))
 	valueArgs := make([]interface{}, 0, len(formatIDs)*2)
 
 	for i, formatID := range formatIDs {
-		valueStrings = append(valueStrings, fmt.Sprintf("($%d, $%d)", i*2+1, i*2+2))
-		valueArgs = append(valueArgs, bookID, formatID)
+			valueStrings[i] = fmt.Sprintf("($%d, $%d)", i*2+1, i*2+2)
+			valueArgs = append(valueArgs, bookID, formatID)
 	}
 
-	statement := fmt.Sprintf(`INSERT INTO book_formats (book_id, format_id) VALUES %s`, strings.Join(valueStrings, ","))
+	statement := fmt.Sprintf("INSERT INTO book_formats (book_id, format_id) VALUES %s", strings.Join(valueStrings, ","))
+
+	// Execute parameterized query with arguments
 	_, err := b.DB.ExecContext(ctx, statement, valueArgs...)
 	if err != nil {
-		b.Logger.Error("Book Model - Error adding formats", "bookID", bookID, "formatIDs", formatIDs, "error", err)
-		return err
+			b.Logger.Error("Book Model - Error adding formats", "bookID", bookID, "formatIDs", formatIDs, "error", err)
+			return err
 	}
 
 	return nil
 }
+
 
 func (b *BookModel) addOrGetFormatID(ctx context.Context, format string) (int, error) {
 	var formatID int

@@ -6,6 +6,7 @@ import (
 	"bravo-kilo/internal/utils"
 	"encoding/json"
 	"fmt"
+	"html"
 	"net/http"
 	"strconv"
 
@@ -191,77 +192,88 @@ func (h *Handlers) HandleInsertBook(response http.ResponseWriter, request *http.
 	var book data.Book
 	err := json.NewDecoder(request.Body).Decode(&book)
 	if err != nil {
-		h.logger.Error("Error decoding book data", "error", err)
-		http.Error(response, "Error decoding book data - invalid input", http.StatusBadRequest)
-		return
+			h.logger.Error("Error decoding book data", "error", err)
+			http.Error(response, "Error decoding book data - invalid input", http.StatusBadRequest)
+			return
 	}
 
 	// Validate struct
 	err = h.validate.Struct(book)
 	if err != nil {
-		h.logger.Error("Validation error", "error", err)
-		http.Error(response, err.Error(), http.StatusBadRequest)
-		return
+			h.logger.Error("Validation error", "error", err)
+			http.Error(response, err.Error(), http.StatusBadRequest)
+			return
 	}
 
 	// Sanitize input
-	book.Title = h.sanitizer.Sanitize(book.Title)
-	book.Subtitle = h.sanitizer.Sanitize(book.Subtitle)
-	book.Description = h.sanitizer.Sanitize(book.Description)
-	book.Language = h.sanitizer.Sanitize(book.Language)
-	book.ImageLink = h.sanitizer.Sanitize(book.ImageLink)
-	book.Notes = h.sanitizer.Sanitize(book.Notes)
-	book.ISBN10 = h.sanitizer.Sanitize(book.ISBN10)
-	book.ISBN13 = h.sanitizer.Sanitize(book.ISBN13)
+	book.Title = h.sanitizeAndUnescape(book.Title)
+	book.Subtitle = h.sanitizeAndUnescape(book.Subtitle)
+	book.Description = h.sanitizeAndUnescape(book.Description)
+	book.Language = h.sanitizeAndUnescape(book.Language)
+	book.ImageLink = h.sanitizeAndUnescape(book.ImageLink)
+	book.Notes = h.sanitizeAndUnescape(book.Notes)
+	book.ISBN10 = h.sanitizeAndUnescape(book.ISBN10)
+	book.ISBN13 = h.sanitizeAndUnescape(book.ISBN13)
 	for i, author := range book.Authors {
-		book.Authors[i] = h.sanitizer.Sanitize(author)
+			book.Authors[i] = h.sanitizeAndUnescape(author)
 	}
 	for i, genre := range book.Genres {
-		book.Genres[i] = h.sanitizer.Sanitize(genre)
+			book.Genres[i] = h.sanitizeAndUnescape(genre)
 	}
 	for i, tag := range book.Tags {
-		book.Tags[i] = h.sanitizer.Sanitize(tag)
+			book.Tags[i] = h.sanitizeAndUnescape(tag)
 	}
 	for i, format := range book.Formats {
-		book.Formats[i] = h.sanitizer.Sanitize(format)
+			book.Formats[i] = h.sanitizeAndUnescape(format)
 	}
 
 	// Retrieve user ID from context
 	userID, ok := middleware.GetUserID(request.Context())
 	if !ok {
-		h.logger.Error("User ID not found in context")
-		http.Error(response, "User ID not found", http.StatusInternalServerError)
-		return
+			h.logger.Error("User ID not found in context")
+			http.Error(response, "User ID not found", http.StatusInternalServerError)
+			return
 	}
 
 	// Insert the book and associate it with the user
 	bookID, err := h.models.Book.InsertBook(book, userID)
 	if err != nil {
-		h.logger.Error("Error inserting book", "error", err)
-		http.Error(response, "Error inserting book", http.StatusInternalServerError)
-		return
+			h.logger.Error("Error inserting book", "error", err)
+			http.Error(response, "Error inserting book", http.StatusInternalServerError)
+			return
 	}
 
-	// Insert formats and their associations
+	// Insert formats and associate with the book in the book_formats table
 	for _, formatType := range book.Formats {
-		formatID, err := h.models.Format.Insert(bookID, formatType)
-		if err != nil {
-			h.logger.Error("Error inserting format", "error", err)
-			http.Error(response, "Error inserting format", http.StatusInternalServerError)
-			return
-		}
+			// Insert or retrieve the format and get its formatID
+			formatID, err := h.models.Format.Insert(formatType)
+			if err != nil {
+					h.logger.Error("Error inserting format", "error", err)
+					http.Error(response, "Error inserting format", http.StatusInternalServerError)
+					return
+			}
 
-		// Pass the context to the AddFormats method and wrap formatID in a slice
-		if err := h.models.Book.AddFormats(request.Context(), bookID, []int{formatID}); err != nil {
-			h.logger.Error("Error adding format association", "error", err)
-			http.Error(response, "Error adding format association", http.StatusInternalServerError)
-			return
-		}
+			// Now associate the book with the format in the book_formats table
+			err = h.models.Book.AddFormats(request.Context(), bookID, []int{formatID})
+			if err != nil {
+					h.logger.Error("Error adding format association", "error", err)
+					http.Error(response, "Error adding format association", http.StatusInternalServerError)
+					return
+			}
 	}
 
 	response.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(response).Encode(map[string]int{"book_id": bookID})
 }
+
+
+// Helper fn for sanitization
+// sanitizeAndUnescape is a helper function to sanitize input and then unescape HTML entities.
+func (h *Handlers) sanitizeAndUnescape(input string) string {
+	sanitized := h.sanitizer.Sanitize(input)
+	return html.UnescapeString(sanitized)
+}
+
 
 // Helper fns for validation
 func validateISBN10(fl validator.FieldLevel) bool {
@@ -388,7 +400,7 @@ func (h *Handlers) HandleUpdateBook(response http.ResponseWriter, request *http.
 
 	// Insert new formats and their associations
 	for _, formatType := range book.Formats {
-		formatID, err := h.models.Format.Insert(bookID, formatType)
+		formatID, err := h.models.Format.Insert(formatType)
 		if err != nil {
 			h.logger.Error("Error inserting format", "error", err)
 			http.Error(response, "Error inserting format", http.StatusInternalServerError)
