@@ -1,12 +1,12 @@
+/// <reference types="vitest" />
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
-// https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
-  resolve: {
-    alias: {
-      '@': '/src',
-    },
+  test: {
+    globals: true, // Enable Jest-like global functions
+    environment: 'jsdom', // Simulates a DOM environment
+    setupFiles: './vitest.setup.ts', // Similar to Jest's setupFiles
   },
 });
