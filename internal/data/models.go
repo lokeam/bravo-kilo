@@ -12,11 +12,8 @@ const dbTimeout = time.Second * 3
 type Models struct {
 	User      UserModel
 	Token     TokenModel
-	Book      BookModel
+	Book      BookRepository
   Category  CategoryModel
-	Format    FormatModel
-	Author    AuthorModel
-	Genre     GenreModel
 }
 
 type CategoryModel struct {
@@ -35,9 +32,6 @@ func New(db *sql.DB, logger *slog.Logger) (Models, error) {
 		Token:     TokenModel{DB: db, Logger: logger},
 		Book:      BookModel{DB: db, Logger: logger, Author: &AuthorModel{DB: db, Logger: logger}},
 		Category:  CategoryModel{DB: db, Logger: logger},
-		Format:    FormatModel{DB: db, Logger: logger},
-		Author:    AuthorModel{DB: db, Logger: logger},
-		Genre:     GenreModel{DB: db, Logger: logger},
 	}
 
 	// Init prepared statements for BookModel
