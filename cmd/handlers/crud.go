@@ -197,71 +197,21 @@ func (h *Handlers) HandleInsertBook(response http.ResponseWriter, request *http.
 			return
 	}
 
-	// Validate struct
-	err = h.validate.Struct(book)
-	if err != nil {
-			h.logger.Error("Validation error", "error", err)
-			http.Error(response, err.Error(), http.StatusBadRequest)
-			return
-	}
-
-	// Sanitize input
-	book.Title = h.sanitizeAndUnescape(book.Title)
-	book.Subtitle = h.sanitizeAndUnescape(book.Subtitle)
-	book.Description = h.sanitizeAndUnescape(book.Description)
-	book.Language = h.sanitizeAndUnescape(book.Language)
-	book.ImageLink = h.sanitizeAndUnescape(book.ImageLink)
-	book.Notes = h.sanitizeAndUnescape(book.Notes)
-	book.ISBN10 = h.sanitizeAndUnescape(book.ISBN10)
-	book.ISBN13 = h.sanitizeAndUnescape(book.ISBN13)
-	for i, author := range book.Authors {
-			book.Authors[i] = h.sanitizeAndUnescape(author)
-	}
-	for i, genre := range book.Genres {
-			book.Genres[i] = h.sanitizeAndUnescape(genre)
-	}
-	for i, tag := range book.Tags {
-			book.Tags[i] = h.sanitizeAndUnescape(tag)
-	}
-	for i, format := range book.Formats {
-			book.Formats[i] = h.sanitizeAndUnescape(format)
-	}
-
-	// Retrieve user ID from context
+	// Authenticate
 	userID, ok := middleware.GetUserID(request.Context())
 	if !ok {
-			h.logger.Error("User ID not found in context")
-			http.Error(response, "User ID not found", http.StatusInternalServerError)
+			http.Error(response, "User ID not found", http.StatusUnauthorized)
 			return
 	}
 
-	// Insert the book and associate it with the user
-	bookID, err := h.models.Book.InsertBook(book, userID)
+	// Call service create a book entry then insert the book
+	bookID, err := h.bookService.CreateBookEntry(request.Context(), book, userID)
 	if err != nil {
-			h.logger.Error("Error inserting book", "error", err)
 			http.Error(response, "Error inserting book", http.StatusInternalServerError)
 			return
 	}
 
-	// Insert formats and associate with the book in the book_formats table
-	for _, formatType := range book.Formats {
-			// Insert or retrieve the format and get its formatID
-			formatID, err := h.models.Format.Insert(formatType)
-			if err != nil {
-					h.logger.Error("Error inserting format", "error", err)
-					http.Error(response, "Error inserting format", http.StatusInternalServerError)
-					return
-			}
-
-			// Now associate the book with the format in the book_formats table
-			err = h.models.Book.AddFormats(request.Context(), bookID, []int{formatID})
-			if err != nil {
-					h.logger.Error("Error adding format association", "error", err)
-					http.Error(response, "Error adding format association", http.StatusInternalServerError)
-					return
-			}
-	}
-
+	// Send response back to FE
 	response.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(response).Encode(map[string]int{"book_id": bookID})
 }

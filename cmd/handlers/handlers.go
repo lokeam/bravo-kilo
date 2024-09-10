@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bravo-kilo/internal/data"
+	"bravo-kilo/internal/services"
 	"log/slog"
 
 	"github.com/go-playground/validator/v10"
@@ -19,11 +20,12 @@ type Claims struct {
 
 // Handlers struct to hold the logger, models, and new components
 type Handlers struct {
-	logger        *slog.Logger
-	models        data.Models
-	exportLimiter *rate.Limiter
-	validate      *validator.Validate
-	sanitizer     *bluemonday.Policy
+	logger          *slog.Logger
+	models          data.Models
+	bookService     services.BookService
+	exportLimiter   *rate.Limiter
+	validate        *validator.Validate
+	sanitizer       *bluemonday.Policy
 }
 
 type jsonResponse struct {
@@ -33,13 +35,14 @@ type jsonResponse struct {
 }
 
 // NewHandlers creates a new Handlers instance
-func NewHandlers(logger *slog.Logger, models data.Models) *Handlers {
+func NewHandlers(logger *slog.Logger, models data.Models, bookService services.BookService) *Handlers {
 	validate := validator.New()
 	sanitizer := bluemonday.StrictPolicy()
 
 	return &Handlers{
 		logger:        logger,
 		models:        models,
+		bookService:   bookService,  // Initialize BookService here
 		exportLimiter: rate.NewLimiter(rate.Limit(1), 3),
 		validate:      validate,
 		sanitizer:     sanitizer,
