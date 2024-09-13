@@ -11,12 +11,12 @@ import (
 	"path/filepath"
 	"strings"
 
-	"bravo-kilo/cmd/middleware"
-	"bravo-kilo/internal/utils"
+	"github.com/lokeam/bravo-kilo/cmd/middleware"
+	"github.com/lokeam/bravo-kilo/internal/shared/utils"
 )
 
 // File handling
-func (h *Handlers) UploadCSV(response http.ResponseWriter, request *http.Request) {
+func (h *BookHandlers) UploadCSV(response http.ResponseWriter, request *http.Request) {
 	// Check auth
 	userID, ok := middleware.GetUserID(request.Context())
 	if !ok {
@@ -126,7 +126,7 @@ func sanitizeFileName(filename string) string {
 }
 
 // ParseAndProcessCSV
-func (h *Handlers) ParseAndProcessCSV(filePath string, response http.ResponseWriter) {
+func (h *BookHandlers) ParseAndProcessCSV(filePath string, response http.ResponseWriter) {
 
 	// Open the uploaded file
 	file, err := os.Open(filePath)
@@ -199,7 +199,7 @@ func (h *Handlers) ParseAndProcessCSV(filePath string, response http.ResponseWri
 }
 
 
-func (h *Handlers) ParseImageURL(urlStr string, allowedDomains []string) error {
+func (h *BookHandlers) ParseImageURL(urlStr string, allowedDomains []string) error {
 	// Parse the URL
 	parsedURL, err := url.Parse(urlStr)
 	if err != nil {
@@ -224,7 +224,7 @@ func (h *Handlers) ParseImageURL(urlStr string, allowedDomains []string) error {
 }
 
 
-func (h *Handlers) handleParsingError(filePath string, response http.ResponseWriter, err error) {
+func (h *BookHandlers) handleParsingError(filePath string, response http.ResponseWriter, err error) {
 	// Log the error and send a response to the client
 	h.logger.Error("Error during CSV processing", "error", err)
 

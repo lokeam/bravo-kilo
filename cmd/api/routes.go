@@ -1,16 +1,22 @@
 package main
 
 import (
-	"bravo-kilo/cmd/handlers"
-	"bravo-kilo/cmd/middleware"
 	"net/http"
+
+	"github.com/lokeam/bravo-kilo/cmd/middleware"
+	"github.com/lokeam/bravo-kilo/internal/books/handlers"
+	auth "github.com/lokeam/bravo-kilo/internal/shared/handlers/auth"
 
 	chimiddleware "github.com/go-chi/chi/middleware"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
 )
 
-func (app *application) routes(h *handlers.Handlers) http.Handler {
+func (app *application) routes(
+	bookHandlers *handlers.BookHandlers,
+	searchHandlers *handlers.SearchHandlers,
+	authHandlers *auth.AuthHandlers,
+	) http.Handler {
 	mux := chi.NewRouter()
 
 	mux.Use(chimiddleware.Recoverer)
@@ -22,34 +28,34 @@ func (app *application) routes(h *handlers.Handlers) http.Handler {
     AllowCredentials: true,
 	}))
 
-	mux.Get("/auth/google/signin", h.HandleGoogleSignIn)
-	mux.Get("/auth/google/callback", h.HandleGoogleCallback)
-	mux.Get("/auth/token/verify", h.HandleVerifyToken)
-	mux.Post("/auth/token/refresh", h.HandleRefreshToken)
-	mux.Post("/auth/signout", h.HandleSignOut)
+	mux.Get("/auth/google/signin", authHandlers.HandleGoogleSignIn)
+	mux.Get("/auth/google/callback", authHandlers.HandleGoogleCallback)
+	mux.Get("/auth/token/verify", authHandlers.HandleVerifyToken)
+	mux.Post("/auth/token/refresh", authHandlers.HandleRefreshToken)
+	mux.Post("/auth/signout", authHandlers.HandleSignOut)
 
 	mux.Route("/api/v1/user", func(r chi.Router) {
 		r.Use(middleware.VerifyJWT)
-		r.Get("/books", h.HandleGetAllUserBooks)
-		r.Get("/books/authors", h.HandleGetBooksByAuthors)
-		r.Get("/books/format", h.HandleGetBooksByFormat)
-		r.Get("/books/genres", h.HandleGetBooksByGenres)
-		r.Get("/books/homepage", h.HandleGetHomepageData)
+		r.Get("/books", bookHandlers.HandleGetAllUserBooks)
+		r.Get("/books/authors", bookHandlers.HandleGetBooksByAuthors)
+		r.Get("/books/format", bookHandlers.HandleGetBooksByFormat)
+		r.Get("/books/genres", bookHandlers.HandleGetBooksByGenres)
+		r.Get("/books/homepage", bookHandlers.HandleGetHomepageData)
 
 		// Apply rate limiting on uploads and exports"
-		r.With(middleware.RateLimiter).Post("/upload", h.UploadCSV)
-		r.With(middleware.RateLimiter).Get("/export", h.HandleExportUserBooks)
+		r.With(middleware.RateLimiter).Post("/upload", bookHandlers.UploadCSV)
+		r.With(middleware.RateLimiter).Get("/export", bookHandlers.HandleExportUserBooks)
 	})
 
 	mux.Route("/api/v1/books", func(r chi.Router) {
 		r.Use(middleware.VerifyJWT)
-		r.Get("/by-id/{bookID}", h.HandleGetBookByID)
-		r.Get("/search", h.HandleSearchBooks)
-		r.With(middleware.RateLimiter).Get("/summary", h.HandleGetGeminiBookSummary)
-		r.Get("/by-title", h.HandleGetBookIDByTitle)
-		r.Put("/{bookID}", h.HandleUpdateBook)
-		r.Post("/add", h.HandleInsertBook)
-		r.Delete("/{bookID}", h.HandleDeleteBook)
+		r.Get("/by-id/{bookID}", bookHandlers.HandleGetBookByID)
+		r.Get("/search", searchHandlers.HandleSearchBooks)
+		r.With(middleware.RateLimiter).Get("/summary", bookHandlers.HandleGetGeminiBookSummary)
+		r.Get("/by-title", bookHandlers.HandleGetBookIDByTitle)
+		r.Put("/{bookID}", bookHandlers.HandleUpdateBook)
+		r.Post("/add", bookHandlers.HandleInsertBook)
+		r.Delete("/{bookID}", bookHandlers.HandleDeleteBook)
 	})
 
 	return mux

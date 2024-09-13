@@ -1,21 +1,22 @@
 package handlers
 
 import (
-	"bravo-kilo/cmd/middleware"
-	"bravo-kilo/internal/data"
-	"bravo-kilo/internal/utils"
 	"encoding/json"
 	"fmt"
 	"html"
 	"net/http"
 	"strconv"
 
+	"github.com/lokeam/bravo-kilo/cmd/middleware"
+	"github.com/lokeam/bravo-kilo/internal/books/repository"
+	"github.com/lokeam/bravo-kilo/internal/shared/utils"
+
 	"github.com/go-chi/chi/v5"
 	"github.com/go-playground/validator/v10"
 )
 
 // Validate Ownership
-func (h *Handlers) ValidateBookOwnership(request *http.Request) (int, int, error) {
+func (h *BookHandlers) ValidateBookOwnership(request *http.Request) (int, int, error) {
 	// Extract user ID from JWT
 	userID, err := utils.ExtractUserIDFromJWT(request)
 	if err != nil {
@@ -30,7 +31,7 @@ func (h *Handlers) ValidateBookOwnership(request *http.Request) (int, int, error
 	}
 
 	// Check if the book is associated user in the user_books
-	isOwner, err := h.models.Book.IsUserBookOwner(userID, bookID)
+	isOwner, err := h.bookRepo.IsUserBookOwner(userID, bookID)
 	if err != nil {
 			return 0, 0, fmt.Errorf("error checking book ownership: %w", err)
 	}
@@ -43,7 +44,7 @@ func (h *Handlers) ValidateBookOwnership(request *http.Request) (int, int, error
 }
 
 // Get all User Books
-func (h *Handlers) HandleGetAllUserBooks(response http.ResponseWriter, request *http.Request) {
+func (h *BookHandlers) HandleGetAllUserBooks(response http.ResponseWriter, request *http.Request) {
 	// Set Content Security Policy headers
 	utils.SetCSPHeaders(response)
 
@@ -55,7 +56,7 @@ func (h *Handlers) HandleGetAllUserBooks(response http.ResponseWriter, request *
 		return
 	}
 
-	books, err := h.models.Book.GetAllBooksByUserID(userID)
+	books, err := h.bookRepo.GetAllBooksByUserID(userID)
 	if err != nil {
 		h.logger.Error("Error fetching books", "error", err)
 		http.Error(response, "Error fetching books", http.StatusInternalServerError)
@@ -75,7 +76,7 @@ func (h *Handlers) HandleGetAllUserBooks(response http.ResponseWriter, request *
 }
 
 // Retrieve books by a specific author
-func (h *Handlers) HandleGetBooksByAuthors(response http.ResponseWriter, request *http.Request) {
+func (h *BookHandlers) HandleGetBooksByAuthors(response http.ResponseWriter, request *http.Request) {
 	// Set Content Security Policy headers
 	utils.SetCSPHeaders(response)
 
@@ -88,7 +89,7 @@ func (h *Handlers) HandleGetBooksByAuthors(response http.ResponseWriter, request
 	}
 	h.logger.Info("Valid user ID received from token", "userID", userID)
 
-	booksByAuthors, err := h.models.Book.GetAllBooksByAuthors(userID)
+	booksByAuthors, err := h.authorRepo.GetAllBooksByAuthors(userID)
 	if err != nil {
 			h.logger.Error("Error fetching books by authors", "error", err)
 			http.Error(response, "Error fetching books by authors", http.StatusInternalServerError)
@@ -102,7 +103,7 @@ func (h *Handlers) HandleGetBooksByAuthors(response http.ResponseWriter, request
 }
 
 // Get Single Book by ID
-func (h *Handlers) HandleGetBookByID(response http.ResponseWriter, request *http.Request) {
+func (h *BookHandlers) HandleGetBookByID(response http.ResponseWriter, request *http.Request) {
 	// Set Content Security Policy headers
 	utils.SetCSPHeaders(response)
 
@@ -123,7 +124,7 @@ func (h *Handlers) HandleGetBookByID(response http.ResponseWriter, request *http
 	}
 
 	// Fetch the book by ID
-	book, err := h.models.Book.GetBookByID(bookID)
+	book, err := h.bookRepo.GetBookByID(bookID)
 	if err != nil {
 		h.logger.Error("Error fetching book", "error", err)
 		http.Error(response, "Error fetching book", http.StatusInternalServerError)
@@ -131,7 +132,7 @@ func (h *Handlers) HandleGetBookByID(response http.ResponseWriter, request *http
 	}
 
 	// Get formats using context from request
-	formats, err := h.models.Book.GetFormats(request.Context(), bookID)
+	formats, err := h.formatRepo.GetFormats(request.Context(), bookID)
 	if err != nil {
 		h.logger.Error("Error fetching formats", "error", err)
 		http.Error(response, "Error fetching formats", http.StatusInternalServerError)
@@ -147,7 +148,7 @@ func (h *Handlers) HandleGetBookByID(response http.ResponseWriter, request *http
 
 
 // Get a Single Book's ID by title
-func (h *Handlers) HandleGetBookIDByTitle(response http.ResponseWriter, request *http.Request) {
+func (h *BookHandlers) HandleGetBookIDByTitle(response http.ResponseWriter, request *http.Request) {
 	// Extract and ignore user ID from JWT
 	_, err := utils.ExtractUserIDFromJWT(request)
 	if err != nil {
@@ -164,7 +165,7 @@ func (h *Handlers) HandleGetBookIDByTitle(response http.ResponseWriter, request 
 	}
 
 	// Retrieve the book ID by title
-	bookID, err := h.models.Book.GetBookIdByTitle(bookTitle)
+	bookID, err := h.bookRepo.GetBookIdByTitle(bookTitle)
 	if err != nil {
 			h.logger.Error("Error fetching book ID by title", "error", err)
 			http.Error(response, "Error fetching book ID", http.StatusInternalServerError)
@@ -183,13 +184,13 @@ func (h *Handlers) HandleGetBookIDByTitle(response http.ResponseWriter, request 
 }
 
 // Add Book
-func (h *Handlers) HandleInsertBook(response http.ResponseWriter, request *http.Request) {
+func (h *BookHandlers) HandleInsertBook(response http.ResponseWriter, request *http.Request) {
 	// Register custom validations
 	h.validate.RegisterValidation("isbn10", validateISBN10)
 	h.validate.RegisterValidation("isbn13", validateISBN13)
 
 	// Grab book data
-	var book data.Book
+	var book repository.Book
 	err := json.NewDecoder(request.Body).Decode(&book)
 	if err != nil {
 			h.logger.Error("Error decoding book data", "error", err)
@@ -219,7 +220,7 @@ func (h *Handlers) HandleInsertBook(response http.ResponseWriter, request *http.
 
 // Helper fn for sanitization
 // sanitizeAndUnescape is a helper function to sanitize input and then unescape HTML entities.
-func (h *Handlers) sanitizeAndUnescape(input string) string {
+func (h *BookHandlers) sanitizeAndUnescape(input string) string {
 	sanitized := h.sanitizer.Sanitize(input)
 	return html.UnescapeString(sanitized)
 }
@@ -265,7 +266,7 @@ func validateISBN13(fl validator.FieldLevel) bool {
 }
 
 // Update Book
-func (h *Handlers) HandleUpdateBook(response http.ResponseWriter, request *http.Request) {
+func (h *BookHandlers) HandleUpdateBook(response http.ResponseWriter, request *http.Request) {
 	// Register custom validations
 	h.validate.RegisterValidation("isbn10", validateISBN10)
 	h.validate.RegisterValidation("isbn13", validateISBN13)
@@ -279,7 +280,7 @@ func (h *Handlers) HandleUpdateBook(response http.ResponseWriter, request *http.
 	}
 
 	// Grab book data from request body
-	var book data.Book
+	var book repository.Book
 	err = json.NewDecoder(request.Body).Decode(&book)
 	if err != nil {
 		h.logger.Error("Error decoding book data", "error", err)
@@ -320,7 +321,7 @@ func (h *Handlers) HandleUpdateBook(response http.ResponseWriter, request *http.
 	}
 
 	// Update the book
-	err = h.models.Book.Update(book)
+	err = h.bookUpdater.UpdateBook(book)
 	if err != nil {
 		h.logger.Error("Error updating book", "error", err)
 		http.Error(response, "Error updating book", http.StatusInternalServerError)
@@ -328,7 +329,7 @@ func (h *Handlers) HandleUpdateBook(response http.ResponseWriter, request *http.
 	}
 
 	// Fetch current formats using context from request
-	currentFormats, err := h.models.Book.GetFormats(request.Context(), book.ID)
+	currentFormats, err := h.formatRepo.GetFormats(request.Context(), book.ID)
 	if err != nil {
 		h.logger.Error("Error fetching current formats", "error", err)
 		http.Error(response, "Error fetching current formats", http.StatusInternalServerError)
@@ -340,7 +341,7 @@ func (h *Handlers) HandleUpdateBook(response http.ResponseWriter, request *http.
 
 	// Remove specific format associations
 	if len(formatsToRemove) > 0 {
-		err = h.models.Book.RemoveSpecificFormats(request.Context(), book.ID, formatsToRemove)
+		err = h.bookUpdater.RemoveSpecificFormats(request.Context(), book.ID, formatsToRemove)
 		if err != nil {
 			h.logger.Error("Error removing specific formats", "error", err)
 			http.Error(response, "Error removing specific formats", http.StatusInternalServerError)
@@ -350,7 +351,7 @@ func (h *Handlers) HandleUpdateBook(response http.ResponseWriter, request *http.
 
 	// Insert new formats and their associations
 	for _, formatType := range book.Formats {
-		formatID, err := h.models.Format.Insert(formatType)
+		formatID, err := h.formatRepo.AddFormats(formatType)
 		if err != nil {
 			h.logger.Error("Error inserting format", "error", err)
 			http.Error(response, "Error inserting format", http.StatusInternalServerError)
@@ -358,7 +359,7 @@ func (h *Handlers) HandleUpdateBook(response http.ResponseWriter, request *http.
 		}
 
 		// Wrap formatID in a slice and pass to AddFormats
-		if err := h.models.Book.AddFormats(request.Context(), book.ID, []int{formatID}); err != nil {
+		if err := h.formatRepo.AddFormats(request.Context(), book.ID, []int{formatID}); err != nil {
 			h.logger.Error("Error adding format association", "error", err)
 			http.Error(response, "Error adding format association", http.StatusInternalServerError)
 			return
@@ -370,7 +371,7 @@ func (h *Handlers) HandleUpdateBook(response http.ResponseWriter, request *http.
 }
 
 // Delete Book
-func (h *Handlers) HandleDeleteBook(response http.ResponseWriter, request *http.Request) {
+func (h *BookHandlers) HandleDeleteBook(response http.ResponseWriter, request *http.Request) {
 	// Validate book ownership
 	_, bookID, err := h.ValidateBookOwnership(request)
 	if err != nil {
@@ -380,7 +381,7 @@ func (h *Handlers) HandleDeleteBook(response http.ResponseWriter, request *http.
 	}
 
 	// Delete book
-	err = h.models.Book.Delete(bookID)
+	err = h.bookDeleter.Delete(bookID)
 	if err != nil {
 		h.logger.Error("Error deleting book", "error", err)
 		http.Error(response, "Error deleting book", http.StatusInternalServerError)
@@ -392,7 +393,7 @@ func (h *Handlers) HandleDeleteBook(response http.ResponseWriter, request *http.
 }
 
 // Sorting - Get Books by Format
-func (h *Handlers) HandleGetBooksByFormat(response http.ResponseWriter, request *http.Request) {
+func (h *BookHandlers) HandleGetBooksByFormat(response http.ResponseWriter, request *http.Request) {
 	// Set Content Security Policy headers
 	utils.SetCSPHeaders(response)
 
@@ -405,7 +406,7 @@ func (h *Handlers) HandleGetBooksByFormat(response http.ResponseWriter, request 
 	}
 
 	// Get books by format
-	booksByFormat, err := h.models.Book.GetAllBooksByFormat(userID)
+	booksByFormat, err := h.formatRepo.GetAllBooksByFormat(userID)
 	if err != nil {
 		h.logger.Error("Error fetching books by format", "error", err)
 		http.Error(response, "Error fetching books by format", http.StatusInternalServerError)
@@ -419,7 +420,7 @@ func (h *Handlers) HandleGetBooksByFormat(response http.ResponseWriter, request 
 }
 
 // Sorting - Get Books by Genre
-func (h *Handlers) HandleGetBooksByGenres(response http.ResponseWriter, request *http.Request) {
+func (h *BookHandlers) HandleGetBooksByGenres(response http.ResponseWriter, request *http.Request) {
 	// Set Content Security Policy headers
 	utils.SetCSPHeaders(response)
 
@@ -433,7 +434,7 @@ func (h *Handlers) HandleGetBooksByGenres(response http.ResponseWriter, request 
 	h.logger.Info("Valid user ID received from token", "userID", userID)
 
 	// Get the request context and pass it to GetAllBooksByGenres
-	booksByGenres, err := h.models.Book.GetAllBooksByGenres(request.Context(), userID)
+	booksByGenres, err := h.genreRepo.GetAllBooksByGenres(request.Context(), userID)
 	if err != nil {
 		h.logger.Error("Error fetching books by genres", "error", err)
 		http.Error(response, "Error fetching books by genres", http.StatusInternalServerError)
@@ -449,7 +450,7 @@ func (h *Handlers) HandleGetBooksByGenres(response http.ResponseWriter, request 
 }
 
 // Build Homepage Analytics Data Response
-func (h *Handlers) HandleGetHomepageData(response http.ResponseWriter, request *http.Request) {
+func (h *BookHandlers) HandleGetHomepageData(response http.ResponseWriter, request *http.Request) {
 	// Set Content Security Policy headers
 	utils.SetCSPHeaders(response)
 
@@ -469,7 +470,7 @@ func (h *Handlers) HandleGetHomepageData(response http.ResponseWriter, request *
 
 	// Goroutine for GetUserTags
 	go func() {
-		tags, err := h.models.Book.GetUserTags(request.Context(), userID)
+		tags, err := h.tagRepo.GetUserTags(request.Context(), userID)
 		if err != nil {
 			errorChan <- err
 			return
@@ -479,7 +480,7 @@ func (h *Handlers) HandleGetHomepageData(response http.ResponseWriter, request *
 
 	// Goroutine for GetBooksByLanguage
 	go func() {
-		langs, err := h.models.Book.GetBooksByLanguage(request.Context(), userID)
+		langs, err := h.bookCache.GetBooksByLanguage(request.Context(), userID)
 		if err != nil {
 			errorChan <- err
 			return
@@ -489,7 +490,7 @@ func (h *Handlers) HandleGetHomepageData(response http.ResponseWriter, request *
 
 	// Goroutine for GetBooksListByGenre
 	go func() {
-		genres, err := h.models.Book.GetBooksListByGenre(request.Context(), userID)
+		genres, err := h.genreRepo.GetBooksListByGenre(request.Context(), userID)
 		if err != nil {
 			errorChan <- err
 			return

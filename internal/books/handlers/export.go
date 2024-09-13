@@ -1,12 +1,13 @@
 package handlers
 
 import (
-	"bravo-kilo/internal/utils"
 	"net/http"
+
+	"github.com/lokeam/bravo-kilo/internal/shared/utils"
 )
 
 // HandleExportUserBooks exports a user's books as a CSV file
-func (h *Handlers) HandleExportUserBooks(response http.ResponseWriter, request *http.Request) {
+func (h *BookHandlers) HandleExportUserBooks(response http.ResponseWriter, request *http.Request) {
 	userID, err := utils.ExtractUserIDFromJWT(request)
 	if err != nil {
 		h.logger.Error("Error extracting userID from JWT", "error", err)

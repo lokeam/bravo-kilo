@@ -1,20 +1,56 @@
 package handlers
 
 import (
-	"bravo-kilo/internal/data"
-	"bravo-kilo/internal/utils"
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/url"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/lokeam/bravo-kilo/internal/books/repository"
+	auth "github.com/lokeam/bravo-kilo/internal/shared/handlers/auth"
+	"github.com/lokeam/bravo-kilo/internal/shared/utils"
 	"golang.org/x/oauth2"
 )
 
+type SearchHandlers struct {
+	logger        *slog.Logger
+	bookRepo      repository.BookRepository
+	bookCache     repository.BookCache
+	authHandlers  *auth.AuthHandlers
+}
+
+func NewSearchHandlers(
+	logger *slog.Logger,
+	bookRepo repository.BookRepository,
+	bookCache repository.BookCache,
+	authHandlers *auth.AuthHandlers,
+	) (*SearchHandlers, error) {
+	if logger == nil {
+		return nil, fmt.Errorf("logger cannot be nil")
+	}
+
+	if bookRepo == nil {
+		return nil, fmt.Errorf("failed to initialize bookRepo")
+	}
+
+	if bookCache == nil {
+		return nil, fmt.Errorf("failed to initialize bookCache")
+	}
+
+	return &SearchHandlers{
+		logger:   logger,
+		bookRepo: bookRepo,
+		bookCache: bookCache,
+		authHandlers: authHandlers,
+	}, nil
+}
+
+
 // Helper fn to check for empty fields in GBooks Response
-func checkEmptyFields(book data.Book) (bool, []string) {
+func checkEmptyFields(book repository.Book) (bool, []string) {
 	emptyFields := []string{}
 
 	if book.Title == "" {
@@ -36,8 +72,8 @@ func checkEmptyFields(book data.Book) (bool, []string) {
 }
 
 // Format Google Books Response
-func (h *Handlers) formatGoogleBooksResponse(response http.ResponseWriter, booksData interface{}) []data.Book {
-	var gBooksResponse []data.Book
+func (h *SearchHandlers) formatGoogleBooksResponse(response http.ResponseWriter, booksData interface{}) []repository.Book {
+	var gBooksResponse []repository.Book
 
 	// Ensure that the data is correctly cast to the expected format
 	dataMap, ok := booksData.(map[string]interface{})
@@ -129,7 +165,7 @@ func (h *Handlers) formatGoogleBooksResponse(response http.ResponseWriter, books
 }
 
 // Process Google Books API Search
-func (h *Handlers) HandleSearchBooks(response http.ResponseWriter, request *http.Request) {
+func (h *SearchHandlers) HandleSearchBooks(response http.ResponseWriter, request *http.Request) {
 	query := request.URL.Query().Get("query")
 	if query == "" {
 			http.Error(response, "Query parameter required in request", http.StatusBadRequest)
@@ -142,7 +178,7 @@ func (h *Handlers) HandleSearchBooks(response http.ResponseWriter, request *http
 	response.Header().Set("Expires", "0")
 
 	// Get user's access token
-	accessToken, err := h.getUserAccessToken(request)
+	accessToken, err := h.authHandlers.GetUserAccessToken(request)
 	if err != nil {
 			h.logger.Error("Error retrieving user access token", "error", err)
 			http.Error(response, "Error retrieving access token", http.StatusUnauthorized)
@@ -193,7 +229,7 @@ func (h *Handlers) HandleSearchBooks(response http.ResponseWriter, request *http
 	}
 
 	tokenStr := cookie.Value
-	claims := &Claims{}
+	claims := &utils.Claims{}
 	jwtToken, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (interface{}, error) {
 			return jwtKey, nil
 	})
@@ -206,14 +242,14 @@ func (h *Handlers) HandleSearchBooks(response http.ResponseWriter, request *http
 	userID := claims.UserID
 
 	// Create hash sets for user's existing library data
-	isbn10Set, err := h.models.Book.GetAllBooksISBN10(userID)
+	isbn10Set, err := h.bookCache.GetAllBooksISBN10(userID)
 	if err != nil {
 			h.logger.Error("Error retrieving user's ISBN10", "error", err)
 			http.Error(response, "Error retrieving user's ISBN10", http.StatusInternalServerError)
 			return
 	}
 
-	isbn13Set, err := h.models.Book.GetAllBooksISBN13(userID)
+	isbn13Set, err := h.bookCache.GetAllBooksISBN13(userID)
 	if err != nil {
 			h.logger.Error("Error retrieving user's ISBN13", "error", err)
 			http.Error(response, "Error retrieving user's ISBN13", http.StatusInternalServerError)
@@ -229,7 +265,7 @@ func (h *Handlers) HandleSearchBooks(response http.ResponseWriter, request *http
 	// }
 
     // Fetch the user's book publish dates as a slice of BookInfo structs
-    bookList, err := h.models.Book.GetAllBooksPublishDate(userID)
+    bookList, err := h.bookCache.GetAllBooksPublishDate(userID)
     if err != nil {
         h.logger.Error("Error retrieving user's book publish dates", "error", err)
         http.Error(response, "Error retrieving user's book publish dates", http.StatusInternalServerError)

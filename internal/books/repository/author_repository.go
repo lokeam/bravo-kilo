@@ -1,9 +1,11 @@
-package data
+package repository
 
 import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
+	"log/slog"
 	"sort"
 	"strconv"
 	"strings"
@@ -11,7 +13,106 @@ import (
 	"github.com/lib/pq"
 )
 
-func (r *BookRepositoryImpl) GetAllBooksByAuthors(userID int) (map[string]interface{}, error) {
+type AuthorRepository interface {
+	InitPreparedStatements() error
+	InsertAuthor(ctx context.Context, tx *sql.Tx, author string) (int, error)
+	AssociateBookWithAuthor(ctx context.Context, tx *sql.Tx, bookID, authorID int) error
+	GetAllBooksByAuthors(userID int) (map[string]interface{}, error)
+	GetAuthorsForBook(bookID int) ([]string, error)
+	GetAuthorsForBooks(bookIDs []int) (map[int][]string, error)
+	GetAuthorIDByName(ctx context.Context, tx *sql.Tx, authorName string, authorID *int) error
+	GetBooksByAuthor(authorName string) ([]Book, error)
+	BatchInsertAuthors(ctx context.Context, tx *sql.Tx, bookID int, authors []string) error
+}
+
+type AuthorRepositoryImpl struct {
+	DB                        *sql.DB
+	Logger                    *slog.Logger
+	getAllBooksByAuthorsStmt  *sql.Stmt
+	getAuthorsForBooksStmt    *sql.Stmt
+}
+
+func NewAuthorRepository(db *sql.DB, logger *slog.Logger) (AuthorRepository, error) {
+	if db == nil || logger == nil {
+		return nil, fmt.Errorf("database or logger is nil")
+	}
+
+	return &AuthorRepositoryImpl{
+		DB:      db,
+		Logger: logger,
+	}, nil
+}
+
+func (r *AuthorRepositoryImpl) InitPreparedStatements() error {
+	var err error
+
+	// Prepared select statement for GetAuthorsForBooks
+	r.getAuthorsForBooksStmt, err = r.DB.Prepare(`
+		SELECT ba.book_id, a.name
+		FROM authors a
+		JOIN book_authors ba ON a.id = ba.author_id
+		WHERE ba.book_id = ANY($1)`)
+	if err != nil {
+		return err
+	}
+
+	// Prepared select statement for GetAllBooksByAuthors
+	r.getAllBooksByAuthorsStmt, err = r.DB.Prepare(`
+	SELECT r.id, r.title, r.subtitle, r.description, r.language, r.page_count, r.publish_date,
+				 r.image_link, r.notes, r.created_at, r.last_updated, r.isbn_10, r.isbn_13,
+				 a.name AS author_name,
+				 json_agg(DISTINCT g.name) AS genres,
+				 json_agg(DISTINCT f.format_type) AS formats,
+				 r.tags
+	FROM books b
+	INNER JOIN book_authors ba ON r.id = ba.book_id
+	INNER JOIN authors a ON ba.author_id = a.id
+	INNER JOIN user_books ub ON r.id = ub.book_id
+	LEFT JOIN book_genres bg ON r.id = bg.book_id
+	LEFT JOIN genres g ON bg.genre_id = g.id
+	LEFT JOIN book_formats bf ON r.id = bf.book_id
+	LEFT JOIN formats f ON bf.format_id = f.id
+	WHERE ub.user_id = $1::integer  -- Explicitly cast the user_id to integer
+	GROUP BY r.id, a.name`)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (r *AuthorRepositoryImpl) InsertAuthor(ctx context.Context, tx *sql.Tx, author string) (int, error) {
+	var authorID int
+
+	// Check if author already exists
+	err := tx.QueryRowContext(ctx, `SELECT id FROM authors WHERE name = $1`, author).Scan(&authorID)
+	if err == sql.ErrNoRows {
+			// Author doesn't exist, so insert it
+			err = tx.QueryRowContext(ctx, `INSERT INTO authors (name) VALUES ($1) RETURNING id`, author).Scan(&authorID)
+			if err != nil {
+					r.Logger.Error("Error inserting new author", "error", err, "author", author)
+					return 0, err
+			}
+	} else if err != nil {
+			r.Logger.Error("Error checking if author exists", "error", err, "author", author)
+			return 0, err
+	}
+
+	return authorID, nil
+}
+
+func (b *AuthorRepositoryImpl) AssociateBookWithAuthor(ctx context.Context, tx *sql.Tx, bookID, authorID int) error {
+	statement := `INSERT INTO book_authors (book_id, author_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`
+	_, err := tx.ExecContext(ctx, statement, bookID, authorID)
+	if err != nil {
+		b.Logger.Error("Error adding author association", "error", err)
+		return err
+	}
+
+	return nil
+}
+
+func (r *AuthorRepositoryImpl) GetAllBooksByAuthors(userID int) (map[string]interface{}, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
 
@@ -127,7 +228,12 @@ func (r *BookRepositoryImpl) GetAllBooksByAuthors(userID int) (map[string]interf
 	return result, nil
 }
 
-func (r *BookRepositoryImpl) GetAuthorsForBook(bookID int) ([]string, error) {
+func (r *AuthorRepositoryImpl) GetAuthorIDByName(ctx context.Context, tx *sql.Tx, authorName string, authorID *int) error {
+	err := tx.QueryRowContext(ctx, `SELECT id FROM authors WHERE name = $1`, authorName).Scan(authorID)
+	return err
+}
+
+func (r *AuthorRepositoryImpl) GetAuthorsForBook(bookID int) ([]string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
 
@@ -154,7 +260,7 @@ func (r *BookRepositoryImpl) GetAuthorsForBook(bookID int) ([]string, error) {
 	return authors, nil
 }
 
-func (r *BookRepositoryImpl) GetAuthorsForBooks(bookIDs []int) (map[int][]string, error) {
+func (r *AuthorRepositoryImpl) GetAuthorsForBooks(bookIDs []int) (map[int][]string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
 
@@ -199,7 +305,7 @@ func (r *BookRepositoryImpl) GetAuthorsForBooks(bookIDs []int) (map[int][]string
 	return authorsByBook, nil
 }
 
-func (r *BookRepositoryImpl) GetBooksByAuthor(authorName string) ([]Book, error) {
+func (r *AuthorRepositoryImpl) GetBooksByAuthor(authorName string) ([]Book, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
 
@@ -305,6 +411,40 @@ func (r *BookRepositoryImpl) GetBooksByAuthor(authorName string) ([]Book, error)
 	}
 
 	return books, nil
+}
+
+func (r *AuthorRepositoryImpl) BatchInsertAuthors(ctx context.Context, tx *sql.Tx, bookID int, authors []string) error {
+	authorIDMap := make(map[string]int) // Store author name -> authorID
+
+	for _, author := range authors {
+		var authorID int
+		// Check if the author already exists
+		err := tx.QueryRowContext(ctx, `SELECT id FROM authors WHERE name = $1`, author).Scan(&authorID)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				// Author doesn't exist, so insert it
+				err = tx.QueryRowContext(ctx, `INSERT INTO authors (name) VALUES ($1) RETURNING id`, author).Scan(&authorID)
+				if err != nil {
+					r.Logger.Error("Error inserting author", "error", err, "author", author)
+					return err
+				}
+			} else {
+				r.Logger.Error("Error querying author", "error", err, "author", author)
+				return err
+			}
+		}
+
+		authorIDMap[author] = authorID // Store the authorID
+
+		// Insert the book-author association
+		_, err = tx.ExecContext(ctx, `INSERT INTO book_authors (book_id, author_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`, bookID, authorID)
+		if err != nil {
+			r.Logger.Error("Error inserting book-author association", "error", err, "bookID", bookID, "authorID", authorID)
+			return err
+		}
+	}
+
+	return nil
 }
 
 // Helper function to get the last name from a full name

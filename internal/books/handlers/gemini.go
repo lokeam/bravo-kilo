@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"bravo-kilo/internal/utils"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -9,6 +8,7 @@ import (
 	"time"
 
 	"github.com/google/generative-ai-go/genai"
+	"github.com/lokeam/bravo-kilo/internal/shared/utils"
 	"google.golang.org/api/option"
 )
 
