@@ -13,6 +13,7 @@ type Config struct {
 }
 
 var AppConfig Config
+var JwtKey = []byte(os.Getenv("JWT_SECRET_KEY"))
 
 func InitConfig(logger *slog.Logger) {
 	AppConfig.GoogleLoginConfig = oauth2.Config{

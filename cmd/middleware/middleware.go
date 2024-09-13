@@ -3,25 +3,21 @@ package middleware
 import (
 	"context"
 	"net/http"
+	"os"
 
 	"golang.org/x/time/rate"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/lokeam/bravo-kilo/internal/shared/utils"
 )
-
-var jwtKey = []byte("extra-super-secret-256-bit-key")
 
 type userKeyType string
 
 const userIDKey userKeyType = "userID"
 
-type Claims struct {
-    UserID int `json:"userId"`
-    jwt.RegisteredClaims
-}
-
 // Set limiter to 1 req/second w/ burst of 5
 var limiter = rate.NewLimiter(1, 5)
+var jwtKey = []byte(os.Getenv("JWT_SECRET_KEY"))
 
 func RateLimiter(next http.Handler) http.Handler {
     return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -44,7 +40,7 @@ func VerifyJWT(next http.Handler) http.Handler {
 		}
 
 		tokenStr := cookie.Value
-		claims := &Claims{}
+		claims := &utils.Claims{}
 
 		token, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (interface{}, error) {
 			return jwtKey, nil
