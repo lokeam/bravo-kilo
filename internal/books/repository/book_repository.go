@@ -54,62 +54,56 @@ func (r *BookRepositoryImpl) InitPreparedStatements() error {
 	var err error
 
 	// Prepared insert statement for books
-	r.insertBookStmt, err = r.DB.Prepare(`
-		INSERT INTO books (title, subtitle, description, language, page_count, publish_date, image_link, notes, tags, created_at, last_updated, isbn_10, isbn_13)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id`)
-	if err != nil {
-		return err
-	}
-
-	// Prepared select statement for GetBookByID
 	r.getBookByIDStmt, err = r.DB.Prepare(`
-		WITH book_data AS (
-				SELECT id, title, subtitle, description, language, page_count, publish_date,
-							image_link, notes, tags, created_at, last_updated, isbn_10, isbn_13
-				FROM books
-				WHERE id = $1
-		),
-		authors_data AS (
-				SELECT a.name, ba.book_id
-				FROM authors a
-				JOIN book_authors ba ON a.id = ba.author_id
-				WHERE ba.book_id = $1
-		),
-		genres_data AS (
-				SELECT g.name, bg.book_id
-				FROM genres g
-				JOIN book_genres bg ON g.id = bg.genre_id
-				WHERE bg.book_id = $1
-		),
-		formats_data AS (
-				SELECT f.format_type, bf.book_id
-				FROM formats f
-				JOIN book_formats bf ON f.id = bf.format_id
-				WHERE bf.book_id = $1
-		)
-		SELECT
-				b.id, b.title, b.subtitle, b.description, b.language, b.page_count, b.publish_date,
-				b.image_link, b.notes, b.tags, b.created_at, b.last_updated, b.isbn_10, b.isbn_13,
-				COALESCE(a.name, '') AS author_name, COALESCE(g.name, '') AS genre_name, COALESCE(f.format_type, '') AS format_type
-		FROM book_data b
-		LEFT JOIN authors_data a ON b.id = a.book_id
-		LEFT JOIN genres_data g ON b.id = g.book_id
-		LEFT JOIN formats_data f ON b.id = f.book_id
-		`)
-	if err != nil {
-		return err
-	}
+	WITH book_data AS (
+			SELECT id, title, subtitle, description, language, page_count, publish_date,
+						 image_link, notes, tags, created_at, last_updated, isbn_10, isbn_13
+			FROM books
+			WHERE id = $1
+	),
+	authors_data AS (
+			SELECT a.name, ba.book_id
+			FROM authors a
+			JOIN book_authors ba ON a.id = ba.author_id
+			WHERE ba.book_id = $1
+	),
+	genres_data AS (
+			SELECT g.name, bg.book_id
+			FROM genres g
+			JOIN book_genres bg ON g.id = bg.genre_id
+			WHERE bg.book_id = $1
+	),
+	formats_data AS (
+			SELECT f.format_type, bf.book_id
+			FROM formats f
+			JOIN book_formats bf ON f.id = bf.format_id
+			WHERE bf.book_id = $1
+	)
+	SELECT
+			b.id, b.title, b.subtitle, b.description, b.language, b.page_count, b.publish_date,
+			b.image_link, b.notes, b.tags, b.created_at, b.last_updated, b.isbn_10, b.isbn_13,
+			COALESCE(a.name, '') AS author_name, COALESCE(g.name, '') AS genre_name, COALESCE(f.format_type, '') AS format_type
+	FROM book_data b
+	LEFT JOIN authors_data a ON b.id = a.book_id
+	LEFT JOIN genres_data g ON b.id = g.book_id
+	LEFT JOIN formats_data f ON b.id = f.book_id`)
+if err != nil {
+	r.Logger.Error("Error preparing getBookByIDStmt", "error", err)
+	return fmt.Errorf("failed to prepare getBookByIDStmt: %w", err)
+}
 
 	// Prepared insert statement for adding books to user
 	r.addBookToUserStmt, err = r.DB.Prepare(`INSERT INTO user_books (user_id, book_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`)
 	if err != nil {
-		return err
+		r.Logger.Error("Error preparing addBookToUserStmt", "error", err)
+		return fmt.Errorf("failed to prepare addBookToUserStmt: %w", err)
 	}
 
 	// Prepared select statement for getting book ID by title
 	r.getBookIdByTitleStmt, err = r.DB.Prepare(`SELECT id FROM books WHERE title = $1`)
 	if err != nil {
-		return err
+		r.Logger.Error("Error preparing getBookIdByTitleStmt", "error", err)
+		return fmt.Errorf("failed to prepare getBookIdByTitleStmt: %w", err)
 	}
 
 	// Prepared select statement for GetAllBooksByUserID
@@ -120,11 +114,14 @@ func (r *BookRepositoryImpl) InitPreparedStatements() error {
 		INNER JOIN user_books ub ON b.id = ub.book_id
 		WHERE ub.user_id = $1`)
 	if err != nil {
-		return err
+		r.Logger.Error("Error preparing getAllBooksByUserIDStmt", "error", err)
+		return fmt.Errorf("failed to prepare getAllBooksByUserIDStmt: %w", err)
 	}
 
 	return nil
 }
+
+
 
 // Corrected Method Signature in book_queries.go
 func (r *BookRepositoryImpl) InsertBook(ctx context.Context, tx *sql.Tx, book Book, userID int, tagsJSON []byte) (int, error) {
@@ -314,24 +311,40 @@ func (r *BookRepositoryImpl) GetAllBooksByUserID(userID int) ([]Book, error) {
 	var rows *sql.Rows
 	var err error
 
+	// Check if prepared statement is available, otherwise try re-initializing
+	if r.getAllBooksByUserIDStmt == nil {
+		r.Logger.Warn("Prepared statement for retrieving books by user ID is nil, attempting to re-initialize")
+		err = r.InitPreparedStatements()
+		if err != nil {
+			r.Logger.Error("Failed to re-initialize prepared statements", "error", err)
+			return nil, fmt.Errorf("failed to initialize prepared statements: %w", err)
+		}
+	}
+
+	// Now attempt to use the prepared statement
 	if r.getAllBooksByUserIDStmt != nil {
 		r.Logger.Info("Using prepared statement for retrieving books by user ID")
 		rows, err = r.getAllBooksByUserIDStmt.QueryContext(ctx, userID)
+		if err != nil {
+			r.Logger.Error("Error executing getAllBooksByUserIDStmt", "error", err)
+			return nil, fmt.Errorf("failed to execute prepared statement: %w", err)
+		}
 	} else {
-		r.Logger.Warn("Prepared statement for retrieving books by user ID not initialized, using fallback query")
+		// Fallback to raw SQL query if prepared statement is unavailable
+		r.Logger.Warn("Prepared statement for retrieving books by user ID is still uninitialized, using fallback query")
 		query := `
-			SELECT r.id, r.title, r.subtitle, r.description, r.language, r.page_count, r.publish_date,
-						 r.image_link, r.notes, r.created_at, r.last_updated, r.isbn_10, r.isbn_13
+			SELECT b.id, b.title, b.subtitle, b.description, b.language, b.page_count, b.publish_date,
+						 b.image_link, b.notes, b.created_at, b.last_updated, b.isbn_10, b.isbn_13
 			FROM books b
 			INNER JOIN user_books ub ON b.id = ub.book_id
 			WHERE ub.user_id = $1`
 		rows, err = r.DB.QueryContext(ctx, query, userID)
+		if err != nil {
+			r.Logger.Error("Error executing fallback query for GetAllBooksByUserID", "error", err)
+			return nil, fmt.Errorf("failed to execute fallback query: %w", err)
+		}
 	}
 
-	if err != nil {
-		r.Logger.Error("Error retrieving books for user", "error", err)
-		return nil, err
-	}
 	defer rows.Close()
 
 	bookIDMap := make(map[int]*Book)
@@ -355,7 +368,7 @@ func (r *BookRepositoryImpl) GetAllBooksByUserID(userID int) ([]Book, error) {
 			&book.ISBN13,
 		); err != nil {
 			r.Logger.Error("Error scanning book", "error", err)
-			return nil, err
+			return nil, fmt.Errorf("failed to scan book row: %w", err)
 		}
 
 		book.IsInLibrary = true
@@ -365,7 +378,7 @@ func (r *BookRepositoryImpl) GetAllBooksByUserID(userID int) ([]Book, error) {
 
 	// Batch Fetch authors, formats, genres, and tags
 	if err := r.batchFetchBookDetails(ctx, bookIDs, bookIDMap); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to fetch additional book details: %w", err)
 	}
 
 	// Collect books from map into a slice, check for empty fields
@@ -377,6 +390,9 @@ func (r *BookRepositoryImpl) GetAllBooksByUserID(userID int) ([]Book, error) {
 
 	return books, nil
 }
+
+
+
 
 func (r *BookRepositoryImpl) AddBookToUser(tx *sql.Tx, userID, bookID int) error {
 	ctx, cancel := context.WithTimeout(context.Background(), dbconfig.DBTimeout)
@@ -458,11 +474,11 @@ func (r *BookRepositoryImpl) batchFetchBookDetails(ctx context.Context, bookIDs 
 	// Single query to batch fetch authors, genres, formats, and tags
 	query := `
 	SELECT
-		b.id AS book_id,
-		a.name AS author_name,
-		g.name AS genre_name,
-		f.format_type,
-		b.tags
+    b.id AS book_id,
+    a.name AS author_name,
+    g.name AS genre_name,
+    f.format_type,
+    b.tags
 	FROM books b
 	LEFT JOIN book_authors ba ON b.id = ba.book_id
 	LEFT JOIN authors a ON ba.author_id = a.id

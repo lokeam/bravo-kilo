@@ -51,7 +51,7 @@ func (r *GenreRepositoryImpl) InitPreparedStatements() error {
 
 	// Prepared statment for GetAllBooksByGenres
 	r.getAllBooksByGenresStmt, err = r.DB.Prepare(`
-	SELECT b.id, b.title, b.subtitle, b.description, b.language, b.page_count, b.publish_date,
+					SELECT b.id, b.title, b.subtitle, b.description, b.language, b.page_count, b.publish_date,
 								 b.image_link, b.notes, b.created_at, b.last_updated, b.isbn_10, b.isbn_13,
 								 json_agg(DISTINCT g.name) AS genres,
 								 json_agg(DISTINCT a.name) AS authors,
@@ -70,7 +70,7 @@ func (r *GenreRepositoryImpl) InitPreparedStatements() error {
 	if err != nil {
 		return err
 	}
-
+	r.Logger.Info("Successfully prepared getAllBooksByGenresStmt")
 	// Prepared select statement for GetGenres
 	r.getGenresStmt, err = r.DB.Prepare(`
 		SELECT g.name
@@ -128,6 +128,17 @@ func (r *GenreRepositoryImpl) GetAllBooksByGenres(ctx context.Context, userID in
 	var rows *sql.Rows
 	var err error
 
+	// Try re-initializing if the prepared statement is nil
+	if r.getAllBooksByGenresStmt == nil {
+			r.Logger.Warn("getAllBooksByGenresStmt is nil, attempting to reinitialize")
+			err = r.InitPreparedStatements()
+			if err != nil {
+					r.Logger.Error("Failed to re-initialize prepared statements", "error", err)
+					return nil, fmt.Errorf("failed to initialize prepared statements: %w", err)
+			}
+			r.Logger.Info("Successfully reinitialized getAllBooksByGenresStmt")
+	}
+
 	// Use the prepared statement if available, else fall back to a raw query
 	if r.getAllBooksByGenresStmt != nil {
 			r.Logger.Info("Using prepared statement for retrieving books by genres")
@@ -135,12 +146,12 @@ func (r *GenreRepositoryImpl) GetAllBooksByGenres(ctx context.Context, userID in
 	} else {
 			r.Logger.Info("Prepared statement unavailable, using fallback query for retrieving books by genres")
 			query := `
-					SELECT r.id, r.title, r.subtitle, r.description, r.language, r.page_count, r.publish_date,
-								 r.image_link, r.notes, r.created_at, r.last_updated, r.isbn_10, r.isbn_13,
+					SELECT b.id, b.title, b.subtitle, b.description, b.language, b.page_count, b.publish_date,
+								 b.image_link, b.notes, b.created_at, b.last_updated, b.isbn_10, b.isbn_13,
 								 json_agg(DISTINCT g.name) AS genres,
 								 json_agg(DISTINCT a.name) AS authors,
 								 json_agg(DISTINCT f.format_type) AS formats,
-								 r.tags
+								 b.tags
 					FROM books b
 					INNER JOIN user_books ub ON b.id = ub.book_id
 					LEFT JOIN book_genres bg ON b.id = bg.book_id

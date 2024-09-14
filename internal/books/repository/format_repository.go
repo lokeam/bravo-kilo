@@ -136,32 +136,45 @@ func (r *FormatRepositoryImpl) GetAllBooksByFormat(userID int) (map[string][]Boo
 	var rows *sql.Rows
 	var err error
 
+	// If prepared statement is nil, try reinitializing it
+	if r.getAllBooksByFormatStmt == nil {
+		r.Logger.Warn("getAllBooksByFormatStmt is nil, attempting to reinitialize")
+		err = r.InitPreparedStatements()
+		if err != nil {
+			r.Logger.Error("Failed to reinitialize prepared statements", "error", err)
+			return nil, fmt.Errorf("failed to reinitialize prepared statements: %w", err)
+		}
+	}
+
+	// Use the prepared statement if available
 	if r.getAllBooksByFormatStmt != nil {
 		r.Logger.Info("Using prepared statement for retrieving books by format")
 		rows, err = r.getAllBooksByFormatStmt.QueryContext(ctx, userID)
 	} else {
-		r.Logger.Warn("Prepared statement for retrieving books by format is not available. Falling back to raw SQL query")
+		// Fallback to raw SQL query if reinitialization fails
+		r.Logger.Warn("Prepared statement for retrieving books by format is still unavailable, using fallback query")
 		query := `
-		SELECT
-			r.id, r.title, r.subtitle, r.description, r.language, r.page_count, r.publish_date,
-			r.image_link, r.notes, r.created_at, r.last_updated, r.isbn_10, r.isbn_13,
-			f.format_type,
-			array_to_json(array_agg(DISTINCT a.name)) as authors,
-			array_to_json(array_agg(DISTINCT g.name)) as genres,
-			r.tags
-		FROM books b
-		INNER JOIN book_formats bf ON b.id = bf.book_id
-		INNER JOIN formats f ON bf.format_id = f.id
-		INNER JOIN user_books ub ON b.id = ub.book_id
-		LEFT JOIN book_authors ba ON b.id = ba.book_id
-		LEFT JOIN authors a ON ba.author_id = a.id
-		LEFT JOIN book_genres bg ON b.id = bg.book_id
-		LEFT JOIN genres g ON bg.genre_id = g.id
-		WHERE ub.user_id = $1
-		GROUP BY b.id, f.format_type`
+			SELECT
+				b.id, b.title, b.subtitle, b.description, b.language, b.page_count, b.publish_date,
+				b.image_link, b.notes, b.created_at, b.last_updated, b.isbn_10, b.isbn_13,
+				f.format_type,
+				array_to_json(array_agg(DISTINCT a.name)) as authors,
+				array_to_json(array_agg(DISTINCT g.name)) as genres,
+				b.tags
+			FROM books b
+			INNER JOIN book_formats bf ON b.id = bf.book_id
+			INNER JOIN formats f ON bf.format_id = f.id
+			INNER JOIN user_books ub ON b.id = ub.book_id
+			LEFT JOIN book_authors ba ON b.id = ba.book_id
+			LEFT JOIN authors a ON ba.author_id = a.id
+			LEFT JOIN book_genres bg ON b.id = bg.book_id
+			LEFT JOIN genres g ON bg.genre_id = g.id
+			WHERE ub.user_id = $1
+			GROUP BY b.id, f.format_type`
 		rows, err = r.DB.QueryContext(ctx, query, userID)
 	}
 
+	// Handle query execution error
 	if err != nil {
 		r.Logger.Error("Error retrieving books by format", "error", err)
 		return nil, err
