@@ -67,7 +67,7 @@ func NewFactory(db *sql.DB, log *slog.Logger) (*Factory, error) {
 		return nil, err
 	}
 
-	bookUpdater, err := repository.NewBookUpdater(db, log)
+	bookUpdater, err := repository.NewBookUpdater(db, log, formatRepo, genreRepo)
 	if err != nil {
 		log.Error("Error initializing book updater", "error", err)
 		return nil, err
@@ -81,9 +81,26 @@ func NewFactory(db *sql.DB, log *slog.Logger) (*Factory, error) {
 	}
 
 	// Initialize services
-	bookService, err := services.NewBookService(bookRepo, authorRepo, genreRepo, formatRepo, tagRepo, log, transactionManager)
+	bookService, err := services.NewBookService(
+		bookRepo,
+		authorRepo,
+		genreRepo,
+		formatRepo,
+		tagRepo,
+		log,
+		transactionManager,
+	)
 	if err != nil {
 		log.Error("Error initializing book service manager", "error", err)
+		os.Exit(1)
+	}
+
+	exportService, err := services.NewExportService(
+		log,
+		bookRepo,
+	)
+	if err != nil {
+		log.Error("Error initializing export service manager", "error", err)
 		os.Exit(1)
 	}
 
@@ -101,6 +118,7 @@ func NewFactory(db *sql.DB, log *slog.Logger) (*Factory, error) {
 
 	// Initialize handlers
 	bookHandlers, err := handlers.NewBookHandlers(
+		db,
 		log,
 		bookModels,
 		authorRepo,
@@ -112,6 +130,7 @@ func NewFactory(db *sql.DB, log *slog.Logger) (*Factory, error) {
 		bookDeleter,
 		bookUpdater,
 		bookService,
+		exportService,
 	)
 	if err != nil {
 		return nil, err

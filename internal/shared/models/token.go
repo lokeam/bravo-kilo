@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"log/slog"
 	"time"
+
+	"github.com/lokeam/bravo-kilo/internal/dbconfig"
 )
 
 type TokenModel struct {
@@ -21,7 +23,7 @@ type Token struct {
 }
 
 func (t *TokenModel) Insert(token Token) error {
-	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), dbconfig.DBTimeout)
 	defer cancel()
 
 	statement := `INSERT INTO tokens (user_id, refresh_token, token_expiry, previous_token)
@@ -41,7 +43,7 @@ func (t *TokenModel) Insert(token Token) error {
 }
 
 func (t *TokenModel) GetRefreshTokenByUserID(userID int) (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), dbconfig.DBTimeout)
 	defer cancel()
 
 	var refreshToken string
@@ -60,7 +62,7 @@ func (t *TokenModel) GetRefreshTokenByUserID(userID int) (string, error) {
 }
 
 func (t *TokenModel) Rotate(userID int, newToken, oldToken string, expiry time.Time) error {
-	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), dbconfig.DBTimeout)
 	defer cancel()
 
 	statement := `UPDATE tokens SET refresh_token = $1, previous_token = $2, token_expiry = $3 WHERE user_id = $4 AND refresh_token = $5`
@@ -73,7 +75,7 @@ func (t *TokenModel) Rotate(userID int, newToken, oldToken string, expiry time.T
 }
 
 func (t *TokenModel) DeleteByUserID(userID int) error {
-	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), dbconfig.DBTimeout)
 	defer cancel()
 
 	statement := `DELETE FROM tokens WHERE user_id = $1`

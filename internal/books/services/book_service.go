@@ -215,18 +215,20 @@ func (s *BookServiceImpl) createGenreEntries(ctx context.Context, tx *sql.Tx, bo
 
 // Helper to insert formats
 func (s *BookServiceImpl) insertFormats(ctx context.Context, tx *sql.Tx, bookID int, formats []string) error {
-	for _, format := range formats {
-		formatID, err := s.formatRepository.AddOrGetFormatID(ctx, tx, format)
-		if err != nil {
-			return err
-		}
-		err = s.formatRepository.AddFormat(ctx, tx, bookID, formatID)
-		if err != nil {
-			return err
-		}
+	if len(formats) == 0 {
+		return nil
 	}
+
+	// Add the formats using AddFormats
+	err := s.formatRepository.AddFormats(tx, ctx, bookID, formats)
+	if err != nil {
+		s.logger.Error("Error inserting formats", "error", err)
+		return err
+	}
+
 	return nil
 }
+
 
 // Helper to format the publish date
 func formatPublishDate(dateStr string) string {

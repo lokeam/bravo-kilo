@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/lib/pq"
+	"github.com/lokeam/bravo-kilo/internal/dbconfig"
 	"github.com/lokeam/bravo-kilo/internal/shared/collections"
 )
 
@@ -113,10 +114,10 @@ func (r *BookRepositoryImpl) InitPreparedStatements() error {
 
 	// Prepared select statement for GetAllBooksByUserID
 	r.getAllBooksByUserIDStmt, err = r.DB.Prepare(`
-		SELECT r.id, r.title, r.subtitle, r.description, r.language, r.page_count, r.publish_date,
-					 r.image_link, r.notes, r.created_at, r.last_updated, r.isbn_10, r.isbn_13
+		SELECT b.id, b.title, b.subtitle, b.description, b.language, b.page_count, b.publish_date,
+       b.image_link, b.notes, b.created_at, b.last_updated, b.isbn_10, b.isbn_13
 		FROM books b
-		INNER JOIN user_books ub ON r.id = ub.book_id
+		INNER JOIN user_books ub ON b.id = ub.book_id
 		WHERE ub.user_id = $1`)
 	if err != nil {
 		return err
@@ -124,6 +125,7 @@ func (r *BookRepositoryImpl) InitPreparedStatements() error {
 
 	return nil
 }
+
 // Corrected Method Signature in book_queries.go
 func (r *BookRepositoryImpl) InsertBook(ctx context.Context, tx *sql.Tx, book Book, userID int, tagsJSON []byte) (int, error) {
 	var newId int
@@ -162,7 +164,7 @@ func (r *BookRepositoryImpl) InsertBook(ctx context.Context, tx *sql.Tx, book Bo
 }
 
 func (r *BookRepositoryImpl) GetBookByID(id int) (*Book, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), dbconfig.DBTimeout)
 	defer cancel()
 
 	// Check if prepared statement is available
@@ -277,7 +279,7 @@ func (r *BookRepositoryImpl) GetBookByID(id int) (*Book, error) {
 }
 
 func (r *BookRepositoryImpl) GetBookIdByTitle(title string) (int, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), dbconfig.DBTimeout)
 	defer cancel()
 
 	var bookID int
@@ -306,7 +308,7 @@ func (r *BookRepositoryImpl) GetBookIdByTitle(title string) (int, error) {
 }
 
 func (r *BookRepositoryImpl) GetAllBooksByUserID(userID int) ([]Book, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), dbconfig.DBTimeout)
 	defer cancel()
 
 	var rows *sql.Rows
@@ -377,7 +379,7 @@ func (r *BookRepositoryImpl) GetAllBooksByUserID(userID int) ([]Book, error) {
 }
 
 func (r *BookRepositoryImpl) AddBookToUser(tx *sql.Tx, userID, bookID int) error {
-	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), dbconfig.DBTimeout)
 	defer cancel()
 
 	// Use prepared statement if available
@@ -403,7 +405,7 @@ func (r *BookRepositoryImpl) AddBookToUser(tx *sql.Tx, userID, bookID int) error
 }
 
 func (r *BookRepositoryImpl) IsUserBookOwner(userID, bookID int) (bool, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), dbconfig.DBTimeout)
 	defer cancel()
 
 	var exists bool
@@ -431,7 +433,7 @@ func (r *BookRepositoryImpl) IsUserBookOwner(userID, bookID int) (bool, error) {
 
 
 func (r *BookRepositoryImpl) addBookToUser(tx *sql.Tx, userID, bookID int) error {
-	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), dbconfig.DBTimeout)
 	defer cancel()
 
 	if r.addBookToUserStmt != nil {

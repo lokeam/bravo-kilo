@@ -18,7 +18,7 @@ func (h *BookHandlers) HandleExportUserBooks(response http.ResponseWriter, reque
 	response.Header().Set("Content-Type", "text/csv")
 	response.Header().Set("Content-Disposition", "attachment; filename=books.csv")
 
-	if err := h.models.Book.GenerateBookCSV(userID, response); err != nil {
+	if err := h.exportService.GenerateBookCSV(userID, response); err != nil {
 		h.logger.Error("Error generating CSV for user books", "userID", userID, "error", err)
 		http.Error(response, "Error generating CSV", http.StatusInternalServerError)
 		return

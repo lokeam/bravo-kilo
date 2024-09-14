@@ -7,14 +7,20 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+
+	"github.com/lib/pq"
+	"github.com/lokeam/bravo-kilo/internal/dbconfig"
 )
 
 type FormatRepository interface {
 	InitPreparedStatements() error
 	AddFormats(tx *sql.Tx, ctx context.Context, bookID int, formatTypes []string) error
+	AddOrGetFormatID(ctx context.Context, tx *sql.Tx, format string) (int, error)
+	AssociateFormatWithBooks(ctx context.Context, tx *sql.Tx, bookID, authorID int) error
 	GetAllBooksByFormat(userID int) (map[string][]Book, error)
 	GetFormats(ctx context.Context, bookID int) ([]string, error)
 	GetOrInsertFormat(ctx context.Context, formatType string) (int, error)
+	RemoveSpecificFormats(ctx context.Context, bookID int, formats []string) error
 }
 
 type FormatRepositoryImpl struct {
@@ -41,22 +47,22 @@ func (r *FormatRepositoryImpl) InitPreparedStatements() error {
 	// Prepared statement for GetAllBooksByFormat
 	r.getAllBooksByFormatStmt, err = r.DB.Prepare(`
 	SELECT
-		r.id, r.title, r.subtitle, r.description, r.language, r.page_count, r.publish_date,
-		r.image_link, r.notes, r.created_at, r.last_updated, r.isbn_10, r.isbn_13,
+		b.id, b.title, b.subtitle, b.description, b.language, b.page_count, b.publish_date,
+		b.image_link, b.notes, b.created_at, b.last_updated, b.isbn_10, b.isbn_13,
 		f.format_type,
 		array_to_json(array_agg(DISTINCT a.name)) as authors,
 		array_to_json(array_agg(DISTINCT g.name)) as genres,
-		r.tags
+		b.tags
 	FROM books b
-	INNER JOIN book_formats bf ON r.id = bf.book_id
+	INNER JOIN book_formats bf ON b.id = bf.book_id
 	INNER JOIN formats f ON bf.format_id = f.id
-	INNER JOIN user_books ub ON r.id = ub.book_id
-	LEFT JOIN book_authors ba ON r.id = ba.book_id
+	INNER JOIN user_books ub ON b.id = ub.book_id
+	LEFT JOIN book_authors ba ON b.id = ba.book_id
 	LEFT JOIN authors a ON ba.author_id = a.id
-	LEFT JOIN book_genres bg ON r.id = bg.book_id
+	LEFT JOIN book_genres bg ON b.id = bg.book_id
 	LEFT JOIN genres g ON bg.genre_id = g.id
 	WHERE ub.user_id = $1
-	GROUP BY r.id, f.format_type`)
+	GROUP BY b.id, f.format_type`)
 	if err != nil {
 	return err
 	}
@@ -107,8 +113,24 @@ func (r *FormatRepositoryImpl) AddFormats(tx *sql.Tx, ctx context.Context, bookI
 	return nil
 }
 
+func (b *FormatRepositoryImpl) AddOrGetFormatID(ctx context.Context, tx *sql.Tx, format string) (int, error) {
+	var formatID int
+	statement := `
+		INSERT INTO formats (format_type)
+		VALUES ($1)
+		ON CONFLICT (format_type) DO UPDATE
+		SET format_type = EXCLUDED.format_type
+		RETURNING id`
+	err := b.DB.QueryRowContext(ctx, statement, format).Scan(&formatID)
+	if err != nil {
+		b.Logger.Error("Error inserting or updating format", "error", err)
+		return 0, err
+	}
+	return formatID, nil
+}
+
 func (r *FormatRepositoryImpl) GetAllBooksByFormat(userID int) (map[string][]Book, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), dbconfig.DBTimeout)
 	defer cancel()
 
 	var rows *sql.Rows
@@ -294,7 +316,7 @@ func (r *FormatRepositoryImpl) GetOrInsertFormat(ctx context.Context, formatType
 	return formatID, nil
 }
 
-func (b *AuthorRepositoryImpl) AssociateFormatWithBooks(ctx context.Context, tx *sql.Tx, bookID, authorID int) error {
+func (b *FormatRepositoryImpl) AssociateFormatWithBooks(ctx context.Context, tx *sql.Tx, bookID, authorID int) error {
 	statement := `INSERT INTO book_authors (book_id, author_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`
 	_, err := tx.ExecContext(ctx, statement, bookID, authorID)
 	if err != nil {
@@ -304,3 +326,23 @@ func (b *AuthorRepositoryImpl) AssociateFormatWithBooks(ctx context.Context, tx 
 
 	return nil
 }
+
+
+func (b *FormatRepositoryImpl) RemoveSpecificFormats(ctx context.Context, bookID int, formats []string) error {
+	statement := `
+		DELETE FROM book_formats
+		WHERE book_id = $1
+		AND format_id IN (
+			SELECT id FROM formats WHERE format_type = ANY($2)
+		)`
+
+	_, err := b.DB.ExecContext(ctx, statement, bookID, pq.Array(formats))
+	if err != nil {
+		b.Logger.Error("Error removing specific formats", "error", err)
+		return err
+	}
+
+	return nil
+}
+
+

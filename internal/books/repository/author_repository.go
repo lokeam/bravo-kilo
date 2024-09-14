@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/lib/pq"
+	"github.com/lokeam/bravo-kilo/internal/dbconfig"
 )
 
 type AuthorRepository interface {
@@ -34,7 +35,7 @@ type AuthorRepositoryImpl struct {
 
 func NewAuthorRepository(db *sql.DB, logger *slog.Logger) (AuthorRepository, error) {
 	if db == nil || logger == nil {
-		return nil, fmt.Errorf("database or logger is nil")
+		return nil, fmt.Errorf("new author repository, database or logger is nil")
 	}
 
 	return &AuthorRepositoryImpl{
@@ -58,22 +59,22 @@ func (r *AuthorRepositoryImpl) InitPreparedStatements() error {
 
 	// Prepared select statement for GetAllBooksByAuthors
 	r.getAllBooksByAuthorsStmt, err = r.DB.Prepare(`
-	SELECT r.id, r.title, r.subtitle, r.description, r.language, r.page_count, r.publish_date,
-				 r.image_link, r.notes, r.created_at, r.last_updated, r.isbn_10, r.isbn_13,
+	SELECT b.id, b.title, b.subtitle, b.description, b.language, b.page_count, b.publish_date,
+				 b.image_link, b.notes, b.created_at, b.last_updated, b.isbn_10, b.isbn_13,
 				 a.name AS author_name,
 				 json_agg(DISTINCT g.name) AS genres,
 				 json_agg(DISTINCT f.format_type) AS formats,
-				 r.tags
+				 b.tags
 	FROM books b
-	INNER JOIN book_authors ba ON r.id = ba.book_id
+	INNER JOIN book_authors ba ON b.id = ba.book_id
 	INNER JOIN authors a ON ba.author_id = a.id
-	INNER JOIN user_books ub ON r.id = ub.book_id
-	LEFT JOIN book_genres bg ON r.id = bg.book_id
+	INNER JOIN user_books ub ON b.id = ub.book_id
+	LEFT JOIN book_genres bg ON b.id = bg.book_id
 	LEFT JOIN genres g ON bg.genre_id = g.id
-	LEFT JOIN book_formats bf ON r.id = bf.book_id
+	LEFT JOIN book_formats bf ON b.id = bf.book_id
 	LEFT JOIN formats f ON bf.format_id = f.id
 	WHERE ub.user_id = $1::integer  -- Explicitly cast the user_id to integer
-	GROUP BY r.id, a.name`)
+	GROUP BY b.id, a.name`)
 	if err != nil {
 		return err
 	}
@@ -113,7 +114,7 @@ func (b *AuthorRepositoryImpl) AssociateBookWithAuthor(ctx context.Context, tx *
 }
 
 func (r *AuthorRepositoryImpl) GetAllBooksByAuthors(userID int) (map[string]interface{}, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), dbconfig.DBTimeout)
 	defer cancel()
 
 	// Single query to get all book details by authors
@@ -234,7 +235,7 @@ func (r *AuthorRepositoryImpl) GetAuthorIDByName(ctx context.Context, tx *sql.Tx
 }
 
 func (r *AuthorRepositoryImpl) GetAuthorsForBook(bookID int) ([]string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), dbconfig.DBTimeout)
 	defer cancel()
 
 	query := `
@@ -244,16 +245,16 @@ func (r *AuthorRepositoryImpl) GetAuthorsForBook(bookID int) ([]string, error) {
 	WHERE ba.book_id = $1`
 
 	var authorsJSON []byte
-	err := b.DB.QueryRowContext(ctx, query, bookID).Scan(&authorsJSON)
+	err := r.DB.QueryRowContext(ctx, query, bookID).Scan(&authorsJSON)
 	if err != nil {
-		b.Logger.Error("Error fetching authors for book", "error", err)
+		r.Logger.Error("Error fetching authors for book", "error", err)
 		return nil, err
 	}
 
 	// Unmarshal the JSON array of authors
 	var authors []string
 	if err := json.Unmarshal(authorsJSON, &authors); err != nil {
-		b.Logger.Error("Error unmarshalling authors JSON", "error", err)
+		r.Logger.Error("Error unmarshalling authors JSON", "error", err)
 		return nil, err
 	}
 
@@ -261,7 +262,7 @@ func (r *AuthorRepositoryImpl) GetAuthorsForBook(bookID int) ([]string, error) {
 }
 
 func (r *AuthorRepositoryImpl) GetAuthorsForBooks(bookIDs []int) (map[int][]string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), dbconfig.DBTimeout)
 	defer cancel()
 
 	var rows *sql.Rows
@@ -306,7 +307,7 @@ func (r *AuthorRepositoryImpl) GetAuthorsForBooks(bookIDs []int) (map[int][]stri
 }
 
 func (r *AuthorRepositoryImpl) GetBooksByAuthor(authorName string) ([]Book, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), dbconfig.DBTimeout)
 	defer cancel()
 
 	// Fetch all books by the author

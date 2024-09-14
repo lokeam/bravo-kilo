@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/lokeam/bravo-kilo/internal/dbconfig"
 	"github.com/lokeam/bravo-kilo/internal/shared/collections"
 	"github.com/lokeam/bravo-kilo/internal/shared/customheap"
 )
@@ -25,6 +26,7 @@ var booksByGenresCache  sync.Map
 var userTagsCache       sync.Map
 
 type BookCache interface {
+	InitPreparedStatements() error
 	GetAllBooksISBN10(userID int) (*collections.Set, error)
 	GetAllBooksISBN13(userID int) (*collections.Set, error)
 	GetAllBooksTitles(userID int) (*collections.Set, error)
@@ -34,8 +36,12 @@ type BookCache interface {
 }
 
 type BookCacheImpl struct {
-	DB      *sql.DB
-	Logger  *slog.Logger
+	DB               *sql.DB
+	Logger           *slog.Logger
+	insertBookStmt   *sql.Stmt
+	getUserTagsStmt  *sql.Stmt
+	getAllLangStmt   *sql.Stmt
+
 }
 
 func NewBookCache(db *sql.DB, logger *slog.Logger) (BookCache, error) {
@@ -44,9 +50,37 @@ func NewBookCache(db *sql.DB, logger *slog.Logger) (BookCache, error) {
 	}
 
 	return &BookCacheImpl{
-		DB:          db,
-		Logger:      logger,
+		DB:              db,
+		Logger:          logger,
 	}, nil
+}
+
+func (b *BookCacheImpl) InitPreparedStatements() error {
+	var err error
+
+	// Prepared statment for GetLanguages
+	b.getAllLangStmt, err = b.DB.Prepare(`
+	SELECT language, COUNT(*) AS total
+		FROM books
+		INNER JOIN user_books ub ON books.id = ub.book_id
+		WHERE ub.user_id = $1
+		GROUP BY language
+		ORDER BY total DESC`)
+	if err != nil {
+		return err
+	}
+
+	b.getUserTagsStmt, err = b.DB.Prepare(`
+	SELECT b.tags
+		FROM books b
+		INNER JOIN user_books ub ON b.id = ub.book_id
+		WHERE ub.user_id = $1
+	`)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // ISBN10 + ISBN13 (Returns a HashSet)
@@ -57,7 +91,7 @@ func (b *BookCacheImpl) GetAllBooksISBN10(userID int) (*collections.Set, error) 
 		return cache.(*collections.Set), nil
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), dbconfig.DBTimeout)
 	defer cancel()
 
 	query := `
@@ -105,7 +139,7 @@ func (b *BookCacheImpl) GetAllBooksISBN13(userID int) (*collections.Set, error) 
 		return cache.(*collections.Set), nil
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), dbconfig.DBTimeout)
 	defer cancel()
 
 	query := `
@@ -153,7 +187,7 @@ func (b *BookCacheImpl) GetAllBooksTitles(userID int) (*collections.Set, error) 
 		return cache.(*collections.Set), nil
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), dbconfig.DBTimeout)
 	defer cancel()
 
 	query := `
@@ -194,7 +228,7 @@ func (b *BookCacheImpl) GetAllBooksTitles(userID int) (*collections.Set, error) 
 
 // (Return a Slice of BookInfo Structs to handle books with duplicate titles)
 func (b *BookCacheImpl) GetAllBooksPublishDate(userID int) ([]BookInfo, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), dbconfig.DBTimeout)
 	defer cancel()
 
 	query := `

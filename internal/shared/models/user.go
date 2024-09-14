@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"log/slog"
 	"time"
+
+	"github.com/lokeam/bravo-kilo/internal/dbconfig"
 )
 
 type UserModel struct {
@@ -23,7 +25,7 @@ type User struct {
 }
 
 func (u *UserModel) Insert(user User) (int, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), dbconfig.DBTimeout)
 	defer cancel()
 
 	var newId int
@@ -46,7 +48,7 @@ func (u *UserModel) Insert(user User) (int, error) {
 }
 
 func (u *UserModel) GetByID(id int) (*User, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), dbconfig.DBTimeout)
 	defer cancel()
 
 	var user User
@@ -74,7 +76,7 @@ func (u *UserModel) GetByID(id int) (*User, error) {
 }
 
 func (u *UserModel) GetByEmail(email string) (*User, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), dbconfig.DBTimeout)
 	defer cancel()
 
 	var user User

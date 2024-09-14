@@ -97,7 +97,7 @@ func (h *SearchHandlers) formatGoogleBooksResponse(response http.ResponseWriter,
 		}
 
 		// Use utility functions to safely retrieve string and integer values with defaults
-		formattedBook := data.Book{
+		formattedBook := repository.Book{
 			Title:       utils.GetStringValOrDefault(volumeInfo, "title", ""),
 			Subtitle:    utils.GetStringValOrDefault(volumeInfo, "subtitle", ""),
 			Description: utils.GetStringValOrDefault(volumeInfo, "description", ""),

@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"fmt"
 	"log/slog"
+
+	"github.com/lokeam/bravo-kilo/internal/dbconfig"
 )
 
 type BookDeleter interface {
@@ -28,7 +30,7 @@ func NewBookDeleter(db *sql.DB, logger *slog.Logger) (BookDeleter, error) {
 }
 
 func (b *BookDeleterImpl) Delete(id int) error {
-	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), dbconfig.DBTimeout)
 	defer cancel()
 
 	// Start a new transaction

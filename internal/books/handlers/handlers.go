@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"database/sql"
 	"fmt"
 	"log/slog"
 	"os"
@@ -20,21 +21,23 @@ var jwtKey = []byte(os.Getenv("JWT_SECRET_KEY"))
 
 // Handlers struct to hold the logger, models, and new components
 type BookHandlers struct {
-	authorRepo      repository.AuthorRepository
-	bookRepo        repository.BookRepository
-	formatRepo      repository.FormatRepository
-	genreRepo       repository.GenreRepository
-	tagRepo         repository.TagRepository
-	bookCache       repository.BookCache
-	bookDeleter     repository.BookDeleter
-	bookUpdater     repository.BookUpdater
-	bookService     services.BookService
-	exportLimiter   *rate.Limiter
-	logger          *slog.Logger
-	bookModels      books.Models
-	sanitizer       *bluemonday.Policy
-	searchHandlers  *SearchHandlers
-	validate        *validator.Validate
+	authorRepo        repository.AuthorRepository
+	bookRepo          repository.BookRepository
+	formatRepo        repository.FormatRepository
+	genreRepo         repository.GenreRepository
+	tagRepo           repository.TagRepository
+	bookCache         repository.BookCache
+	bookDeleter       repository.BookDeleter
+	bookUpdater       repository.BookUpdater
+	bookService       services.BookService
+	exportService     services.ExportService
+	exportLimiter     *rate.Limiter
+	logger            *slog.Logger
+	bookModels        books.Models
+	sanitizer         *bluemonday.Policy
+	searchHandlers    *SearchHandlers
+	validate          *validator.Validate
+	DB                *sql.DB
 }
 
 type jsonResponse struct {
@@ -45,6 +48,7 @@ type jsonResponse struct {
 
 // Create a new Handlers instance
 func NewBookHandlers(
+	db *sql.DB,
 	logger *slog.Logger,
 	bookModels books.Models,
 	authorRepo repository.AuthorRepository,
@@ -56,6 +60,7 @@ func NewBookHandlers(
 	bookDeleter repository.BookDeleter,
 	bookUpdater repository.BookUpdater,
 	bookService services.BookService,
+	exportService services.ExportService,
 	) (*BookHandlers, error) {
 	if logger == nil {
 		return nil, fmt.Errorf("logger cannot be nil")
@@ -75,6 +80,10 @@ func NewBookHandlers(
 
 	if genreRepo == nil {
 		return nil, fmt.Errorf("genreRepo cannot be nil")
+	}
+
+	if exportService == nil {
+		return nil, fmt.Errorf("exportService cannot be nil")
 	}
 
 	if bookUpdater == nil {
@@ -100,19 +109,21 @@ func NewBookHandlers(
 	}
 
 	return &BookHandlers{
-		logger:        logger,
-		bookModels:    bookModels,
-		authorRepo:    authorRepo,
-		bookRepo:      bookRepo,
-		formatRepo:    formatRepo,
-		genreRepo:     genreRepo,
-		tagRepo:       tagRepo,
-		bookCache:     bookCache,
-		bookDeleter:   bookDeleter,
-		bookUpdater:   bookUpdater,
-		bookService:   bookService,
-		exportLimiter: rate.NewLimiter(rate.Limit(1), 3),
-		validate:      validate,
-		sanitizer:     sanitizer,
+		DB:                db,
+		logger:            logger,
+		bookModels:        bookModels,
+		authorRepo:        authorRepo,
+		bookRepo:          bookRepo,
+		formatRepo:        formatRepo,
+		genreRepo:         genreRepo,
+		tagRepo:           tagRepo,
+		bookCache:         bookCache,
+		bookDeleter:       bookDeleter,
+		bookUpdater:       bookUpdater,
+		bookService:       bookService,
+		exportService:     exportService,
+		exportLimiter:     rate.NewLimiter(rate.Limit(1), 3),
+		validate:          validate,
+		sanitizer:         sanitizer,
 	}, nil
 }

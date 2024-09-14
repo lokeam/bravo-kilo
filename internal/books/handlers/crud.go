@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"html"
@@ -274,18 +276,18 @@ func (h *BookHandlers) HandleUpdateBook(response http.ResponseWriter, request *h
 	// Validate book ownership
 	_, bookID, err := h.ValidateBookOwnership(request)
 	if err != nil {
-		h.logger.Error("Validation failed", "error", err)
-		http.Error(response, err.Error(), http.StatusUnauthorized)
-		return
+			h.logger.Error("Validation failed", "error", err)
+			http.Error(response, err.Error(), http.StatusUnauthorized)
+			return
 	}
 
 	// Grab book data from request body
 	var book repository.Book
 	err = json.NewDecoder(request.Body).Decode(&book)
 	if err != nil {
-		h.logger.Error("Error decoding book data", "error", err)
-		http.Error(response, "Error decoding book data - invalid input", http.StatusBadRequest)
-		return
+			h.logger.Error("Error decoding book data", "error", err)
+			http.Error(response, "Error decoding book data - invalid input", http.StatusBadRequest)
+			return
 	}
 
 	book.ID = bookID
@@ -293,47 +295,53 @@ func (h *BookHandlers) HandleUpdateBook(response http.ResponseWriter, request *h
 	// Validate struct
 	err = h.validate.Struct(book)
 	if err != nil {
-		h.logger.Error("Validation error", "error", err)
-		http.Error(response, err.Error(), http.StatusBadRequest)
-		return
+			h.logger.Error("Validation error", "error", err)
+			http.Error(response, err.Error(), http.StatusBadRequest)
+			return
 	}
 
-	// Sanitize input
-	book.Title = h.sanitizer.Sanitize(book.Title)
-	book.Subtitle = h.sanitizer.Sanitize(book.Subtitle)
-	book.Description = h.sanitizer.Sanitize(book.Description)
-	book.Language = h.sanitizer.Sanitize(book.Language)
-	book.ImageLink = h.sanitizer.Sanitize(book.ImageLink)
-	book.Notes = h.sanitizer.Sanitize(book.Notes)
-	book.ISBN10 = h.sanitizer.Sanitize(book.ISBN10)
-	book.ISBN13 = h.sanitizer.Sanitize(book.ISBN13)
-	for i, author := range book.Authors {
-		book.Authors[i] = h.sanitizer.Sanitize(author)
+	// Start a transaction
+	tx, err := h.DB.BeginTx(request.Context(), nil)
+	if err != nil {
+			h.logger.Error("Failed to start transaction", "error", err)
+			http.Error(response, "Transaction start failed", http.StatusInternalServerError)
+			return
 	}
-	for i, genre := range book.Genres {
-		book.Genres[i] = h.sanitizer.Sanitize(genre)
-	}
-	for i, tag := range book.Tags {
-		book.Tags[i] = h.sanitizer.Sanitize(tag)
-	}
-	for i, format := range book.Formats {
-		book.Formats[i] = h.sanitizer.Sanitize(format)
-	}
+	defer tx.Rollback()
 
 	// Update the book
-	err = h.bookUpdater.UpdateBook(book)
+	err = h.bookUpdater.UpdateBook(tx, book)
 	if err != nil {
-		h.logger.Error("Error updating book", "error", err)
-		http.Error(response, "Error updating book", http.StatusInternalServerError)
-		return
+			h.logger.Error("Error updating book", "error", err)
+			http.Error(response, "Error updating book", http.StatusInternalServerError)
+			return
 	}
 
-	// Fetch current formats using context from request
-	currentFormats, err := h.formatRepo.GetFormats(request.Context(), book.ID)
+	// Handle formats, genres, etc. within the transaction
+	err = h.updateFormatsAndAssociations(tx, request.Context(), book)
 	if err != nil {
-		h.logger.Error("Error fetching current formats", "error", err)
-		http.Error(response, "Error fetching current formats", http.StatusInternalServerError)
-		return
+			h.logger.Error("Error updating formats and associations", "error", err)
+			http.Error(response, "Error updating formats and associations", http.StatusInternalServerError)
+			return
+	}
+
+	// Commit the transaction
+	if err := tx.Commit(); err != nil {
+			h.logger.Error("Error committing transaction", "error", err)
+			http.Error(response, "Error committing transaction", http.StatusInternalServerError)
+			return
+	}
+
+	response.WriteHeader(http.StatusOK)
+	json.NewEncoder(response).Encode(map[string]string{"message": "Book updated successfully"})
+}
+
+func (h *BookHandlers) updateFormatsAndAssociations(tx *sql.Tx, ctx context.Context, book repository.Book) error {
+	// Fetch current formats using context from request
+	currentFormats, err := h.formatRepo.GetFormats(ctx, book.ID)
+	if err != nil {
+			h.logger.Error("Error fetching current formats", "error", err)
+			return err
 	}
 
 	// Determine formats to remove
@@ -341,34 +349,35 @@ func (h *BookHandlers) HandleUpdateBook(response http.ResponseWriter, request *h
 
 	// Remove specific format associations
 	if len(formatsToRemove) > 0 {
-		err = h.bookUpdater.RemoveSpecificFormats(request.Context(), book.ID, formatsToRemove)
-		if err != nil {
-			h.logger.Error("Error removing specific formats", "error", err)
-			http.Error(response, "Error removing specific formats", http.StatusInternalServerError)
-			return
-		}
+			err = h.formatRepo.RemoveSpecificFormats(ctx, book.ID, formatsToRemove)
+			if err != nil {
+					h.logger.Error("Error removing specific formats", "error", err)
+					return err
+			}
 	}
 
 	// Insert new formats and their associations
 	for _, formatType := range book.Formats {
-		formatID, err := h.formatRepo.AddFormats(formatType)
-		if err != nil {
-			h.logger.Error("Error inserting format", "error", err)
-			http.Error(response, "Error inserting format", http.StatusInternalServerError)
-			return
-		}
+		// DEBUG - temporarily removing formatID:
+		// formatID, err := h.formatRepo.AddOrGetFormatID(ctx, tx, formatType)
+		_, err := h.formatRepo.AddOrGetFormatID(ctx, tx, formatType)
+			if err != nil {
+					h.logger.Error("Error getting or inserting format ID", "error", err)
+					return err
+			}
 
-		// Wrap formatID in a slice and pass to AddFormats
-		if err := h.formatRepo.AddFormats(request.Context(), book.ID, []int{formatID}); err != nil {
-			h.logger.Error("Error adding format association", "error", err)
-			http.Error(response, "Error adding format association", http.StatusInternalServerError)
-			return
-		}
+			// Now associate the format ID with the book
+			err = h.formatRepo.AddFormats(tx, ctx, book.ID, []string{formatType})
+			if err != nil {
+					h.logger.Error("Error adding format association", "error", err)
+					return err
+			}
 	}
 
-	response.WriteHeader(http.StatusOK)
-	json.NewEncoder(response).Encode(map[string]string{"message": "Book updated successfully"})
+	return nil
 }
+
+
 
 // Delete Book
 func (h *BookHandlers) HandleDeleteBook(response http.ResponseWriter, request *http.Request) {

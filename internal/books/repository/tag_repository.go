@@ -40,9 +40,9 @@ func (r *TagRepositoryImpl) InitPreparedStatements() error {
 	var err error
 
 	r.getUserTagsStmt, err = r.DB.Prepare(`
-	SELECT r.tags
+	SELECT b.tags
 		FROM books b
-		INNER JOIN user_books ub ON r.id = ub.book_id
+		INNER JOIN user_books ub ON b.id = ub.book_id
 		WHERE ub.user_id = $1
 	`)
 	if err != nil {

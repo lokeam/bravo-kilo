@@ -72,19 +72,23 @@ func main() {
 	}
 
 	// Start the server with domain-specific handlers
-	err = app.serve(factory.BookHandlers, factory.AuthHandlers)
+	err = app.serve(factory.BookHandlers, factory.SearchHandlers, factory.AuthHandlers)
 	if err != nil {
 		log.Error("Error starting the server", "error", err)
 	}
 }
 
-func (app *application) serve(bookHandlers *handlers.BookHandlers, authHandlers *authHandlers.AuthHandlers) error {
+func (app *application) serve(
+	bookHandlers *handlers.BookHandlers,
+	searchHandlers *handlers.SearchHandlers,
+	authHandlers *authHandlers.AuthHandlers,
+	) error {
 	app.logger.Info("API listening on port", "port", app.config.port)
 
 	// Set up routes with domain handlers
 	srv := &http.Server{
 		Addr:    fmt.Sprintf(":%d", app.config.port),
-		Handler: app.routes(bookHandlers, authHandlers),
+		Handler: app.routes(bookHandlers, searchHandlers, authHandlers),
 	}
 
 	return srv.ListenAndServe()

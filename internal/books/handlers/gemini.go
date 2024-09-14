@@ -25,7 +25,7 @@ func cacheSet(key string, value string) {
 }
 
 // HandleGetGeminiBookSummary processes the Google Gemini request
-func (h *Handlers) HandleGetGeminiBookSummary(response http.ResponseWriter, request *http.Request) {
+func (h *BookHandlers) HandleGetGeminiBookSummary(response http.ResponseWriter, request *http.Request) {
 	// Extract user ID from JWT
 	h.logger.Info("Handling Google Gemini request")
 	_, err := utils.ExtractUserIDFromJWT(request)

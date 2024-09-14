@@ -9,16 +9,21 @@ import (
 	"sort"
 	"strconv"
 	"time"
+
+	"github.com/lib/pq"
 )
 
 type GenreRepository interface {
 	InitPreparedStatements() error
+	AddGenre(ctx context.Context, bookID, genreID int) error
+	AddOrGetGenreID(ctx context.Context, genreName string) (int, error)
 	InsertGenre(ctx context.Context, tx *sql.Tx, genre string) (int, error)
 	GetAllBooksByGenres(ctx context.Context, userID int) (map[string]interface{}, error)
 	GetGenres(ctx context.Context, bookID int) ([]string, error)
 	GetBooksListByGenre(ctx context.Context, userID int) (map[string]interface{}, error)
 	GetGenreIDByName(ctx context.Context, tx *sql.Tx, genreName string, genreID *int) error
 	AssociateBookWithGenre(ctx context.Context, tx *sql.Tx, bookID, genreID int) error
+	RemoveSpecificGenres(ctx context.Context, bookID int, genres []string) error
 }
 
 type GenreRepositoryImpl struct {
@@ -46,22 +51,22 @@ func (r *GenreRepositoryImpl) InitPreparedStatements() error {
 
 	// Prepared statment for GetAllBooksByGenres
 	r.getAllBooksByGenresStmt, err = r.DB.Prepare(`
-	SELECT r.id, r.title, r.subtitle, r.description, r.language, r.page_count, r.publish_date,
-								 r.image_link, r.notes, r.created_at, r.last_updated, r.isbn_10, r.isbn_13,
+	SELECT b.id, b.title, b.subtitle, b.description, b.language, b.page_count, b.publish_date,
+								 b.image_link, b.notes, b.created_at, b.last_updated, b.isbn_10, b.isbn_13,
 								 json_agg(DISTINCT g.name) AS genres,
 								 json_agg(DISTINCT a.name) AS authors,
 								 json_agg(DISTINCT f.format_type) AS formats,
-								 r.tags
+								 b.tags
 					FROM books b
-					INNER JOIN user_books ub ON r.id = ub.book_id
-					LEFT JOIN book_genres bg ON r.id = bg.book_id
+					INNER JOIN user_books ub ON b.id = ub.book_id
+					LEFT JOIN book_genres bg ON b.id = bg.book_id
 					LEFT JOIN genres g ON bg.genre_id = g.id
-					LEFT JOIN book_authors ba ON r.id = ba.book_id
+					LEFT JOIN book_authors ba ON b.id = ba.book_id
 					LEFT JOIN authors a ON ba.author_id = a.id
-					LEFT JOIN book_formats bf ON r.id = bf.book_id
+					LEFT JOIN book_formats bf ON b.id = bf.book_id
 					LEFT JOIN formats f ON bf.format_id = f.id
 					WHERE ub.user_id = $1
-					GROUP BY r.id`)
+					GROUP BY b.id`)
 	if err != nil {
 		return err
 	}
@@ -77,11 +82,11 @@ func (r *GenreRepositoryImpl) InitPreparedStatements() error {
 	}
 
 	r.getBookListByGenreStmt, err = r.DB.Prepare(`
-	SELECT g.name, COUNT(DISTINCT r.id) AS total_books
+	SELECT g.name, COUNT(DISTINCT b.id) AS total_books
 		FROM books b
-		INNER JOIN book_genres bg ON r.id = bg.book_id
+		INNER JOIN book_genres bg ON b.id = bg.book_id
 		INNER JOIN genres g ON bg.genre_id = g.id
-		INNER JOIN user_books ub ON r.id = ub.book_id
+		INNER JOIN user_books ub ON b.id = ub.book_id
 		WHERE ub.user_id = $1
 		GROUP BY g.name
 		ORDER BY total_books DESC`)
@@ -380,7 +385,18 @@ func (b *GenreRepositoryImpl) GetBooksListByGenre(ctx context.Context, userID in
 	return result, nil
 }
 
-func (b *BookModel) addOrGetGenreID(ctx context.Context, genreName string) (int, error) {
+func (b *GenreRepositoryImpl) AddGenre(ctx context.Context, bookID, genreID int) error {
+	statement := `INSERT INTO book_genres (book_id, genre_id) VALUES ($1, $2)`
+	_, err := b.DB.ExecContext(ctx, statement, bookID, genreID)
+	if err != nil {
+		b.Logger.Error("Error adding genre association", "error", err)
+		return err
+	}
+
+	return nil
+}
+
+func (b *GenreRepositoryImpl) AddOrGetGenreID(ctx context.Context, genreName string) (int, error) {
 	var genreID int
 	statement := `
 		INSERT INTO genres (name)
@@ -401,6 +417,24 @@ func (b *GenreRepositoryImpl) AssociateBookWithGenre(ctx context.Context, tx *sq
 	_, err := tx.ExecContext(ctx, statement, bookID, genreID)
 	if err != nil {
 		b.Logger.Error("Error adding author association", "error", err)
+		return err
+	}
+
+	return nil
+}
+
+func (b *GenreRepositoryImpl) RemoveSpecificGenres(ctx context.Context, bookID int, genres []string) error {
+
+	statement := `
+		DELETE FROM book_genres
+		WHERE book_id = $1
+		AND genre_id IN (
+			SELECT id FROM genres WHERE name = ANY($2)
+		)`
+
+	_, err := b.DB.ExecContext(ctx, statement, bookID, pq.Array(genres))
+	if err != nil {
+		b.Logger.Error("Error removing specific genres", "error", err)
 		return err
 	}
 
