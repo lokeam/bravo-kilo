@@ -1,4 +1,5 @@
 import { useNavigate } from "react-router-dom";
+import { motion } from 'framer-motion';
 import { Book } from "../../types/api";
 import { BsPerson } from "react-icons/bs";
 
@@ -18,10 +19,11 @@ export default function CardListItemAuthor({ authorName, books }: CardListItemAu
   const navigate = useNavigate();
 
   return (
-      <li
-        key={authorName}
-        onClick={() => navigate(`/library/${authorID}?page=author`, { state: books })}
+      <motion.li
         className="py-3 flex items-start justify-between"
+        key={authorName}
+        layout
+        onClick={() => navigate(`/library/${authorID}?page=author`, { state: books })}
       >
         <div className="flex gap-3 cursor-pointer">
           <div className="flex flex-row items-center justify-center rounded-full w-16 h-16 bg-dark-gunmetal">
@@ -31,6 +33,6 @@ export default function CardListItemAuthor({ authorName, books }: CardListItemAu
             <span className="block text-sm text-white font-semibold">{authorName}</span>
           </div>
         </div>
-      </li>
+      </motion.li>
   );
 }

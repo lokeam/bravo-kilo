@@ -1,7 +1,9 @@
 import CardListItem from './CardListItem'
 import CardListItemAuthor from './CardListItemAuthor';
 import CardListItemGenre from './CardListItemGenre';
+import { motion } from 'framer-motion';
 import { Book } from '../../types/api';
+
 
 type CardListItemDefault = {
   books: Book[];
@@ -46,7 +48,13 @@ export default function CardList(props: CardListItemProps) {
   if (isCardListItemAuthor(props)) {
     //console.log('Card List Author flag tripped');
     return (
-      <div className="card_list__wrapper pb-20 md:pb-4 flex flex-col relative w-full max-w-7xl mt-8">
+      <motion.div
+        className="card_list__wrapper pb-20 md:pb-4 flex flex-col relative w-full max-w-7xl mt-8"
+        animate={{ opacity: 1 }}
+        initial={{ opacity: 0 }}
+        exit={{ opacity: 0 }}
+        layout
+      >
         <ul className="flex flex-col justify-center rounded text-white">
           {props.allAuthors.map((authorName: string, index: number) => (
             <CardListItemAuthor
@@ -56,7 +64,7 @@ export default function CardList(props: CardListItemProps) {
             />
           ))}
         </ul>
-      </div>
+      </motion.div>
     );
   }
 
@@ -64,7 +72,13 @@ export default function CardList(props: CardListItemProps) {
   if (isCardListItemGenre(props)) {
     console.log('Card List GENRE flag tripped');
     return (
-      <div className="card_list__wrapper pb-20 md:pb-4 flex flex-col relative w-full max-w-7xl mt-8">
+      <motion.div
+        className="card_list__wrapper pb-20 md:pb-4 flex flex-col relative w-full max-w-7xl mt-8"
+        animate={{ opacity: 1 }}
+        initial={{ opacity: 0 }}
+        exit={{ opacity: 0 }}
+        layout
+      >
         <ul className="flex flex-col justify-center rounded text-white">
           {props.allGenres.map((genreName: string, index: number) => (
               <CardListItemGenre
@@ -75,7 +89,7 @@ export default function CardList(props: CardListItemProps) {
               />
           ))}
         </ul>
-      </div>
+      </motion.div>
     );
   }
 
@@ -83,13 +97,19 @@ export default function CardList(props: CardListItemProps) {
   if (isCardListItemDefault(props)) {
     //console.log('Card List Default flag tripped');
     return (
-      <div className="card_list__wrapper pb-20 md:pb-4 flex flex-col relative w-full max-w-7xl mt-8">
+      <motion.div
+        className="card_list__wrapper pb-20 md:pb-4 flex flex-col relative w-full max-w-7xl mt-8"
+        animate={{ opacity: 1 }}
+        initial={{ opacity: 0 }}
+        exit={{ opacity: 0 }}
+        layout
+      >
         <ul className="flex flex-col justify-center rounded text-white">
           {props.books.map((book: Book) => (
             <CardListItem key={`${book.id}-${book.title}-${book.pageCount}`} book={book} isSearchPage={props.isSearchPage} />
           ))}
         </ul>
-      </div>
+      </motion.div>
     );
   }
 

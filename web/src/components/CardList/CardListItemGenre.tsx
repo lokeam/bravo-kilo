@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import { Book } from '../../types/api';
 
 interface CardListItemGenreProps {
@@ -44,9 +45,10 @@ export default function CardListItemGenre({ genreName, genreImgs, books }: CardL
   const navigate = useNavigate();
 
   return (
-      <li
-        key={genreName}
+      <motion.li
         className="py-3 flex items-start justify-between"
+        key={genreName}
+        layout
         onClick={() => navigate(`/library/${genreID}`, { state: books })}
       >
         <div className="flex gap-3 cursor-pointer">
@@ -57,6 +59,6 @@ export default function CardListItemGenre({ genreName, genreImgs, books }: CardL
             <span className="block text-base text-white font-bold">{genreName}</span>
           </div>
         </div>
-      </li>
+      </motion.li>
   );
 }

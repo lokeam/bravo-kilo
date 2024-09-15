@@ -2,6 +2,7 @@ import { useState } from 'react';
 import Modal from '../Modal/ModalRoot';
 import ImagePlaceholder from './ImagePlaceholder';
 import { useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion'
 import { Book } from '../../types/api';
 
 import { BsThreeDotsVertical } from "react-icons/bs";
@@ -47,9 +48,10 @@ function CardListItem({ book, isSearchPage }: CardListItemProps) {
   const mayRenderImage = hasImageLink && isWhitelistedImageURL(imageLink);
 
   return (
-      <li
+      <motion.li
         className="py-3 flex items-start justify-between"
         key={`${title}-${id}`}
+        layout
       >
         <div
           className="flex object-cover gap-3 cursor-pointer"
@@ -107,7 +109,7 @@ function CardListItem({ book, isSearchPage }: CardListItemProps) {
             <span>Edit Title Details</span>
           </button>
         </Modal>
-      </li>
+      </motion.li>
   );
 }
 
