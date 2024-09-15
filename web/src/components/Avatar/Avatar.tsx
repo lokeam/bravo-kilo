@@ -59,7 +59,7 @@ export default function Avatar() {
 
 
   return (
-    <div className="flex flex-row justify-center space-x-4 rounded avatar text-white">
+    <div className="flex flex-row justify-center space-x-5 rounded avatar text-white">
       <div aria-label="Bravo Kilo user avatar" className="relative">
         <div className="relative inline-flex items-center justify-center overflow-hidden bg-gray-600 h-10 w-10 rounded-full">
           <span className="font-medium text-gray-600 dark:text-gray-300">{userInitials}</span>

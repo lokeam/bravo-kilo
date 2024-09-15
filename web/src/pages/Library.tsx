@@ -71,7 +71,7 @@ function Library() {
   }
 
   return (
-    <div className="bk_lib flex flex-col items-center place-content-around px-5 antialiased mdTablet:pr-5 mdTablet:ml-24 h-screen pt-28">
+    <div className="bk_lib flex flex-col items-center px-5 antialiased mdTablet:pl-1 pr-5 mdTablet:ml-24 h-screen pt-28">
       <LibraryNav />
       <CardListSortHeader sortedBooksCount={sortedBooks.length} />
 

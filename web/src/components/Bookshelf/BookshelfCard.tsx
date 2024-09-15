@@ -16,7 +16,7 @@ const BookshelfCard = ({ book }: CardProps) => {
   };
 
   return (
-    <div className="card_wrapper relative box-border min-w-0 h-full cursor-pointer truncate" onClick={handleCardClick}>
+    <div className="card_wrapper relative box-border min-w-0 h-full cursor-pointer border border-gray-600 rounded-lg truncate" onClick={handleCardClick}>
       <div className="card_thumbnail rounded-md relative ">
         <div className="card_thumbnail_container relative rounded-md w-full">
           <img

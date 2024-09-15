@@ -1,7 +1,7 @@
 import { Suspense } from 'react';
 import { Route, Routes } from 'react-router-dom';
 import { AppProvider } from './components/AuthContext';
-import { ThemeProvider } from './components/ThemeProvider/ThemeProvider';
+import ThemeProvider from './components/ThemeProvider/ThemeProvider';
 import AuthenticatedLayout from './pages/AuthLayout';
 import ProtectedRoute from './components/ProtectedRoute';
 import Home from './pages/Home';

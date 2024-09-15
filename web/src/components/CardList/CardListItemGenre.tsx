@@ -19,7 +19,7 @@ export default function CardListItemGenre({ genreName, genreImgs, books }: CardL
       return (
       <img
         alt={`Genre thumbnail for ${genreName}`}
-        className="flex-none rounded w-16 h-16"
+        className="object-cover flex-none rounded w-16 h-16"
         loading="lazy"
         src={genreImgs[0]}
       />);

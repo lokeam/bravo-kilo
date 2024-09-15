@@ -52,14 +52,14 @@ function CardListItem({ book, isSearchPage }: CardListItemProps) {
         key={`${title}-${id}`}
       >
         <div
-          className="flex gap-3 cursor-pointer"
+          className="flex object-cover gap-3 cursor-pointer"
           onClick={handleBookClick}
         >
           {
             mayRenderImage ? (
               <img
                 alt={`Book cover thumbnail for ${title}`}
-                className="flex-none rounded w-16 h-16"
+                className="object-cover flex-none rounded w-16 h-16"
                 loading="lazy"
                 src={imageLink}
               />

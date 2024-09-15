@@ -46,7 +46,7 @@ function Home() {
   if (error) return <div>Error loading data: {error.message}</div>;
 
   return (
-    <div className="bk_home flex flex-col items-center px-5 antialiased mdTablet:px-1 mdTablet:ml-24 h-screen pt-28">
+    <div className="bk_home flex flex-col items-center px-5 antialiased mdTablet:pl-1 pr-5 mdTablet:ml-24 h-screen pt-28">
 
       <div className="pb-20 mdTablet:pb-4 flex flex-col relative w-full max-w-7xl">
 
