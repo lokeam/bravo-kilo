@@ -53,7 +53,7 @@ function Search() {
   }
 
   return (
-    <div className="bk_search flex flex-col items-center place-content-around px-5 antialiased mdTablet:pr-5 mdTablet:ml-24 h-screen pt-28">
+    <div className="bk_searchflex flex-col items-center px-5 antialiased mdTablet:pl-1 pr-5 mdTablet:ml-24 h-screen pt-28">
       {renderContent()}
     </div>
   );

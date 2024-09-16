@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from "../AuthContext";
+import { useFocusContext  } from '../FocusProvider/FocusProvider';
 import Avatar from '../Avatar/Avatar';
 import Modal from '../Modal/Modal';
 import AutoComplete from '../AutoComplete/AutoComplete';
@@ -13,6 +14,7 @@ import { ImArrowLeft2 } from "react-icons/im";
 function TopNavigation() {
   const [opened, setOpened] = useState(false);
   const { logout } = useAuth();
+  const { searchFocusRef } = useFocusContext();
   const location = useLocation();
   const navigate = useNavigate();
   const isBookDetailOrSettingsPage = location.pathname.includes('library/books/') || location.pathname.includes('settings');
@@ -88,6 +90,7 @@ function TopNavigation() {
               <Link
                 className="p-3 mr-1 text-gray-500 rounded hover:text-gray-900 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-white dark:hover:bg-gray-700 focus:ring-4 focus:ring-gray-300 dark:focus:ring-gray-600"
                 to={"/library/books/search"}
+                ref={ searchFocusRef }
               >
                 <IoSearchOutline />
               </Link>

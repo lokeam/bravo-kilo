@@ -1,9 +1,11 @@
-import { useMemo} from 'react';
+import { useMemo } from 'react';
 import LibraryNav from '../components/LibraryNav/LibraryNav';
 import CardList from '../components/CardList/CardList';
 import CardListSortHeader from '../components/CardList/CardListSortHeader';
 import Snackbar from '../components/Snackbar/Snackbar';
 import Loading from '../components/Loading/Loading';
+import EmptyLibraryCard from '../components/ErrorMessages/EmptyLibraryCard';
+
 import { defaultBookGenres, isBookGenresData, GenreData } from '../types/api';
 import { sortBooks } from '../utils/ui';
 import { Book } from '../types/api';
@@ -62,43 +64,63 @@ function Library() {
   const { allGenres, ...remainingGenres } = safeBookGenres;
   const genreBooks = remainingGenres as { [key: string]: GenreData };
 
+  const renderCardList = () => {
+    if (activeTab === 'Authors' && bookAuthors?.allAuthors?.length > 0) {
+      return <CardList allAuthors={bookAuthors.allAuthors} authorBooks={bookAuthors} />;
+    }
+    if (activeTab === 'Genres' && bookGenres?.allGenres?.length > 0) {
+      return <CardList allGenres={allGenres} genreBooks={genreBooks} />;
+    }
+    if (sortedBooks?.length > 0) {
+      return <CardList books={sortedBooks} isSearchPage={false} />;
+    }
+    return null;
+  };
+
+  const isEmpty = (arr?: any[]) => !arr || arr.length < 1;
+
+  const isEmptyLibrary = useMemo(() => {
+    return (
+      isEmpty(books) &&
+      isEmpty(bookAuthors?.allAuthors) &&
+      isEmpty(bookGenres?.allGenres) &&
+      isEmpty(Object.keys(bookFormats || {}))
+    );
+  }, [books, bookAuthors, bookGenres, bookFormats]);
+
+  const memoizedSnackbar = useMemo(() => (
+    <Snackbar
+      message={snackbarMessage || ''}
+      open={snackbarOpen}
+      variant={snackbarVariant || 'added'}
+      onClose={hideSnackbar}
+    />
+  ), [snackbarMessage, snackbarOpen, snackbarVariant, hideSnackbar]);
+
   if (isLoading) {
     return <Loading />;
   }
 
+  // Replace with Error state
   if (isError) {
     return <div>Error loading books</div>;
   }
 
+
   return (
-    <div className="bk_lib flex flex-col items-center px-5 antialiased mdTablet:pl-1 pr-5 mdTablet:ml-24 h-screen pt-28">
+    <div className="bk_lib flex flex-col items-center px-5 pt-28 antialiased mdTablet:pl-1 pr-5 mdTablet:ml-24 h-screen">
       <LibraryNav />
-      <CardListSortHeader sortedBooksCount={sortedBooks.length} />
 
-      {activeTab === 'Authors' && bookAuthors?.allAuthors.length > 0 ? (
-        <CardList
-          allAuthors={bookAuthors.allAuthors}
-          authorBooks={bookAuthors}
-        />
-      ) : activeTab === 'Genres' && bookGenres?.allGenres.length > 0 ? (
-        <CardList
-          allGenres={allGenres}
-          genreBooks={genreBooks}
-        />
-      ) : (
-        sortedBooks && sortedBooks.length > 0 &&
-        <CardList
-          books={sortedBooks}
-          isSearchPage={false}
-        />
-      )}
-
-      <Snackbar
-        message={snackbarMessage || ''}
-        open={snackbarOpen}
-        variant={snackbarVariant || 'added'}
-        onClose={hideSnackbar}
-      />
+      { isEmptyLibrary ?
+        <EmptyLibraryCard /> :
+        (
+          <>
+            <CardListSortHeader sortedBooksCount={sortedBooks.length} />
+            {renderCardList()}
+            {memoizedSnackbar}
+          </>
+        )
+      }
     </div>
   )
 }

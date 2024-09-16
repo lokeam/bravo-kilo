@@ -5,7 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useNavigate, useLocation } from 'react-router-dom';
 
 import useAddBook from '../hooks/useAddBook';
-import { sanitizeFormData } from '../utils/sanitizeInput';
+//import { sanitizeFormData } from '../utils/sanitizeInput';
 import { Book } from '../types/api';
 
 import { IoClose } from 'react-icons/io5';
@@ -21,7 +21,7 @@ const bookSchema = z.object({
   publishDate: z.string().min(1, 'Please enter a date of publication'),
   isbn10: z.string().min(10).max(10, 'This field must contain 10 characters'),
   isbn13: z.string().min(13).max(13,  'This field must contain 13 characters'),
-  formats: z.array(z.enum(['physical', 'eBook', 'audioBook'])),
+  formats: z.array(z.enum(['physical', 'eBook', 'audioBook'])).min(1, 'Please select at least one format'),
   language: z.string().min(1, 'Please enter a language'),
   pageCount: z.number().min(1, 'Please enter a total page count'),
   imageLink: z.string().min(1, 'Please enter an image link'),
@@ -51,9 +51,9 @@ const ManualAdd = () => {
     defaultValues: {
       title: '',
       subtitle: '',
-      authors: [''],
-      genres: [''],
-      tags: [''],
+      authors: [],
+      genres: [],
+      tags: [],
       publishDate: '',
       isbn10: '',
       isbn13: '',
@@ -121,17 +121,17 @@ const ManualAdd = () => {
     const defaultDate = new Date().toISOString();
 
     // Field sanitization
-    const fieldsToSanitize: (keyof BookFormData)[] = [
-      'title', 'subtitle', 'authors', 'genres', 'tags',
-      'formats', 'language', 'imageLink', 'description', 'notes'
-    ];
-    const fieldsToTrim: (keyof BookFormData)[] = ['imageLink'];
-    const sanitizedData = sanitizeFormData(data, fieldsToSanitize, fieldsToTrim);
+    // const fieldsToSanitize: (keyof BookFormData)[] = [
+    //   'title', 'subtitle', 'authors', 'genres', 'tags',
+    //   'formats', 'language', 'imageLink', 'description', 'notes'
+    // ];
+    //const fieldsToTrim: (keyof BookFormData)[] = ['imageLink'];
+    //const sanitizedData = sanitizeFormData(data, fieldsToSanitize, fieldsToTrim);
 
 
     const book: Book = {
-      ...sanitizedData,
-      subtitle: sanitizedData.subtitle || '',
+      ...data,
+      subtitle: data.subtitle || '',
       createdAt: defaultDate,
       lastUpdated: defaultDate,
     };
@@ -151,21 +151,21 @@ const ManualAdd = () => {
           {/* Title */}
           <div className="block col-span-2 mdTablet:col-span-1">
             <label className="block mb-2 text-base font-medium text-gray-900 dark:text-white" htmlFor="title">Title<span className="text-red-600 ml-px">*</span></label>
-            <input className="bg-maastricht border border-gray-00 text-gray-900 text-base rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500" id="title" {...register('title')} />
+            <input className={`bg-maastricht border ${errors.title ? 'border-red-500' : 'border-gray-600'} text-gray-900 text-base rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500 mb-1`} id="title" {...register('title')} />
             {errors.title && <p className="text-red-500">{errors.title.message}</p>}
           </div>
 
           {/* Subtitle */}
           <div className="block col-span-2 mdTablet:col-span-1">
             <label className="block mb-2 text-base font-medium text-gray-900 dark:text-white" htmlFor="subtitle">Subtitle (if applicable)</label>
-            <input className="bg-maastricht border border-gray-00 text-gray-900 text-base rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500" id="subtitle" {...register('subtitle')} />
+            <input className={`bg-maastricht border ${errors.subtitle ? 'border-red-500' : 'border-gray-600'} text-gray-900 text-base rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500 mb-1`} id="subtitle" {...register('subtitle')} />
             {errors.subtitle && <p className="text-red-500">{errors.subtitle.message}</p>}
           </div>
 
           {/* Authors Field Array */}
           <div className="block col-span-2">
             <label className="block mb-2 text-base font-medium text-gray-900 dark:text-white">Authors<span className="text-red-600 ml-px">*</span></label>
-            <div className="border border-cadet-gray rounded p-4">
+            <div className={`border ${errors.authors ? 'border-red-500' : 'border-cadet-gray'} rounded p-4 mb-1`}>
               {authorFields.map((item, index) => (
                 <div className="flex w-full items-center mb-4 col-span-2" key={item.id}>
                   <Controller
@@ -189,7 +189,7 @@ const ManualAdd = () => {
           {/* Genres Field Array */}
           <div className="block col-span-2">
             <label className="block mb-2 text-base  font-medium text-gray-900 dark:text-white">Genres<span className="text-red-600 ml-px">*</span></label>
-            <div className="border border-cadet-gray rounded p-4">
+            <div className={`border ${errors.genres ? 'border-red-500' : 'border-cadet-gray'} rounded p-4 mb-1`}>
               <div className="flex flex-col sm:gap-6 ">
               {genreFields.map((item, index) => (
                   <div key={item.id} className="flex w-full items-center mb-4 col-span-2">
@@ -215,7 +215,7 @@ const ManualAdd = () => {
           {/* Tags Field Array */}
           <div className="block col-span-2">
             <label className="block mb-2 text-base font-medium text-gray-900 dark:text-white">Personal Tags<span className="text-red-600 ml-px">*</span></label>
-            <div className="border border-cadet-gray rounded p-4">
+            <div className={`border ${errors.tags ? 'border-red-500' : 'border-cadet-gray'} rounded p-4 mb-1`}>
               <div className="flex flex-col sm:gap-6 ">
               {tagFields.map((item, index) => (
                   <div key={item.id} className="flex w-full items-center mb-4 col-span-2">
@@ -241,28 +241,28 @@ const ManualAdd = () => {
           {/* Publish Date */}
           <div className="block col-span-2">
             <label htmlFor="publishDate" className="block mb-2  text-base  font-medium text-gray-900 dark:text-white">Publish Date<span className="text-red-600 ml-px">*</span></label>
-            <input id="publishDate" {...register('publishDate')} className="bg-maastricht border border-gray-300 text-gray-900 text-base rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5  dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"/>
+            <input id="publishDate" {...register('publishDate')} className={`bg-maastricht border ${errors.publishDate ? 'border-red-500' : 'border-gray-600'} text-gray-900 text-base rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500 mb-1`}/>
             {errors.publishDate && <p className="text-red-500">{errors.publishDate.message}</p>}
           </div>
 
           {/* ISBN10 */}
           <div className="block col-span-2">
             <label htmlFor="isbn10" className="block mb-2  text-base  font-medium text-gray-900 dark:text-white">ISBN-10<span className="text-red-600 ml-px">*</span></label>
-            <input id="isbn10" {...register('isbn10')} className="bg-maastricht border border-gray-300 text-gray-900 text-base rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5  dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500" />
+            <input id="isbn10" {...register('isbn10')} className={`bg-maastricht border ${errors.isbn10 ? 'border-red-500' : 'border-gray-600'} text-gray-900 text-base rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500 mb-1`} />
             {errors.isbn10 && <p className="text-red-500">{errors.isbn10.message}</p>}
           </div>
 
           {/* ISBN13 */}
           <div className="block col-span-2">
             <label htmlFor="isbn13" className="block mb-2  text-base  font-medium text-gray-900 dark:text-white">ISBN-13<span className="text-red-600 ml-px">*</span></label>
-            <input id="isbn13" {...register('isbn13')} className="bg-maastricht border border-gray-300 text-gray-900 text-base rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5  dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500" />
+            <input id="isbn13" {...register('isbn13')} className={`bg-maastricht border ${errors.isbn13 ? 'border-red-500' : 'border-gray-600'} text-gray-900 text-base rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500 mb-1`} />
             {errors.isbn13 && <p className="text-red-500">{errors.isbn13.message}</p>}
           </div>
 
           {/* Formats */}
           <div className="col-span-2">
             <label className="block mb-2 text-base  font-medium text-gray-900 dark:text-white">Formats (select all that apply)<span className="text-red-600 ml-px">*</span></label>
-              <ul className="grid w-full gap-6 lgMobile:grid-cols-3">
+              <ul className="grid w-full gap-6 lgMobile:grid-cols-3 mb-1">
                 {['physical', 'eBook', 'audioBook'].map((format) => (
                   <li key={format}>
                     <input
@@ -282,35 +282,35 @@ const ManualAdd = () => {
           {/* Language */}
           <div className="col-span-2">
             <label htmlFor="language" className="block mb-2 text-base  font-medium text-gray-900 dark:text-white">Language<span className="text-red-600 ml-px">*</span></label>
-            <input id="language" {...register('language')} className="bg-maastricht border border-gray-300 text-gray-900 text-base rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5  dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500" />
+            <input id="language" {...register('language')} className={`bg-maastricht border ${errors.language ? 'border-red-500' : 'border-gray-600'} text-gray-900 text-base rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500 mb-1`} />
             {errors.language && <p className="text-red-500">{errors.language.message}</p>}
           </div>
 
           {/* Page Count */}
           <div className="col-span-2">
             <label htmlFor="pageCount" className="block mb-2 text-base font-medium text-gray-900 dark:text-white">Page Count<span className="text-red-600 ml-px">*</span></label>
-            <input id="pageCount" type="number" {...register('pageCount', { valueAsNumber: true })} className="bg-maastricht border border-gray-300 text-gray-900 text-base rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5  dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500" />
+            <input id="pageCount" type="number" {...register('pageCount', { valueAsNumber: true })} className={`bg-maastricht border ${errors.pageCount ? 'border-red-500' : 'border-gray-600'} text-gray-900 text-base rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500 mb-1`} />
             {errors.pageCount && <p className="text-red-500">{errors.pageCount.message}</p>}
           </div>
 
           {/* Image Link */}
           <div className="col-span-2">
             <label className="block mb-2 text-base font-medium text-gray-900 dark:text-white">Image Link<span className="text-red-600 ml-px">*</span></label>
-            <input className="bg-maastricht border border-gray-00 text-gray-900 text-base rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500" id="imageLink" {...register('imageLink')} />
+            <input className={`bg-maastricht border ${errors.imageLink ? 'border-red-500' : 'border-gray-600'} text-gray-900 text-base rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500 mb-1`} id="imageLink" {...register('imageLink')} />
             {errors.imageLink && <p className="text-red-500">{errors.imageLink.message}</p>}
           </div>
 
           {/* Description */}
           <div className="col-span-2">
             <label htmlFor="description" className="block mb-2 text-base font-medium text-gray-900 dark:text-white">Description<span className="text-red-600 ml-px">*</span></label>
-            <textarea id="description" rows={4} {...register('description')} className="block p-2.5 w-full text-base text-gray-900 bg-maastricht rounded border border-gray-300 focus:ring-primary-500 focus:border-primary-500  dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500" />
+            <textarea id="description" rows={4} {...register('description')} className={`block p-2.5 w-full text-base text-gray-900 bg-maastricht rounded border ${errors.description ? 'border-red-500' : 'border-gray-600'} focus:ring-primary-500 focus:border-primary-500 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500 mb-1`} />
             {errors.description && <p className="text-red-500">{errors.description.message}</p>}
           </div>
 
           {/* Notes */}
           <div className="col-span-2">
-            <label htmlFor="notes" className="block mb-2 text-base font-medium text-gray-900 dark:text-white">Notes<span className="text-red-600 ml-px">*</span></label>
-            <textarea id="notes" rows={4} {...register('notes')} className="block p-2.5 w-full text-base text-gray-900 bg-maastricht rounded border border-gray-300 focus:ring-primary-500 focus:border-primary-500  dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500" />
+            <label htmlFor="notes" className="block mb-2 text-base font-medium text-gray-900 dark:text-white">Notes (optional)</label>
+            <textarea id="notes" rows={4} {...register('notes')} className={`block p-2.5 w-full text-base text-gray-900 bg-maastricht rounded border ${errors.notes ? 'border-red-500' : 'border-gray-600'} focus:ring-primary-500 focus:border-primary-500 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500 mb-1`} />
             {errors.notes && <p className="text-red-500">{errors.notes.message}</p>}
           </div>
 

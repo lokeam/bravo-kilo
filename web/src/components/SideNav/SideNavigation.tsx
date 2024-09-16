@@ -1,3 +1,4 @@
+import { useFocusContext } from '../FocusProvider/FocusProvider';
 import SideNavWrapper from './SideNavWrapper';
 import SideNavList from './SideNavList';
 import SideNavListItem from './SideNavListItem';
@@ -9,6 +10,8 @@ import { TbEdit } from "react-icons/tb";
 import { IoSearchOutline } from 'react-icons/io5';
 
 function SideNavigation() {
+  const { addManualRef, searchFocusRef } = useFocusContext();
+
   return (
     <SideNavWrapper
       ariaLabel="Main navigation"
@@ -36,6 +39,7 @@ function SideNavigation() {
         <SideNavListItem
           icon={TbEdit}
           pageRoute="/library/books/add/gateway"
+          ref={addManualRef}
         >
           Add
         </SideNavListItem>
