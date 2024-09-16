@@ -54,6 +54,15 @@ func (r *BookRepositoryImpl) InitPreparedStatements() error {
 	var err error
 
 	// Prepared insert statement for books
+	r.insertBookStmt, err = r.DB.Prepare(`
+		INSERT INTO books (title, subtitle, description, language, page_count, publish_date, image_link, notes, tags, created_at, last_updated, isbn_10, isbn_13)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id`)
+	if err != nil {
+		r.Logger.Error("insertBookStmt is nil, unable to execute insert")
+		return err
+	}
+
+	// Prepared insert statement for books
 	r.getBookByIDStmt, err = r.DB.Prepare(`
 	WITH book_data AS (
 			SELECT id, title, subtitle, description, language, page_count, publish_date,
@@ -87,10 +96,10 @@ func (r *BookRepositoryImpl) InitPreparedStatements() error {
 	LEFT JOIN authors_data a ON b.id = a.book_id
 	LEFT JOIN genres_data g ON b.id = g.book_id
 	LEFT JOIN formats_data f ON b.id = f.book_id`)
-if err != nil {
-	r.Logger.Error("Error preparing getBookByIDStmt", "error", err)
-	return fmt.Errorf("failed to prepare getBookByIDStmt: %w", err)
-}
+	if err != nil {
+		r.Logger.Error("Error preparing getBookByIDStmt", "error", err)
+		return fmt.Errorf("failed to prepare getBookByIDStmt: %w", err)
+	}
 
 	// Prepared insert statement for adding books to user
 	r.addBookToUserStmt, err = r.DB.Prepare(`INSERT INTO user_books (user_id, book_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`)

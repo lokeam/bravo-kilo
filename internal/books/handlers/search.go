@@ -187,7 +187,7 @@ func (h *SearchHandlers) HandleSearchBooks(response http.ResponseWriter, request
 
 	// Use the access token to call the Google Books API
 	client := oauth2.NewClient(context.Background(), oauth2.StaticTokenSource(accessToken))
-	googleBooksURL := fmt.Sprintf("https://www.googleapis.com/books/v1/volumes?q=%s", url.QueryEscape(query))
+	googleBooksURL := fmt.Sprintf("https://www.googleapis.com/books/v1/volumes?q=%s&maxResults=35", url.QueryEscape(query))
 
 	h.logger.Info("Requesting Google Books API", "url", googleBooksURL)
 
