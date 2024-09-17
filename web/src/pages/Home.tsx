@@ -3,6 +3,7 @@ import Bookshelf from '../components/Bookshelf/Bookshelf';
 import BarChartCard from '../components/Statistics/BarChartCard';
 import TableCard from '../components/Statistics/TableCard';
 import DonutChartCard from '../components/Statistics/DonutChartCard';
+import EmptyHomeCard from '../components/ErrorMessages/EmptyHomeCard';
 import Loading from '../components/Loading/Loading';
 import useHomePageData from '../hooks/useHomeData';
 import { AggregatedHomePageData } from '../types/api';
@@ -25,25 +26,35 @@ function Home() {
       userTags: []
     };
 
-    const { books, booksByFormat, homepageStats } = data;
+    const { books = [], booksByFormat = { physical: [], eBook: [], audioBook: [] }, homepageStats = defaultData.homepageStats } = data;
 
     return {
       books,
       booksByFormat: [
-        { label: "Physical", count: booksByFormat.physical.length },
-        { label: "eBook", count: booksByFormat.eBook.length },
-        { label: "Audio", count: booksByFormat.audioBook.length },
+        { label: "Physical", count: booksByFormat.physical?.length || 0 },
+        { label: "eBook", count: booksByFormat.eBook?.length || 0 },
+        { label: "Audio", count: booksByFormat.audioBook?.length || 0 },
       ],
-      homepageStats,
-      totalBooks: books.length,
-      booksByLang: homepageStats.userBkLang.booksByLang,
-      booksByGenre: homepageStats.userBkGenres.booksByGenre,
-      userTags: homepageStats.userTags.userTags,
+      totalBooks: books.length || 0,
+      booksByLang: homepageStats.userBkLang?.booksByLang || [],
+      booksByGenre: homepageStats.userBkGenres?.booksByGenre || [],
+      userTags: homepageStats.userTags?.userTags || [],
     };
   }, [data]);
 
   if (isLoading) return <Loading />;
   if (error) return <div>Error loading data: {error.message}</div>;
+
+  // Check if all data arrays are empty
+  const isEmpty = books.length === 0 &&
+                  booksByFormat.every(format => format.count === 0) &&
+                  booksByLang.length === 0 &&
+                  booksByGenre.length === 0 &&
+                  userTags.length === 0;
+
+  if (isEmpty) {
+    return <EmptyHomeCard />;
+  }
 
   return (
     <div className="bk_home flex flex-col items-center px-5 antialiased mdTablet:pl-1 pr-5 mdTablet:ml-24 h-screen pt-28">

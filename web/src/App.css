@@ -145,3 +145,7 @@
 .lib_nav_list {
   transform: translateZ(0);
 }
+
+.react-datepicker-wrapper {
+  display: unset;
+}

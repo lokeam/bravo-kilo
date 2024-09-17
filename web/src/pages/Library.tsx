@@ -12,6 +12,7 @@ import { Book } from '../types/api';
 
 import useStore from '../store/useStore';
 import useLibraryData from '../hooks/useLibraryData';
+import OfflineBanner from '../components/ErrorMessages/OfflineBanner';
 
 function Library() {
   const {
@@ -108,13 +109,12 @@ function Library() {
 
 
   return (
-    <div className="bk_lib flex flex-col items-center px-5 pt-28 antialiased mdTablet:pl-1 pr-5 mdTablet:ml-24 h-screen">
-      <LibraryNav />
-
+    <div className="bk_lib flex flex-col items-center px-5 pt-12 antialiased mdTablet:pl-1 pr-5 mdTablet:ml-24 h-screen">
       { isEmptyLibrary ?
         <EmptyLibraryCard /> :
         (
           <>
+            <LibraryNav />
             <CardListSortHeader sortedBooksCount={sortedBooks.length} />
             {renderCardList()}
             {memoizedSnackbar}

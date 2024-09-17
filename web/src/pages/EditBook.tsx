@@ -334,7 +334,7 @@ const EditBook = () => {
           {/* Image Link Field Array */}
           <div className="col-span-2">
             <label className="block mb-2 text-base font-medium text-gray-900 dark:text-white">Image Link<span className="text-red-600 ml-px">*</span></label>
-            <input className={`bg-maastricht border ${errors.imageLink ? 'border-red-500' : 'border-gray-600'} text-gray-900 text-base rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500 mb-1`} id="imageLink" {...register('imageLink')} />
+            <input type="url" className={`bg-maastricht border ${errors.imageLink ? 'border-red-500' : 'border-gray-600'} text-gray-900 text-base rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500 mb-1`} id="imageLink" {...register('imageLink')} />
             {errors.imageLink && <p className="text-red-500">{errors.imageLink.message}</p>}
           </div>
 

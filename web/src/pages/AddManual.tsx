@@ -5,12 +5,11 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useNavigate, useLocation } from 'react-router-dom';
 
 import useAddBook from '../hooks/useAddBook';
-//import { sanitizeFormData } from '../utils/sanitizeInput';
-import { Book } from '../types/api';
+import LanguageSelect from '../components/LanguageSelect/LanguageSelect';
 
+import { Book } from '../types/api';
 import { IoClose } from 'react-icons/io5';
 import { IoAddOutline } from 'react-icons/io5';
-
 
 const bookSchema = z.object({
   title: z.string().min(1, 'Please enter a title'),
@@ -119,15 +118,6 @@ const ManualAdd = () => {
   const onSubmit: SubmitHandler<BookFormData> = (data) => {
     console.log('Submitted data:', data);
     const defaultDate = new Date().toISOString();
-
-    // Field sanitization
-    // const fieldsToSanitize: (keyof BookFormData)[] = [
-    //   'title', 'subtitle', 'authors', 'genres', 'tags',
-    //   'formats', 'language', 'imageLink', 'description', 'notes'
-    // ];
-    //const fieldsToTrim: (keyof BookFormData)[] = ['imageLink'];
-    //const sanitizedData = sanitizeFormData(data, fieldsToSanitize, fieldsToTrim);
-
 
     const book: Book = {
       ...data,
@@ -241,7 +231,7 @@ const ManualAdd = () => {
           {/* Publish Date */}
           <div className="block col-span-2">
             <label htmlFor="publishDate" className="block mb-2  text-base  font-medium text-gray-900 dark:text-white">Publish Date<span className="text-red-600 ml-px">*</span></label>
-            <input id="publishDate" {...register('publishDate')} className={`bg-maastricht border ${errors.publishDate ? 'border-red-500' : 'border-gray-600'} text-gray-900 text-base rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500 mb-1`}/>
+            <input type="date" id="publishDate" {...register('publishDate')} className={`bg-maastricht border ${errors.publishDate ? 'border-red-500' : 'border-gray-600'} text-gray-900 text-base rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500 mb-1`}/>
             {errors.publishDate && <p className="text-red-500">{errors.publishDate.message}</p>}
           </div>
 
@@ -280,10 +270,13 @@ const ManualAdd = () => {
           </div>
 
           {/* Language */}
-          <div className="col-span-2">
+          {/* <div className="col-span-2">
             <label htmlFor="language" className="block mb-2 text-base  font-medium text-gray-900 dark:text-white">Language<span className="text-red-600 ml-px">*</span></label>
             <input id="language" {...register('language')} className={`bg-maastricht border ${errors.language ? 'border-red-500' : 'border-gray-600'} text-gray-900 text-base rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500 mb-1`} />
             {errors.language && <p className="text-red-500">{errors.language.message}</p>}
+          </div> */}
+          <div className="col-span-2">
+            <LanguageSelect control={control} errors={errors} />
           </div>
 
           {/* Page Count */}
@@ -296,7 +289,7 @@ const ManualAdd = () => {
           {/* Image Link */}
           <div className="col-span-2">
             <label className="block mb-2 text-base font-medium text-gray-900 dark:text-white">Image Link<span className="text-red-600 ml-px">*</span></label>
-            <input className={`bg-maastricht border ${errors.imageLink ? 'border-red-500' : 'border-gray-600'} text-gray-900 text-base rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500 mb-1`} id="imageLink" {...register('imageLink')} />
+            <input type="url" className={`bg-maastricht border ${errors.imageLink ? 'border-red-500' : 'border-gray-600'} text-gray-900 text-base rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500 mb-1`} id="imageLink" {...register('imageLink')} />
             {errors.imageLink && <p className="text-red-500">{errors.imageLink.message}</p>}
           </div>
 
