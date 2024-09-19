@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/lokeam/bravo-kilo/internal/shared/collections"
 )
 
 // Book struct to hold simplified structure for Books
@@ -192,14 +193,14 @@ func ExtractUserIDFromJWT(request *http.Request) (int, error) {
 	return claims.UserID, nil
 }
 
-// Returns els in A but not in B
+// FindDifference returns the elements in A but not in B.
 func FindDifference(a, b []string) []string {
 	setB := make(map[string]struct{}, len(b))
 	for _, x := range b {
 		setB[x] = struct{}{}
 	}
 
-	var diff[]string
+	var diff []string
 	for _, x := range a {
 		if _, found := setB[x]; !found {
 			diff = append(diff, x)
@@ -212,3 +213,19 @@ func FindDifference(a, b []string) []string {
 func CleanImageLink(link string) string {
 	return strings.Trim(link, "\"")
 }
+
+// Remove Dupes from a slice of strings
+func RemoveDuplicates(input []string) []string {
+	if input == nil {
+		return []string{}
+	}
+
+	set := collections.NewSet()
+
+	for _, value := range input {
+		set.Add(value)
+	}
+
+	return set.Elements()
+}
+

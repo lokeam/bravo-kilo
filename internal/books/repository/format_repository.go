@@ -101,7 +101,7 @@ func (r *FormatRepositoryImpl) AddFormats(tx *sql.Tx, ctx context.Context, bookI
 		valueArgs = append(valueArgs, bookID, formatID)
 	}
 
-	statement := fmt.Sprintf("INSERT INTO book_formats (book_id, format_id) VALUES %s", strings.Join(valueStrings, ","))
+	statement := fmt.Sprintf("INSERT INTO book_formats (book_id, format_id) VALUES %s ON CONFLICT DO NOTHING", strings.Join(valueStrings, ","))
 
 	// Use the passed-in transaction
 	_, err := tx.ExecContext(ctx, statement, valueArgs...)

@@ -39,11 +39,15 @@ func (s *Set) Clear() {
 }
 
 // Returns all elements in set as a slice of strings
+// Safeguard in Elements method to prevent empty results
 func (s *Set) Elements() []string {
+	if len(s.m) == 0 {
+		// Return an empty slice if the set is empty
+		return []string{}
+	}
 	elements := make([]string, 0, len(s.m))
 	for key := range s.m {
 		elements = append(elements, key)
 	}
-
 	return elements
 }

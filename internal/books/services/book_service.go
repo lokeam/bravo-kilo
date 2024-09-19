@@ -23,22 +23,25 @@ import (
 
 type BookService interface {
 	CreateBookEntry(ctx context.Context, book repository.Book, userID int) (int, error)
+	ReverseNormalizeBookData(books *[]repository.Book)
 }
 
 // BookServiceImpl implements BookService
 type BookServiceImpl struct {
-	bookRepository   repository.BookRepository
-	authorRepository repository.AuthorRepository
-	genreRepository  repository.GenreRepository
-	formatRepository repository.FormatRepository
-	tagRepository    repository.TagRepository
-	sanitizer        *bluemonday.Policy
-	dbManager        transaction.DBManager
-	logger           *slog.Logger
+	BookUpdaterService  BookUpdaterService
+	bookRepository      repository.BookRepository
+	authorRepository    repository.AuthorRepository
+	genreRepository     repository.GenreRepository
+	formatRepository    repository.FormatRepository
+	tagRepository       repository.TagRepository
+	sanitizer           *bluemonday.Policy
+	dbManager           transaction.DBManager
+	logger              *slog.Logger
 }
 
 // NewBookService creates a new instance of BookService
 func NewBookService(
+	bookUpdaterService BookUpdaterService,
 	bookRepo repository.BookRepository,
 	authorRepo repository.AuthorRepository,
 	genreRepo repository.GenreRepository,
@@ -81,22 +84,23 @@ func NewBookService(
 	}
 
 	return &BookServiceImpl{
-		bookRepository:   bookRepo,
-		authorRepository: authorRepo,
-		genreRepository:  genreRepo,
-		formatRepository: formatRepo,
-		tagRepository:    tagRepo,
-		sanitizer:        sanitizer,
-		dbManager:        dbManager,
-		logger:           logger,
+		BookUpdaterService:  bookUpdaterService,
+		bookRepository:      bookRepo,
+		authorRepository:    authorRepo,
+		genreRepository:     genreRepo,
+		formatRepository:    formatRepo,
+		tagRepository:       tagRepo,
+		sanitizer:           sanitizer,
+		dbManager:           dbManager,
+		logger:              logger,
 	}, nil
 }
 
 // InsertBook creates a new book with its associated authors, genres, and formats
 func (s *BookServiceImpl) CreateBookEntry(ctx context.Context, book repository.Book, userID int) (int, error) {
 	// Normalize + sanitize book data before proceeding
-	s.normalizeBookData(&book)
-	s.sanitizeBookData(&book)
+	s.NormalizeBookData(&book)
+	s.SanitizeBookData(&book)
 
 	// Validate required fields
 	if book.Title == "" || len(book.Authors) == 0 {
@@ -129,14 +133,30 @@ func (s *BookServiceImpl) CreateBookEntry(ctx context.Context, book repository.B
 	}
 
 	// Create author entries
-	err = s.createAuthorEntries(ctx, tx, bookID, book.Authors)
+	err = s.createEntries(
+		ctx,
+		tx,
+		bookID,
+		book.Authors,
+		s.authorRepository.GetAuthorIDByName,
+		s.authorRepository.InsertAuthor,
+		s.authorRepository.AssociateBookWithAuthor,
+	)
 	if err != nil {
 		s.logger.Error("Error inserting authors", "error", err)
 		return 0, err
 	}
 
-	// Create genres
-	err = s.createGenreEntries(ctx, tx, bookID, book.Genres)
+	// Create genres entries
+	err = s.createEntries(
+		ctx,
+		tx,
+		bookID,
+		book.Genres,
+		s.genreRepository.GetGenreIDByName,
+		s.genreRepository.InsertGenre,
+		s.genreRepository.AssociateBookWithGenre,
+	)
 	if err != nil {
 		s.logger.Error("Error inserting genres", "error", err)
 		return 0, err
@@ -158,84 +178,51 @@ func (s *BookServiceImpl) CreateBookEntry(ctx context.Context, book repository.B
 	return bookID, nil
 }
 
-// Helper to insert authors
-func (s *BookServiceImpl) createAuthorEntries(ctx context.Context, tx *sql.Tx, bookID int, authors []string) error {
-	authorsSet := collections.NewSet()
+// Higher order helper fn to insert author, genre, tag entries
+func (s *BookServiceImpl) createEntries(
+	ctx context.Context,
+	tx *sql.Tx,
+	bookID int,
+	items []string,
+	getIDByName func(ctx context.Context, tx *sql.Tx, name string, id *int) error,
+	insertItem func(ctx context.Context, tx *sql.Tx, name string) (int, error),
+	associateItem func(ctx context.Context, tx *sql.Tx, bookID, itemID int) error,
+) error {
+	itemSet := collections.NewSet()
+	itemMap := make(map[string] string)
 
-	// Deduplicate authors using the set
-	for _, author := range authors {
-		if author != "" {
-			authorsSet.Add(author)
+	// Dedupe and normalize for comparison, keep original for insertion
+	for _, item := range items {
+		normalizedItem := strings.TrimSpace(width.Narrow.String(norm.NFC.String(strings.ToLower(item))))
+		if normalizedItem != "" {
+			itemSet.Add(normalizedItem)
+			itemMap[normalizedItem] = item
 		}
 	}
 
-	for _, author := range authorsSet.Elements() {
-		var authorID int
-		// Query the author once
-		err := s.authorRepository.GetAuthorIDByName(ctx, tx, author, &authorID)
+	// Look at each normalized entry, check existence and insert or associate
+	for _, normalizedItem := range itemSet.Elements() {
+		originalItem := itemMap[normalizedItem]
+		var itemID int
+
+		// Check item existence
+		err := getIDByName(ctx, tx, normalizedItem, &itemID)
 		if err == sql.ErrNoRows {
-			authorID, err = s.authorRepository.InsertAuthor(ctx, tx, author)
+			// Insert original item into db if not found
+			itemID, err = insertItem(ctx, tx, originalItem)
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to insert item: %w", err)
 			}
 		} else if err != nil {
-			return err
+			return fmt.Errorf("failed to query item: %w", err)
 		}
 
-		// Associate author with the book
-		err = s.authorRepository.AssociateBookWithAuthor(ctx, tx, bookID, authorID)
+		// Associate item with book
+		err = associateItem(ctx, tx, bookID, itemID)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to associate item with book: %w", err)
 		}
 	}
-
-	return nil
-}
-
-// Helper to insert genres
-func (s *BookServiceImpl) createGenreEntries(ctx context.Context, tx *sql.Tx, bookID int, genres []string) error {
-	genresSet := collections.NewSet()
-
-	for _, genre := range genres {
-		if genre != "" {
-			genresSet.Add(genre)
-		} else {
-			s.logger.Warn("Skipping empty genre")
-		}
-	}
-
-	for _, genre := range genresSet.Elements() {
-		var genreID int
-		err := s.genreRepository.GetGenreIDByName(ctx, tx, genre, &genreID)
-		if err != nil {
-			if err == sql.ErrNoRows {
-				s.logger.Info("Genre not found, inserting new genre", "genre", genre)
-				genreID, err = s.genreRepository.InsertGenre(ctx, tx, genre)
-				if err != nil {
-					s.logger.Error("Error inserting genre", "error", err)
-					return err
-				}
-			} else {
-				s.logger.Error("Error querying genre", "error", err)
-				return err
-			}
-		}
-
-		// Validate genreID
-		if genreID == 0 {
-			s.logger.Error("Invalid genreID found", "genre", genre)
-			return errors.New("invalid genreID")
-		}
-
-		err = s.genreRepository.AssociateBookWithGenre(ctx, tx, bookID, genreID)
-		if err != nil {
-			s.logger.Error("Error adding genre association", "error", err)
-			return err
-		}
-
-		s.logger.Info("Successfully associated book with genre", "bookID", bookID, "genreID", genreID)
-	}
-
 	return nil
 }
 
@@ -264,19 +251,43 @@ func (s *BookServiceImpl) insertFormats(ctx context.Context, tx *sql.Tx, bookID 
 	return nil
 }
 
-func (s *BookServiceImpl) sanitizeAndUnescape(input string) string {
+func (s *BookServiceImpl) SanitizeAndUnescape(input string) string {
 	sanitized := s.sanitizer.Sanitize(input)
 	return html.UnescapeString(sanitized)
 }
 
+func (s *BookServiceImpl) ReverseNormalizeBookData(books *[]repository.Book) {
+	caser := cases.Title(language.Und)
+
+	for i := range *books {
+		book := &(*books)[i]
+
+		// Apply sentence case to book fields
+		book.Title = caser.String(book.Title)
+		book.Subtitle = caser.String(book.Subtitle)
+
+		for j := range book.Genres {
+			book.Genres[j] = caser.String(book.Genres[j])
+		}
+
+		for j := range book.Formats {
+			book.Formats[j] = caser.String(book.Formats[j])
+		}
+
+		for j := range book.Tags {
+			book.Tags[j] = caser.String(book.Tags[j])
+		}
+	}
+}
+
 // Helper method to normalize book data
-func (s *BookServiceImpl) normalizeBookData(book *repository.Book) {
+func (s *BookServiceImpl) NormalizeBookData(book *repository.Book) {
 	caser := cases.Lower(language.Und)
+	titleCaser := cases.Title(language.Und)
 
 	// Normalize book title and description
 	book.Title = strings.TrimSpace(caser.String(norm.NFC.String(book.Title)))
 	book.Subtitle = strings.TrimSpace(norm.NFC.String(book.Subtitle))
-	book.Description = strings.TrimSpace(caser.String(norm.NFC.String(book.Description)))
 	book.Language = strings.TrimSpace(caser.String(norm.NFC.String(book.Language)))
 
 	// Normalize authors (trim only, no lowercase conversion)
@@ -286,42 +297,42 @@ func (s *BookServiceImpl) normalizeBookData(book *repository.Book) {
 
 	// Normalize genres, formats, tags
 	for i := range book.Genres {
-		book.Genres[i] = strings.TrimSpace(caser.String(norm.NFC.String(book.Genres[i])))
+		book.Genres[i] = strings.TrimSpace(titleCaser.String(norm.NFC.String(book.Genres[i])))
 	}
 
 	for i := range book.Formats {
-		book.Formats[i] = strings.TrimSpace(caser.String(norm.NFC.String(book.Formats[i])))
+		book.Formats[i] = strings.TrimSpace(norm.NFC.String(book.Formats[i]))
 	}
 
 	for i := range book.Tags {
-		book.Tags[i] = strings.TrimSpace(caser.String(norm.NFC.String(book.Tags[i])))
+		book.Tags[i] = strings.TrimSpace(titleCaser.String(norm.NFC.String(book.Tags[i])))
 	}
-
 }
 
-func (s *BookServiceImpl) sanitizeBookData(book *repository.Book) {
+func (s *BookServiceImpl) SanitizeBookData(book *repository.Book) {
 	// Sanitize book fields
-	book.Title = s.sanitizeAndUnescape(book.Title)
-	book.Subtitle = s.sanitizeAndUnescape(book.Subtitle)
-	book.Description = s.sanitizeAndUnescape(book.Description)
-	book.Language = s.sanitizeAndUnescape(book.Language)
+	book.Title = s.SanitizeAndUnescape(book.Title)
+	book.Subtitle = s.SanitizeAndUnescape(book.Subtitle)
+	book.Language = s.SanitizeAndUnescape(book.Language)
+	book.Description = s.SanitizeAndUnescape(book.Description)
+	book.Notes = s.SanitizeAndUnescape(book.Notes)
 
 	// Sanitize genres, formats, and tags
 	for i := range book.Genres {
-		book.Genres[i] = s.sanitizeAndUnescape(book.Genres[i])
+		book.Genres[i] = s.SanitizeAndUnescape(book.Genres[i])
 	}
 
 	for i := range book.Formats {
-		book.Formats[i] = s.sanitizeAndUnescape(book.Formats[i])
+		book.Formats[i] = s.SanitizeAndUnescape(book.Formats[i])
 	}
 
 	for i := range book.Tags {
-		book.Tags[i] = s.sanitizeAndUnescape(book.Tags[i])
+		book.Tags[i] = s.SanitizeAndUnescape(book.Tags[i])
 	}
 
 	// Authors only need sanitization, no case normalization
 	for i := range book.Authors {
-		book.Authors[i] = s.sanitizeAndUnescape(book.Authors[i])
+		book.Authors[i] = s.SanitizeAndUnescape(book.Authors[i])
 	}
 }
 

@@ -28,6 +28,9 @@ type BookRepository interface {
 type BookRepositoryImpl struct {
 	DB                         *sql.DB
 	Logger                     *slog.Logger
+	AuthorRepository           AuthorRepository
+	GenreRepository            GenreRepository
+	FormatRepository           FormatRepository
 	insertBookStmt             *sql.Stmt
 	getBookByIDStmt            *sql.Stmt
 	addBookToUserStmt          *sql.Stmt
@@ -38,64 +41,87 @@ type BookRepositoryImpl struct {
 
 
 // NewBookRepository initializes and returns a new instance of BookRepositoryImpl
-func NewBookRepository(db *sql.DB, logger *slog.Logger) (BookRepository, error) {
+func NewBookRepository(
+	db *sql.DB,
+	logger *slog.Logger,
+	authorRepo AuthorRepository,
+	genreRepo GenreRepository,
+	formatRemo FormatRepository,
+	) (BookRepository, error) {
 	if db == nil || logger == nil {
 		return nil, fmt.Errorf("database or logger is nil")
 	}
 
+	if authorRepo == nil {
+		return nil, fmt.Errorf("author repository is nil")
+	}
+
+	if genreRepo == nil {
+		return nil, fmt.Errorf("genreRepo is nil")
+	}
+
+	if formatRemo == nil {
+		return nil, fmt.Errorf("formatRepo is nil")
+	}
+
 	return &BookRepositoryImpl{
-		DB:          db,
-		Logger:      logger,
+		DB:                db,
+		Logger:            logger,
+		AuthorRepository:  authorRepo,
+		GenreRepository:   genreRepo,
+		FormatRepository:  formatRemo,
 	}, nil
 }
-
 
 func (r *BookRepositoryImpl) InitPreparedStatements() error {
 	var err error
 
-	// Prepared insert statement for books
+	// DEBUG Prepared insert statement for books
 	r.insertBookStmt, err = r.DB.Prepare(`
 		INSERT INTO books (title, subtitle, description, language, page_count, publish_date, image_link, notes, tags, created_at, last_updated, isbn_10, isbn_13)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id`)
 	if err != nil {
-		r.Logger.Error("insertBookStmt is nil, unable to execute insert")
+		r.Logger.Error("Error preparing insertBookStmt", "error", err)
 		return err
 	}
 
 	// Prepared insert statement for books
 	r.getBookByIDStmt, err = r.DB.Prepare(`
-	WITH book_data AS (
-			SELECT id, title, subtitle, description, language, page_count, publish_date,
-						 image_link, notes, tags, created_at, last_updated, isbn_10, isbn_13
-			FROM books
-			WHERE id = $1
-	),
-	authors_data AS (
-			SELECT a.name, ba.book_id
-			FROM authors a
-			JOIN book_authors ba ON a.id = ba.author_id
-			WHERE ba.book_id = $1
-	),
-	genres_data AS (
-			SELECT g.name, bg.book_id
-			FROM genres g
-			JOIN book_genres bg ON g.id = bg.genre_id
-			WHERE bg.book_id = $1
-	),
-	formats_data AS (
-			SELECT f.format_type, bf.book_id
-			FROM formats f
-			JOIN book_formats bf ON f.id = bf.format_id
-			WHERE bf.book_id = $1
-	)
-	SELECT
-			b.id, b.title, b.subtitle, b.description, b.language, b.page_count, b.publish_date,
-			b.image_link, b.notes, b.tags, b.created_at, b.last_updated, b.isbn_10, b.isbn_13,
-			COALESCE(a.name, '') AS author_name, COALESCE(g.name, '') AS genre_name, COALESCE(f.format_type, '') AS format_type
-	FROM book_data b
-	LEFT JOIN authors_data a ON b.id = a.book_id
-	LEFT JOIN genres_data g ON b.id = g.book_id
-	LEFT JOIN formats_data f ON b.id = f.book_id`)
+		WITH book_data AS (
+				SELECT
+						id, title, subtitle, description, language, page_count, publish_date,
+						image_link, notes, tags, created_at, last_updated, isbn_10, isbn_13
+				FROM books
+				WHERE id = $1
+		),
+		authors_data AS (
+				SELECT ARRAY_AGG(DISTINCT a.name) AS author_names
+				FROM authors a
+				JOIN book_authors ba ON a.id = ba.author_id
+				WHERE ba.book_id = $1
+		),
+		genres_data AS (
+				SELECT ARRAY_AGG(DISTINCT g.name) AS genre_names
+				FROM genres g
+				JOIN book_genres bg ON g.id = bg.genre_id
+				WHERE bg.book_id = $1
+		),
+		formats_data AS (
+				SELECT ARRAY_AGG(DISTINCT f.format_type) AS format_types
+				FROM formats f
+				JOIN book_formats bf ON f.id = bf.format_id
+				WHERE bf.book_id = $1
+		)
+		SELECT
+				b.id, b.title, b.subtitle, b.description, b.language, b.page_count, b.publish_date,
+				b.image_link, b.notes, b.tags, b.created_at, b.last_updated, b.isbn_10, b.isbn_13,
+				COALESCE(ad.author_names, '{}') AS author_names,
+				COALESCE(gd.genre_names, '{}') AS genre_names,
+				COALESCE(fd.format_types, '{}') AS format_types
+		FROM book_data b
+		LEFT JOIN authors_data ad ON true
+		LEFT JOIN genres_data gd ON true
+		LEFT JOIN formats_data fd ON true;`)
 	if err != nil {
 		r.Logger.Error("Error preparing getBookByIDStmt", "error", err)
 		return fmt.Errorf("failed to prepare getBookByIDStmt: %w", err)
@@ -117,11 +143,12 @@ func (r *BookRepositoryImpl) InitPreparedStatements() error {
 
 	// Prepared select statement for GetAllBooksByUserID
 	r.getAllBooksByUserIDStmt, err = r.DB.Prepare(`
-		SELECT b.id, b.title, b.subtitle, b.description, b.language, b.page_count, b.publish_date,
-       b.image_link, b.notes, b.created_at, b.last_updated, b.isbn_10, b.isbn_13
-		FROM books b
-		INNER JOIN user_books ub ON b.id = ub.book_id
-		WHERE ub.user_id = $1`)
+	SELECT DISTINCT b.id, b.title, b.subtitle, b.description, b.language, b.page_count,
+			b.publish_date, b.image_link, b.notes, b.created_at, b.last_updated,
+			b.isbn_10, b.isbn_13
+	FROM books b
+	INNER JOIN user_books ub ON b.id = ub.book_id
+	WHERE ub.user_id = $1`)
 	if err != nil {
 		r.Logger.Error("Error preparing getAllBooksByUserIDStmt", "error", err)
 		return fmt.Errorf("failed to prepare getAllBooksByUserIDStmt: %w", err)
@@ -130,50 +157,48 @@ func (r *BookRepositoryImpl) InitPreparedStatements() error {
 	return nil
 }
 
-
-
-// Corrected Method Signature in book_queries.go
 func (r *BookRepositoryImpl) InsertBook(ctx context.Context, tx *sql.Tx, book Book, userID int, tagsJSON []byte) (int, error) {
 	var newId int
 	formattedPublishDate := formatPublishDate(book.PublishDate)
 
 	// Insert book into books table
 	err := tx.StmtContext(ctx, r.insertBookStmt).QueryRowContext(ctx,
-			book.Title,
-			book.Subtitle,
-			book.Description,
-			book.Language,
-			book.PageCount,
-			formattedPublishDate,
-			book.ImageLink,
-			book.Notes,
-			tagsJSON,
-			time.Now(),
-			time.Now(),
-			book.ISBN10,
-			book.ISBN13,
+		book.Title,
+		book.Subtitle,
+		book.Description,
+		book.Language,
+		book.PageCount,
+		formattedPublishDate,
+		book.ImageLink,
+		book.Notes,
+		tagsJSON,
+		time.Now(),
+		time.Now(),
+		book.ISBN10,
+		book.ISBN13,
 	).Scan(&newId)
 
 	if err != nil {
-			r.Logger.Error("Error inserting book", "error", err)
-			return 0, err
+		r.Logger.Error("Error inserting book", "error", err)
+		return 0, err
 	}
 
 	// Associate book with the user
 	err = r.addBookToUser(tx, userID, newId)
 	if err != nil {
-			r.Logger.Error("Error associating book with user", "error", err)
-			return 0, err
+		r.Logger.Error("Error associating book with user", "error", err)
+		return 0, err
 	}
 
 	return newId, nil
 }
 
+
 func (r *BookRepositoryImpl) GetBookByID(id int) (*Book, error) {
+
 	ctx, cancel := context.WithTimeout(context.Background(), dbconfig.DBTimeout)
 	defer cancel()
 
-	// Check if prepared statement is available
 	var rows *sql.Rows
 	var err error
 
@@ -181,42 +206,43 @@ func (r *BookRepositoryImpl) GetBookByID(id int) (*Book, error) {
 		r.Logger.Info("Using prepared statement for fetching book by ID")
 		rows, err = r.getBookByIDStmt.QueryContext(ctx, id)
 	} else {
-		// Fallback to raw SQL query if prepared statement is unavailable
 		r.Logger.Warn("Prepared statement for fetching book by ID is not available. Falling back to raw SQL query")
 		query := `
 		WITH book_data AS (
-			SELECT
-				id, title, subtitle, description, language, page_count, publish_date,
-				image_link, notes, tags, created_at, last_updated, isbn_10, isbn_13
-			FROM books
-			WHERE id = $1
+				SELECT
+						id, title, subtitle, description, language, page_count, publish_date,
+						image_link, notes, tags, created_at, last_updated, isbn_10, isbn_13
+				FROM books
+				WHERE id = $1
 		),
 		authors_data AS (
-			SELECT a.name
-			FROM authors a
-			JOIN book_authors ba ON a.id = ba.author_id
-			WHERE ba.book_id = $1
+				SELECT ARRAY_AGG(DISTINCT a.name) AS author_names
+				FROM authors a
+				JOIN book_authors ba ON a.id = ba.author_id
+				WHERE ba.book_id = $1
 		),
 		genres_data AS (
-			SELECT g.name
-			FROM genres g
-			JOIN book_genres bg ON g.id = bg.genre_id
-			WHERE bg.book_id = $1
+				SELECT ARRAY_AGG(DISTINCT g.name) AS genre_names
+				FROM genres g
+				JOIN book_genres bg ON g.id = bg.genre_id
+				WHERE bg.book_id = $1
 		),
 		formats_data AS (
-			SELECT f.format_type
-			FROM formats f
-			JOIN book_formats bf ON f.id = bf.format_id
-			WHERE bf.book_id = $1
+				SELECT ARRAY_AGG(DISTINCT f.format_type) AS format_types
+				FROM formats f
+				JOIN book_formats bf ON f.id = bf.format_id
+				WHERE bf.book_id = $1
 		)
 		SELECT
-			id, title, subtitle, description, language, page_count, publish_date,
-			image_link, notes, tags, created_at, last_updated, isbn_10, isbn_13,
-			a.name AS author_name, g.name AS genre_name, f.format_type AS format_type
+				b.id, b.title, b.subtitle, b.description, b.language, b.page_count, b.publish_date,
+				b.image_link, b.notes, b.tags, b.created_at, b.last_updated, b.isbn_10, b.isbn_13,
+				COALESCE(ad.author_names, '{}') AS author_names,
+				COALESCE(gd.genre_names, '{}') AS genre_names,
+				COALESCE(fd.format_types, '{}') AS format_types
 		FROM book_data b
-		LEFT JOIN authors_data a ON b.id = a.book_id
-		LEFT JOIN genres_data g ON b.id = g.book_id
-		LEFT JOIN formats_data f ON b.id = f.book_id`
+		LEFT JOIN authors_data ad ON true
+		LEFT JOIN genres_data gd ON true
+		LEFT JOIN formats_data fd ON true;`
 		rows, err = r.DB.QueryContext(ctx, query, id)
 	}
 
@@ -233,55 +259,69 @@ func (r *BookRepositoryImpl) GetBookByID(id int) (*Book, error) {
 	formatsSet := collections.NewSet()
 
 	for rows.Next() {
-		var authorName, genreName, formatType sql.NullString
+    var authorName, genreName, formatType sql.NullString
 
-		if err := rows.Scan(
-			&book.ID,
-			&book.Title,
-			&book.Subtitle,
-			&book.Description,
-			&book.Language,
-			&book.PageCount,
-			&book.PublishDate,
-			&book.ImageLink,
-			&book.Notes,
-			&tagsJSON,
-			&book.CreatedAt,
-			&book.LastUpdated,
-			&book.ISBN10,
-			&book.ISBN13,
-			&authorName,
-			&genreName,
-			&formatType,
-		); err != nil {
-			r.Logger.Error("Error scanning book with batch queries", "error", err)
-			return nil, err
-		}
+		// Log the raw row data
+		r.Logger.Info("Raw row data before scan", "row", rows)
 
-		if authorName.Valid {
-			authorsSet.Add(authorName.String)
-		}
-		if genreName.Valid {
-			genresSet.Add(genreName.String)
-		}
-		if formatType.Valid {
-			formatsSet.Add(formatType.String)
-		}
-	}
+    if err := rows.Scan(
+        &book.ID,
+        &book.Title,
+        &book.Subtitle,
+        &book.Description,
+        &book.Language,
+        &book.PageCount,
+        &book.PublishDate,
+        &book.ImageLink,
+        &book.Notes,
+        &tagsJSON,
+        &book.CreatedAt,
+        &book.LastUpdated,
+        &book.ISBN10,
+        &book.ISBN13,
+        &authorName,
+        &genreName,
+        &formatType,
+    ); err != nil {
+        r.Logger.Error("Error scanning book with batch queries", "error", err)
+        return nil, err
+    }
 
-	// Unmarshal JSON field
-	if err := json.Unmarshal(tagsJSON, &book.Tags); err != nil {
-		r.Logger.Error("Error unmarshalling tags JSON", "error", err)
-		return nil, err
-	}
+    // Add logging for the extracted data
+    r.Logger.Info("Extracted row data", "authorName", authorName, "genreName", genreName, "formatType", formatType)
 
-	// Convert sets to slices
+    // Safeguards to prevent nil or invalid data
+    if authorName.Valid {
+        authorsSet.Add(authorName.String)
+    }
+    if genreName.Valid {
+        genresSet.Add(genreName.String)
+    }
+    if formatType.Valid {
+        formatsSet.Add(formatType.String)
+    }
+
+    // Log after adding to the set
+    r.Logger.Info("Sets after adding", "authorsSet", authorsSet.Elements(), "genresSet", genresSet.Elements(), "formatsSet", formatsSet.Elements())
+}
+
+	// Log the deduplicated sets before converting them to slices
+	r.Logger.Info("Deduplicated authors before response", "authorsSet", authorsSet.Elements())
+	r.Logger.Info("Deduplicated genres before response", "genresSet", genresSet.Elements())
+	r.Logger.Info("Deduplicated formats before response", "formatsSet", formatsSet.Elements())
+
+	// Convert sets to slices and log them
 	book.Authors = authorsSet.Elements()
 	book.Genres = genresSet.Elements()
 	book.Formats = formatsSet.Elements()
 
+	r.Logger.Info("Final authors in response", "authors", book.Authors)
+	r.Logger.Info("Final genres in response", "genres", book.Genres)
+	r.Logger.Info("Final formats in response", "formats", book.Formats)
+
 	book.IsInLibrary = true
 	return &book, nil
+
 }
 
 func (r *BookRepositoryImpl) GetBookIdByTitle(title string) (int, error) {
@@ -480,14 +520,13 @@ func (r *BookRepositoryImpl) addBookToUser(tx *sql.Tx, userID, bookID int) error
 }
 
 func (r *BookRepositoryImpl) batchFetchBookDetails(ctx context.Context, bookIDs []int, bookIDMap map[int]*Book) error {
-	// Single query to batch fetch authors, genres, formats, and tags
 	query := `
 	SELECT
-    b.id AS book_id,
-    a.name AS author_name,
-    g.name AS genre_name,
-    f.format_type,
-    b.tags
+		b.id AS book_id,
+		ARRAY_AGG(DISTINCT a.name) AS author_names,
+		ARRAY_AGG(DISTINCT g.name) AS genre_names,
+		ARRAY_AGG(DISTINCT f.format_type) AS format_types,
+		b.tags
 	FROM books b
 	LEFT JOIN book_authors ba ON b.id = ba.book_id
 	LEFT JOIN authors a ON ba.author_id = a.id
@@ -495,7 +534,8 @@ func (r *BookRepositoryImpl) batchFetchBookDetails(ctx context.Context, bookIDs 
 	LEFT JOIN genres g ON bg.genre_id = g.id
 	LEFT JOIN book_formats bf ON b.id = bf.book_id
 	LEFT JOIN formats f ON bf.format_id = f.id
-	WHERE b.id = ANY($1)`
+	WHERE b.id = ANY($1)
+	GROUP BY b.id, b.tags`
 
 	rows, err := r.DB.QueryContext(ctx, query, pq.Array(bookIDs))
 	if err != nil {
@@ -504,37 +544,36 @@ func (r *BookRepositoryImpl) batchFetchBookDetails(ctx context.Context, bookIDs 
 	}
 	defer rows.Close()
 
+	// Processing the result rows
 	for rows.Next() {
 		var bookID int
-		var authorName, genreName, formatType sql.NullString
+		var authorNames, genreNames, formatTypes pq.StringArray
 		var tagsJSON []byte
 
-		if err := rows.Scan(&bookID, &authorName, &genreName, &formatType, &tagsJSON); err != nil {
+		// Scan the row
+		if err := rows.Scan(&bookID, &authorNames, &genreNames, &formatTypes, &tagsJSON); err != nil {
 			r.Logger.Error("Error scanning book details", "error", err)
 			return err
 		}
 
+		// Fetch book from map
 		book := bookIDMap[bookID]
-		// Unmarshal tags
-		if len(tagsJSON) > 0 {
+
+		// Unmarshal tags if needed
+		if len(tagsJSON) > 0 && len(book.Tags) == 0 {
 			if err := json.Unmarshal(tagsJSON, &book.Tags); err != nil {
 				r.Logger.Error("Error unmarshalling tags JSON", "error", err)
 				return err
 			}
 		}
 
-		// Add to the respective sets
-		if authorName.Valid {
-			book.Authors = append(book.Authors, authorName.String)
-		}
-		if genreName.Valid {
-			book.Genres = append(book.Genres, genreName.String)
-		}
-		if formatType.Valid {
-			book.Formats = append(book.Formats, formatType.String)
-		}
+		// Deduplicated authors, genres, and formats are added
+		book.Authors = append(book.Authors, authorNames...)
+		book.Genres = append(book.Genres, genreNames...)
+		book.Formats = append(book.Formats, formatTypes...)
 	}
 
+	// Check for errors after row iteration
 	if err = rows.Err(); err != nil {
 		r.Logger.Error("Error with rows in batch fetch", "error", err)
 		return err
@@ -560,7 +599,6 @@ func (r *BookRepositoryImpl) findEmptyFields(book *Book) ([]string, bool) {
 		name  string
 	}{
 		{book.Title, "title"},
-		{book.Subtitle, "subtitle"},
 		{book.Description, "description"},
 		{book.Language, "language"},
 		{book.PageCount == 0, "pageCount"},

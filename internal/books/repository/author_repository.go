@@ -87,20 +87,23 @@ func (r *AuthorRepositoryImpl) InsertAuthor(ctx context.Context, tx *sql.Tx, aut
 
 	// Check if author already exists
 	err := tx.QueryRowContext(ctx, `SELECT id FROM authors WHERE name = $1`, author).Scan(&authorID)
-	if err == sql.ErrNoRows {
-			// Author doesn't exist, so insert it
+	if err != nil {
+		if err == sql.ErrNoRows {
+			// Author doesn't exist, insert it
 			err = tx.QueryRowContext(ctx, `INSERT INTO authors (name) VALUES ($1) RETURNING id`, author).Scan(&authorID)
 			if err != nil {
-					r.Logger.Error("Error inserting new author", "error", err, "author", author)
-					return 0, err
+				r.Logger.Error("Error inserting new author", "error", err, "author", author)
+				return 0, err
 			}
-	} else if err != nil {
+		} else {
 			r.Logger.Error("Error checking if author exists", "error", err, "author", author)
 			return 0, err
+		}
 	}
 
 	return authorID, nil
 }
+
 
 func (b *AuthorRepositoryImpl) AssociateBookWithAuthor(ctx context.Context, tx *sql.Tx, bookID, authorID int) error {
 	statement := `INSERT INTO book_authors (book_id, author_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`
@@ -415,38 +418,64 @@ func (r *AuthorRepositoryImpl) GetBooksByAuthor(authorName string) ([]Book, erro
 }
 
 func (r *AuthorRepositoryImpl) BatchInsertAuthors(ctx context.Context, tx *sql.Tx, bookID int, authors []string) error {
-	authorIDMap := make(map[string]int) // Store author name -> authorID
-
-	for _, author := range authors {
-		var authorID int
-		// Check if the author already exists
-		err := tx.QueryRowContext(ctx, `SELECT id FROM authors WHERE name = $1`, author).Scan(&authorID)
-		if err != nil {
-			if err == sql.ErrNoRows {
-				// Author doesn't exist, so insert it
-				err = tx.QueryRowContext(ctx, `INSERT INTO authors (name) VALUES ($1) RETURNING id`, author).Scan(&authorID)
-				if err != nil {
-					r.Logger.Error("Error inserting author", "error", err, "author", author)
-					return err
-				}
-			} else {
-				r.Logger.Error("Error querying author", "error", err, "author", author)
-				return err
-			}
-		}
-
-		authorIDMap[author] = authorID // Store the authorID
-
-		// Insert the book-author association
-		_, err = tx.ExecContext(ctx, `INSERT INTO book_authors (book_id, author_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`, bookID, authorID)
-		if err != nil {
-			r.Logger.Error("Error inserting book-author association", "error", err, "bookID", bookID, "authorID", authorID)
-			return err
-		}
+	// Ensure authors slice is not empty
+	if len(authors) == 0 {
+			r.Logger.Warn("No authors provided for book", "bookID", bookID)
+			return nil // Early return as there's nothing to insert
 	}
 
+	authorIDMap := make(map[string]int) // Store author name -> authorID
+
+	for i, author := range authors {
+			var authorID int
+			// Log author processing step
+			r.Logger.Info("Processing author", "index", i, "author", author)
+
+			// Skip invalid author names
+			if author == "" {
+					r.Logger.Warn("Skipping empty author name", "bookID", bookID, "index", i)
+					continue
+			}
+
+			// Check if the author already exists
+			err := tx.QueryRowContext(ctx, `SELECT id FROM authors WHERE name = $1`, author).Scan(&authorID)
+			if err != nil {
+					if err == sql.ErrNoRows {
+							// Insert new author
+							r.Logger.Info("Inserting new author", "author", author)
+							err = tx.QueryRowContext(ctx, `INSERT INTO authors (name) VALUES ($1) RETURNING id`, author).Scan(&authorID)
+							if err != nil {
+									r.Logger.Error("Failed to insert new author", "author", author, "error", err)
+									return fmt.Errorf("error inserting new author: %s, err: %w", author, err)
+							}
+					} else {
+							r.Logger.Error("Error querying author", "author", author, "error", err)
+							return fmt.Errorf("error querying author: %s, err: %w", author, err)
+					}
+			}
+
+			// Avoid inserting duplicate author associations
+			if _, exists := authorIDMap[author]; exists {
+					r.Logger.Warn("Skipping duplicate author", "author", author)
+					continue
+			}
+
+			authorIDMap[author] = authorID
+
+			// Insert the book-author association
+			r.Logger.Info("Inserting book-author association", "bookID", bookID, "authorID", authorID)
+			_, err = tx.ExecContext(ctx, `INSERT INTO book_authors (book_id, author_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`, bookID, authorID)
+			if err != nil {
+					r.Logger.Error("Error inserting book-author association", "bookID", bookID, "authorID", authorID, "error", err)
+					return fmt.Errorf("error inserting book-author association for author: %s, err: %w", author, err)
+			}
+	}
+
+
+	r.Logger.Info("BatchInsertAuthors completed successfully", "bookID", bookID)
 	return nil
 }
+
 
 // Helper function to get the last name from a full name
 func getLastName(fullName string) string {

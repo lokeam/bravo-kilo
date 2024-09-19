@@ -24,13 +24,6 @@ type Factory struct {
 // NewFactory initializes repositories, services, and handlers
 func NewFactory(db *sql.DB, log *slog.Logger) (*Factory, error) {
 	// Initialize repositories
-	bookRepo, err := repository.NewBookRepository(db, log)
-	if err != nil {
-		log.Error("Error initializing book repository", "error", err)
-		return nil, err
-	}
-
-
 	authorRepo, err := repository.NewAuthorRepository(db, log)
 	if err != nil {
 		log.Error("Error initializing author repository", "error", err)
@@ -55,6 +48,12 @@ func NewFactory(db *sql.DB, log *slog.Logger) (*Factory, error) {
 		return nil, err
 	}
 
+	bookRepo, err := repository.NewBookRepository(db, log, authorRepo, genreRepo, formatRepo)
+	if err != nil {
+		log.Error("Error initializing book repository", "error", err)
+		return nil, err
+	}
+
 	bookCache, err := repository.NewBookCache(db, log)
 	if err != nil {
 		log.Error("Error initializing book cache", "error", err)
@@ -67,12 +66,6 @@ func NewFactory(db *sql.DB, log *slog.Logger) (*Factory, error) {
 		return nil, err
 	}
 
-	bookUpdater, err := repository.NewBookUpdater(db, log, formatRepo, genreRepo)
-	if err != nil {
-		log.Error("Error initializing book updater", "error", err)
-		return nil, err
-	}
-
 	// Initialize transaction manager
 	transactionManager, err := transaction.NewDBManager(db, log)
 	if err != nil {
@@ -81,6 +74,19 @@ func NewFactory(db *sql.DB, log *slog.Logger) (*Factory, error) {
 	}
 
 	// Initialize services
+	bookUpdaterService, err := services.NewBookUpdaterService(
+		db,
+		log,
+		bookRepo,
+		bookCache,
+		formatRepo,
+		genreRepo,
+	)
+	if err != nil {
+		log.Error("Error initializing book updater service manager", "error", err)
+		os.Exit(1)
+	}
+
 	bookService, err := services.NewBookService(
 		bookRepo,
 		authorRepo,
@@ -89,6 +95,7 @@ func NewFactory(db *sql.DB, log *slog.Logger) (*Factory, error) {
 		tagRepo,
 		log,
 		transactionManager,
+		bookUpdaterService,
 	)
 	if err != nil {
 		log.Error("Error initializing book service manager", "error", err)
@@ -128,7 +135,7 @@ func NewFactory(db *sql.DB, log *slog.Logger) (*Factory, error) {
 		tagRepo,
 		bookCache,
 		bookDeleter,
-		bookUpdater,
+		bookUpdaterService,
 		bookService,
 		exportService,
 	)

@@ -54,7 +54,7 @@ func (app *application) routes(
 		r.With(middleware.RateLimiter).Get("/summary", bookHandlers.HandleGetGeminiBookSummary)
 		r.Get("/by-title", bookHandlers.HandleGetBookIDByTitle)
 		r.Put("/{bookID}", bookHandlers.HandleUpdateBook)
-		r.Post("/add", bookHandlers.HandleInsertBook)
+	r.Post("/add", bookHandlers.HandleInsertBook)
 		r.Delete("/{bookID}", bookHandlers.HandleDeleteBook)
 	})
 

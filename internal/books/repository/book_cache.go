@@ -33,6 +33,7 @@ type BookCache interface {
 	GetAllBooksPublishDate(userID int) ([]BookInfo, error)
 	GetBooksByLanguage(ctx context.Context, userID int) (map[string]interface{}, error)
 	GetUserTags(ctx context.Context, userID int) (map[string]interface{}, error)
+	InvalidateCaches(bookID int)
 }
 
 type BookCacheImpl struct {
@@ -422,4 +423,14 @@ func (b *BookCacheImpl) GetBooksByLanguage(ctx context.Context, userID int) (map
 	b.Logger.Info("Caching books by language", "userID", userID)
 
 	return result, nil
+}
+
+// Invalidate Caches
+func (b *BookCacheImpl) InvalidateCaches(bookID int) {
+	isbn10Cache.Delete(bookID)
+	isbn13Cache.Delete(bookID)
+	titleCache.Delete(bookID)
+	formatsCache.Delete(bookID)
+	genresCache.Delete(bookID)
+	b.Logger.Info("Caches invalidated for book", "bookID", bookID)
 }

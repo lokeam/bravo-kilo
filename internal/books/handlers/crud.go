@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"html"
 	"net/http"
 	"strconv"
 
@@ -64,6 +63,9 @@ func (h *BookHandlers) HandleGetAllUserBooks(response http.ResponseWriter, reque
 		http.Error(response, "Error fetching books", http.StatusInternalServerError)
 		return
 	}
+
+	// Reverse Normalize Book Data
+	h.bookService.ReverseNormalizeBookData(&books)
 
 	dbResponse := map[string]interface{}{
 		"books": books,
@@ -217,14 +219,6 @@ func (h *BookHandlers) HandleInsertBook(response http.ResponseWriter, request *h
 	// Send response back to FE
 	response.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(response).Encode(map[string]int{"book_id": bookID})
-}
-
-
-// Helper fn for sanitization
-// sanitizeAndUnescape is a helper function to sanitize input and then unescape HTML entities.
-func (h *BookHandlers) sanitizeAndUnescape(input string) string {
-	sanitized := h.sanitizer.Sanitize(input)
-	return html.UnescapeString(sanitized)
 }
 
 
@@ -422,7 +416,10 @@ func (h *BookHandlers) HandleGetBooksByFormat(response http.ResponseWriter, requ
 		return
 	}
 
-	// h.logger.Info("Books fetched successfully", "booksByFormat", booksByFormat)
+	for format, books := range booksByFormat {
+		h.bookService.ReverseNormalizeBookData(&books)
+		booksByFormat[format] = books
+	}
 
 	response.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(response).Encode(booksByFormat)
@@ -504,6 +501,7 @@ func (h *BookHandlers) HandleGetHomepageData(response http.ResponseWriter, reque
 			errorChan <- err
 			return
 		}
+
 		userGenresChan <- genres
 	}()
 
