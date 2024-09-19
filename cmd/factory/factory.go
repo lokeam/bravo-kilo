@@ -74,19 +74,6 @@ func NewFactory(db *sql.DB, log *slog.Logger) (*Factory, error) {
 	}
 
 	// Initialize services
-	bookUpdaterService, err := services.NewBookUpdaterService(
-		db,
-		log,
-		bookRepo,
-		bookCache,
-		formatRepo,
-		genreRepo,
-	)
-	if err != nil {
-		log.Error("Error initializing book updater service manager", "error", err)
-		os.Exit(1)
-	}
-
 	bookService, err := services.NewBookService(
 		bookRepo,
 		authorRepo,
@@ -95,10 +82,25 @@ func NewFactory(db *sql.DB, log *slog.Logger) (*Factory, error) {
 		tagRepo,
 		log,
 		transactionManager,
-		bookUpdaterService,
 	)
 	if err != nil {
 		log.Error("Error initializing book service manager", "error", err)
+		os.Exit(1)
+	}
+
+	bookUpdaterService, err := services.NewBookUpdaterService(
+		db,
+		log,
+		bookRepo,
+		authorRepo,
+		bookCache,
+		formatRepo,
+		genreRepo,
+		bookService,
+		transactionManager,
+	)
+	if err != nil {
+		log.Error("Error initializing book updater service manager", "error", err)
 		os.Exit(1)
 	}
 

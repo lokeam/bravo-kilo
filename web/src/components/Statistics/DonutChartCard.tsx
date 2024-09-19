@@ -22,6 +22,8 @@ function DonutChartCard({ bookFormats = [] }: DonutChartCardProps) {
     ],
   };
 
+  console.log('formatCountArr: ', formatCountArr);
+
   return(
     <div className="books_format_card_wrapper flex flex-col col-span-full lgMobile:col-span-6 mdTablet:col-span-4 bg-maastricht shadow-sm rounded-xl">
       <PieChartCardHeader bookFormats={bookFormats} />

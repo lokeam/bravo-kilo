@@ -23,6 +23,16 @@ import (
 
 type BookService interface {
 	CreateBookEntry(ctx context.Context, book repository.Book, userID int) (int, error)
+	CreateEntries(
+		ctx context.Context,
+		tx *sql.Tx,
+		bookID int,
+		items []string,
+		getIDByName func(ctx context.Context, tx *sql.Tx, name string, id *int) error,
+		insertItem func(ctx context.Context, tx *sql.Tx, name string) (int, error),
+		associateItem func(ctx context.Context, tx *sql.Tx, bookID, itemID int) error,
+	) error
+	InsertFormats(ctx context.Context, tx *sql.Tx, bookID int, formats []string) error
 	ReverseNormalizeBookData(books *[]repository.Book)
 }
 
@@ -41,7 +51,6 @@ type BookServiceImpl struct {
 
 // NewBookService creates a new instance of BookService
 func NewBookService(
-	bookUpdaterService BookUpdaterService,
 	bookRepo repository.BookRepository,
 	authorRepo repository.AuthorRepository,
 	genreRepo repository.GenreRepository,
@@ -84,7 +93,6 @@ func NewBookService(
 	}
 
 	return &BookServiceImpl{
-		BookUpdaterService:  bookUpdaterService,
 		bookRepository:      bookRepo,
 		authorRepository:    authorRepo,
 		genreRepository:     genreRepo,
@@ -133,7 +141,7 @@ func (s *BookServiceImpl) CreateBookEntry(ctx context.Context, book repository.B
 	}
 
 	// Create author entries
-	err = s.createEntries(
+	err = s.CreateEntries(
 		ctx,
 		tx,
 		bookID,
@@ -148,7 +156,7 @@ func (s *BookServiceImpl) CreateBookEntry(ctx context.Context, book repository.B
 	}
 
 	// Create genres entries
-	err = s.createEntries(
+	err = s.CreateEntries(
 		ctx,
 		tx,
 		bookID,
@@ -163,7 +171,7 @@ func (s *BookServiceImpl) CreateBookEntry(ctx context.Context, book repository.B
 	}
 
 	// Insert formats
-	err = s.insertFormats(ctx, tx, bookID, book.Formats)
+	err = s.InsertFormats(ctx, tx, bookID, book.Formats)
 	if err != nil {
 		s.logger.Error("Error inserting formats", "error", err)
 		return 0, err
@@ -179,7 +187,7 @@ func (s *BookServiceImpl) CreateBookEntry(ctx context.Context, book repository.B
 }
 
 // Higher order helper fn to insert author, genre, tag entries
-func (s *BookServiceImpl) createEntries(
+func (s *BookServiceImpl) CreateEntries(
 	ctx context.Context,
 	tx *sql.Tx,
 	bookID int,
@@ -227,7 +235,7 @@ func (s *BookServiceImpl) createEntries(
 }
 
 // Helper to insert formats
-func (s *BookServiceImpl) insertFormats(ctx context.Context, tx *sql.Tx, bookID int, formats []string) error {
+func (s *BookServiceImpl) InsertFormats(ctx context.Context, tx *sql.Tx, bookID int, formats []string) error {
 	if len(formats) == 0 {
 		return nil
 	}

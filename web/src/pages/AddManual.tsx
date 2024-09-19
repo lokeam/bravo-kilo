@@ -57,7 +57,7 @@ const ManualAdd = () => {
       isbn10: '',
       isbn13: '',
       formats: [],
-      language: '',
+      language: 'en',
       pageCount: 0,
       imageLink: '',
       description: '',
@@ -231,7 +231,7 @@ const ManualAdd = () => {
           {/* Publish Date */}
           <div className="block col-span-2">
             <label htmlFor="publishDate" className="block mb-2  text-base  font-medium text-gray-900 dark:text-white">Publish Date<span className="text-red-600 ml-px">*</span></label>
-            <input type="date" id="publishDate" {...register('publishDate')} className={`bg-maastricht border ${errors.publishDate ? 'border-red-500' : 'border-gray-600'} text-gray-900 text-base rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500 mb-1`}/>
+            <input type="date" id="publishDate" min="1000-01-01" {...register('publishDate')} className={`bg-maastricht border ${errors.publishDate ? 'border-red-500' : 'border-gray-600'} text-gray-900 text-base rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500 mb-1`}/>
             {errors.publishDate && <p className="text-red-500">{errors.publishDate.message}</p>}
           </div>
 

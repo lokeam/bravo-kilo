@@ -34,8 +34,8 @@ function BarChartCardBody({
                   ></div>
                   <div className="relative h-full flex flex-row place-content-between items-center px-2">
                     <div className="z-10 text-white text-base text-left flex flex-row gap-2">
-                      <div className="text-white">
-                        { isLanguageCard ? languageCodes[book.label] : book.label }
+                      <div className="text-white capitalize">
+                        { isLanguageCard ? languageCodes[book.label] : book.label.toLowerCase() }
                       </div>
                     </div>
                     <div className="text-base text-right">{book.count}&nbsp; /&nbsp; {totalBooks}</div>

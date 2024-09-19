@@ -51,10 +51,11 @@ func (app *application) routes(
 		r.Use(middleware.VerifyJWT)
 		r.Get("/by-id/{bookID}", bookHandlers.HandleGetBookByID)
 		r.Get("/search", searchHandlers.HandleSearchBooks)
+
 		r.With(middleware.RateLimiter).Get("/summary", bookHandlers.HandleGetGeminiBookSummary)
 		r.Get("/by-title", bookHandlers.HandleGetBookIDByTitle)
 		r.Put("/{bookID}", bookHandlers.HandleUpdateBook)
-	r.Post("/add", bookHandlers.HandleInsertBook)
+		r.Post("/add", bookHandlers.HandleInsertBook)
 		r.Delete("/{bookID}", bookHandlers.HandleDeleteBook)
 	})
 

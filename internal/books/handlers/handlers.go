@@ -28,6 +28,7 @@ type BookHandlers struct {
 	tagRepo           repository.TagRepository
 	bookCache         repository.BookCache
 	bookDeleter       repository.BookDeleter
+	bookUpdater       services.BookUpdaterService
 	bookService       services.BookService
 	exportService     services.ExportService
 	exportLimiter     *rate.Limiter
@@ -57,6 +58,7 @@ func NewBookHandlers(
 	tagRepo repository.TagRepository,
 	bookCache repository.BookCache,
 	bookDeleter repository.BookDeleter,
+	bookUpdater services.BookUpdaterService,
 	bookService services.BookService,
 	exportService services.ExportService,
 	) (*BookHandlers, error) {
@@ -114,6 +116,7 @@ func NewBookHandlers(
 		bookCache:         bookCache,
 		bookDeleter:       bookDeleter,
 		bookService:       bookService,
+		bookUpdater:       bookUpdater,
 		exportService:     exportService,
 		exportLimiter:     rate.NewLimiter(rate.Limit(1), 3),
 		validate:          validate,

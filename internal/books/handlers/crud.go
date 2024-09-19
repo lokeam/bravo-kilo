@@ -1,8 +1,6 @@
 package handlers
 
 import (
-	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -11,6 +9,9 @@ import (
 	"github.com/lokeam/bravo-kilo/cmd/middleware"
 	"github.com/lokeam/bravo-kilo/internal/books/repository"
 	"github.com/lokeam/bravo-kilo/internal/shared/utils"
+
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-playground/validator/v10"
@@ -135,14 +136,8 @@ func (h *BookHandlers) HandleGetBookByID(response http.ResponseWriter, request *
 		return
 	}
 
-	// Get formats using context from request
-	formats, err := h.formatRepo.GetFormats(request.Context(), bookID)
-	if err != nil {
-		h.logger.Error("Error fetching formats", "error", err)
-		http.Error(response, "Error fetching formats", http.StatusInternalServerError)
-		return
-	}
-	book.Formats = formats
+	caser := cases.Title(language.Und)
+	book.Title = caser.String(book.Title)
 
 	response.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(response).Encode(map[string]interface{}{"book": book}); err != nil {
@@ -294,83 +289,17 @@ func (h *BookHandlers) HandleUpdateBook(response http.ResponseWriter, request *h
 			return
 	}
 
-	// Start a transaction
-	tx, err := h.DB.BeginTx(request.Context(), nil)
-	if err != nil {
-			h.logger.Error("Failed to start transaction", "error", err)
-			http.Error(response, "Transaction start failed", http.StatusInternalServerError)
-			return
-	}
-	defer tx.Rollback()
-
 	// Update the book
-	err = h.bookUpdater.UpdateBook(tx, book)
+	err = h.bookUpdater.UpdateBookEntry(request.Context(), book)
 	if err != nil {
 			h.logger.Error("Error updating book", "error", err)
 			http.Error(response, "Error updating book", http.StatusInternalServerError)
 			return
 	}
 
-	// Handle formats, genres, etc. within the transaction
-	err = h.updateFormatsAndAssociations(tx, request.Context(), book)
-	if err != nil {
-			h.logger.Error("Error updating formats and associations", "error", err)
-			http.Error(response, "Error updating formats and associations", http.StatusInternalServerError)
-			return
-	}
-
-	// Commit the transaction
-	if err := tx.Commit(); err != nil {
-			h.logger.Error("Error committing transaction", "error", err)
-			http.Error(response, "Error committing transaction", http.StatusInternalServerError)
-			return
-	}
-
 	response.WriteHeader(http.StatusOK)
 	json.NewEncoder(response).Encode(map[string]string{"message": "Book updated successfully"})
 }
-
-func (h *BookHandlers) updateFormatsAndAssociations(tx *sql.Tx, ctx context.Context, book repository.Book) error {
-	// Fetch current formats using context from request
-	currentFormats, err := h.formatRepo.GetFormats(ctx, book.ID)
-	if err != nil {
-			h.logger.Error("Error fetching current formats", "error", err)
-			return err
-	}
-
-	// Determine formats to remove
-	formatsToRemove := utils.FindDifference(currentFormats, book.Formats)
-
-	// Remove specific format associations
-	if len(formatsToRemove) > 0 {
-			err = h.formatRepo.RemoveSpecificFormats(ctx, book.ID, formatsToRemove)
-			if err != nil {
-					h.logger.Error("Error removing specific formats", "error", err)
-					return err
-			}
-	}
-
-	// Insert new formats and their associations
-	for _, formatType := range book.Formats {
-		// DEBUG - temporarily removing formatID:
-		// formatID, err := h.formatRepo.AddOrGetFormatID(ctx, tx, formatType)
-		_, err := h.formatRepo.AddOrGetFormatID(ctx, tx, formatType)
-			if err != nil {
-					h.logger.Error("Error getting or inserting format ID", "error", err)
-					return err
-			}
-
-			// Now associate the format ID with the book
-			err = h.formatRepo.AddFormats(tx, ctx, book.ID, []string{formatType})
-			if err != nil {
-					h.logger.Error("Error adding format association", "error", err)
-					return err
-			}
-	}
-
-	return nil
-}
-
 
 
 // Delete Book

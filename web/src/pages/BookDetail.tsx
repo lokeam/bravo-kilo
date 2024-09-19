@@ -32,7 +32,7 @@ const MissingInfoWarning = ({emptyFields}: MissingInfoWarningProps) => {
 
 const BookDetail = () => {
   const { bookTitle } = useParams();
-  const decodedTitle = bookTitle ? decodeURIComponent(bookTitle) : '';
+  const decodedTitle = bookTitle ? decodeURIComponent(bookTitle.toLowerCase()) : '';
   const imageRef = useScrollShrink();
   const navigate = useNavigate();
   const location = useLocation();
