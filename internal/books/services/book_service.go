@@ -34,6 +34,9 @@ type BookService interface {
 	) error
 	InsertFormats(ctx context.Context, tx *sql.Tx, bookID int, formats []string) error
 	ReverseNormalizeBookData(books *[]repository.Book)
+	SanitizeAndUnescape(input string) string
+	NormalizeBookData(book *repository.Book)
+	SanitizeBookData(book *repository.Book)
 }
 
 // BookServiceImpl implements BookService

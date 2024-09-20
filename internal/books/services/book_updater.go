@@ -68,6 +68,10 @@ func (b *BookUpdaterServiceImpl) UpdateBookEntry(ctx context.Context, book repos
 	b.bookCache.InvalidateCaches(book.ID)
 	b.logger.Info("Cache invalidated for book", "book", book.ID)
 
+	// Normalize + sanitize book data before proceeding
+	b.bookService.NormalizeBookData(&book)
+	b.bookService.SanitizeBookData(&book)
+
 	tagsJSON, err := json.Marshal(book.Tags)
 	if err != nil {
 			b.logger.Error("Error marshalling tags to JSON", "error", err)
