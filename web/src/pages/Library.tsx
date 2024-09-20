@@ -2,10 +2,9 @@ import { useMemo } from 'react';
 import LibraryNav from '../components/LibraryNav/LibraryNav';
 import CardList from '../components/CardList/CardList';
 import CardListSortHeader from '../components/CardList/CardListSortHeader';
-import Snackbar from '../components/Snackbar/Snackbar';
 import Loading from '../components/Loading/Loading';
 import EmptyLibraryCard from '../components/ErrorMessages/EmptyLibraryCard';
-
+import PageWithErrorBoundary from '../components/ErrorMessages/PageWithErrorBoundary';
 import { defaultBookGenres, isBookGenresData, GenreData } from '../types/api';
 import { sortBooks } from '../utils/ui';
 import { Book } from '../types/api';
@@ -13,15 +12,12 @@ import { Book } from '../types/api';
 import useStore from '../store/useStore';
 import useLibraryData from '../hooks/useLibraryData';
 
+
 function Library() {
   const {
     activeTab,
-    snackbarMessage,
-    snackbarOpen,
-    snackbarVariant,
     sortCriteria,
     sortOrder,
-    hideSnackbar,
   } = useStore();
 
   const {
@@ -88,44 +84,29 @@ function Library() {
     );
   }, [books, bookAuthors, bookGenres, bookFormats]);
 
-  const memoizedSnackbar = useMemo(() => (
-    <Snackbar
-      message={snackbarMessage || ''}
-      open={snackbarOpen}
-      variant={snackbarVariant || 'added'}
-      onClose={hideSnackbar}
-    />
-  ), [snackbarMessage, snackbarOpen, snackbarVariant, hideSnackbar]);
-
   if (isLoading) {
     return (
       <div className="bk_lib flex flex-col items-center px-5 pt-12 antialiased mdTablet:pl-1 pr-5 mdTablet:ml-24 h-screen">
         <Loading />
       </div>
-  );
+    );
   }
-
-  // Replace with Error state
-  if (isError) {
-    return <div>Error loading books</div>;
-  }
-
-  console.log('bookFormats: ', bookFormats);
 
   return (
-    <div className="bk_lib flex flex-col items-center px-5 pt-12 antialiased mdTablet:pl-1 pr-5 mdTablet:ml-24 h-screen">
-      { isEmptyLibrary ?
-        <EmptyLibraryCard /> :
-        (
-          <>
-            <LibraryNav />
-            <CardListSortHeader sortedBooksCount={sortedBooks.length} />
-            {renderCardList()}
-            {memoizedSnackbar}
-          </>
-        )
-      }
-    </div>
+    <PageWithErrorBoundary fallbackMessage="Error loading library">
+      <div className="bk_lib flex flex-col items-center px-5 pt-12 antialiased mdTablet:pl-1 pr-5 mdTablet:ml-24 h-screen">
+        { isEmptyLibrary ?
+          <EmptyLibraryCard /> :
+          (
+            <>
+              <LibraryNav />
+              <CardListSortHeader sortedBooksCount={sortedBooks.length} />
+              {renderCardList()}
+            </>
+          )
+        }
+      </div>
+    </PageWithErrorBoundary>
   )
 }
 

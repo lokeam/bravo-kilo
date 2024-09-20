@@ -11,7 +11,7 @@ interface SnackbarProps {
   onClose: () => void;
 }
 
-function Snackbar({ message, open, duration = 5000, onClose, variant }: SnackbarProps) {
+function Snackbar({ message, open, duration = 2000, onClose, variant }: SnackbarProps) {
   useEffect(() => {
     if (open) {
       const timer = setTimeout(() => {
