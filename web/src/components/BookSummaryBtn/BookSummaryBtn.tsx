@@ -47,7 +47,7 @@ const BookSummaryBtn = (
       isManualTrigger
     ) {
       const formattedResponse = promptResponse.parts[0].replace(/['‘’"“”]/g, '');
-      console.log('checking formatted response: ', formattedResponse);
+      //console.log('checking formatted response: ', formattedResponse);
 
       setAiSummaryPreview(formattedResponse);
       openPreviewModal();
@@ -65,7 +65,7 @@ const BookSummaryBtn = (
     refetch();
   }, 2000);
 
-  console.log('Book Summary Button - prompt to send: ', prompt);
+  //console.log('Book Summary Button - prompt to send: ', prompt);
 
   return (
     <>

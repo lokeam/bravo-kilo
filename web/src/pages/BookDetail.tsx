@@ -4,6 +4,7 @@ import ImagePlaceholder from '../components/CardList/ImagePlaceholder';
 import { fetchBookIDByTitle } from '../service/apiClient.service';
 import useScrollShrink from "../hooks/useScrollShrink";
 import PageWithErrorBoundary from '../components/ErrorMessages/PageWithErrorBoundary';
+import Loading from '../components/Loading/Loading';
 import { IoIosAdd } from "react-icons/io";
 import { IoIosWarning } from "react-icons/io";
 import { TbEdit } from "react-icons/tb";
@@ -69,7 +70,7 @@ const BookDetail = () => {
 
   // Display loading state
   if (isLoading) {
-    return <div>Loading...</div>;
+    return <Loading />;
   }
 
   // Display error message

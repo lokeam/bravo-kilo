@@ -4,6 +4,7 @@ import Loading from '../components/Loading/Loading';
 import useSearchStore from '../store/useSearchStore';
 import useBookSearch from '../hooks/useBookSearch';
 import { TbWorldSearch } from "react-icons/tb";
+import PageWithErrorBoundary from '../components/ErrorMessages/PageWithErrorBoundary';
 
 function Search() {
   const [searchParams] = useSearchParams();
@@ -17,7 +18,7 @@ function Search() {
   const renderContent = () => {
     if (!query) {
       return (
-        <div className="text-center">
+        <div className="text-center pt-28">
           <TbWorldSearch
             className="mx-auto text-6xl mb-4"
             size={30}
@@ -27,20 +28,17 @@ function Search() {
       );
     }
 
-    if (isLoading) return <Loading />;
-
-    if (error) {
+    if (isLoading) {
       return (
-        <div className="text-center text-red-500">
-          <p>Something happened. Don't worry, we're working on it. Please try again later</p>
-          <p>Error: {error.message}</p>
+        <div className="bk_searchflex flex-col items-center px-5 antialiased mdTablet:pl-1 pr-5 mdTablet:ml-24 h-screen pt-28">
+          <Loading />
         </div>
       );
     }
 
     if (books.length === 0) {
       return (
-        <p className="text-center">No results found for {query}</p>
+        <p className="text-center">We couldn't find any results found for {query}</p>
       );
     }
 
@@ -49,13 +47,15 @@ function Search() {
         books={books}
         isSearchPage
       />
-    )
+    );
   }
 
   return (
-    <div className="bk_searchflex flex-col items-center px-5 antialiased mdTablet:pl-1 pr-5 mdTablet:ml-24 h-screen pt-28">
-      {renderContent()}
-    </div>
+    <PageWithErrorBoundary fallbackMessage="Error loading search page">
+      <div className="bk_search flex flex-col items-center px-5 antialiased mdTablet:pl-1 pr-5 mdTablet:ml-24 h-screen">
+        { renderContent() }
+      </div>
+    </PageWithErrorBoundary>
   );
 }
 

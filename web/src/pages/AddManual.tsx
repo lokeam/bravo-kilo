@@ -2,9 +2,9 @@ import { useEffect } from 'react';
 import { Controller, SubmitHandler, useForm, useFieldArray } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import PageWithErrorBoundary from '../components/ErrorMessages/PageWithErrorBoundary';
-
+import { useFormatPublishDate } from '../utils/formatPublishDate';
 import useAddBook from '../hooks/useAddBook';
 import LanguageSelect from '../components/LanguageSelect/LanguageSelect';
 
@@ -33,18 +33,16 @@ type BookFormData = z.infer<typeof bookSchema>;
 
 const ManualAdd = () => {
   const { mutate: addBook } = useAddBook();
-  const navigate = useNavigate();
   const location = useLocation();
-
-  // Retrieve book data from navigation state
   const bookData = location.state?.book || {};
+  const { formattedDate, dateWarning } = useFormatPublishDate(bookData.publishDate);
 
-  // Use default values to ensure inputs are always controlled
   const {
     control,
     handleSubmit,
     register,
     reset,
+    setValue,
     formState: { errors },
   } = useForm<BookFormData>({
     resolver: zodResolver(bookSchema),
@@ -54,7 +52,7 @@ const ManualAdd = () => {
       authors: [],
       genres: [],
       tags: [],
-      publishDate: '',
+      publishDate: formattedDate,
       isbn10: '',
       isbn13: '',
       formats: [],
@@ -63,9 +61,13 @@ const ManualAdd = () => {
       imageLink: '',
       description: '',
       notes: '',
-      ...bookData, // Merge with any existing data
+      ...bookData,
     },
   });
+
+  useEffect(() => {
+    setValue('publishDate', formattedDate);
+  }, [formattedDate, setValue]);
 
   useEffect(() => {
     if (errors) {
@@ -109,12 +111,18 @@ const ManualAdd = () => {
     name: 'tags' as const,
   });
 
+
   useEffect(() => {
     // Only reset if bookData is actually different
     if (bookData && Object.keys(bookData).length > 0) {
       reset(bookData);
     }
   }, [bookData, reset]);
+
+  // Update publish date when formattedDate changes
+  useEffect(() => {
+    setValue('publishDate', formattedDate);
+  }, [formattedDate, setValue]);
 
   const onSubmit: SubmitHandler<BookFormData> = (data) => {
     console.log('Submitted data:', data);
@@ -128,14 +136,13 @@ const ManualAdd = () => {
     };
 
     addBook(book);
-    navigate('/library/');
   };
 
   console.log('RHF errors: ', errors );
 
   return (
     <PageWithErrorBoundary fallbackMessage="Error loading add manual page">
-      <section className="bg-black relative flex flex-col items-center place-content-around px-5 antialiased mdTablet:pr-5 mdTablet:ml-24 h-screen">
+      <section className="addManual bg-black relative flex flex-col items-center place-content-around px-5 antialiased mdTablet:pr-5 mdTablet:ml-24 h-screen">
         <div className="text-left max-w-screen-mdTablet py-24 md:pb-4 flex flex-col relative w-full">
           <h2 className="mb-4 text-xl font-bold text-gray-900 dark:text-white">Add Book</h2>
           <form className="grid gap-4 grid-cols-2 sm:gap-6" onSubmit={handleSubmit(onSubmit)}>
@@ -233,8 +240,15 @@ const ManualAdd = () => {
             {/* Publish Date */}
             <div className="block col-span-2">
               <label htmlFor="publishDate" className="block mb-2  text-base  font-medium text-gray-900 dark:text-white">Publish Date<span className="text-red-600 ml-px">*</span></label>
-              <input type="date" id="publishDate" min="1000-01-01" {...register('publishDate')} className={`bg-maastricht border ${errors.publishDate ? 'border-red-500' : 'border-gray-600'} text-gray-900 text-base rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500 mb-1`}/>
+              <input
+                type="date"
+                id="publishDate"
+                min="1000-01-01" {...register('publishDate')}
+                className={`bg-maastricht border ${
+                  errors.publishDate ? 'border-red-500' : 'border-gray-600'
+                } text-gray-900 text-base rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500 mb-1`} />
               {errors.publishDate && <p className="text-red-500">{errors.publishDate.message}</p>}
+              {dateWarning && <p className="text-yellow-500">{dateWarning}</p>}
             </div>
 
             {/* ISBN10 */}

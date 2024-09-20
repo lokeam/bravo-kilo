@@ -11,6 +11,7 @@ import PageWithErrorBoundary from '../components/ErrorMessages/PageWithErrorBoun
 import useUpdateBook from '../hooks/useUpdateBook';
 import useDeleteBook from '../hooks/useDeleteBook';
 import useFetchBookById from '../hooks/useFetchBookById';
+import Loading from '../components/Loading/Loading';
 
 import Modal from '../components/Modal/ModalRoot';
 import BookSummaryBtn from '../components/BookSummaryBtn/BookSummaryBtn';
@@ -115,7 +116,7 @@ const EditBook = () => {
     console.log('isPreviewModalOpen state changed:', isPreviewModalOpen);
   }, [isPreviewModalOpen]);
 
-  if (isLoading) return <div>Loading...</div>;
+  if (isLoading) return <Loading />;
 
   if (isError) return <div>Error loading book data</div>;
 
@@ -132,7 +133,6 @@ const EditBook = () => {
     };
 
     updateBook(book);
-    navigate('/library');
   };
 
   const copyTextContent = () => {
