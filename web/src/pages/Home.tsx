@@ -12,6 +12,7 @@ import { AggregatedHomePageData } from '../types/api';
 
 function Home() {
   const { data, isLoading, error } = useHomePageData();
+
   const { books, booksByFormat, totalBooks, booksByLang, booksByGenre, userTags } = useMemo(() => {
     const defaultData: AggregatedHomePageData = {
       books: [],
@@ -43,6 +44,15 @@ function Home() {
       userTags: homepageStats.userTags?.userTags || [],
     };
   }, [data]);
+  //const isInitialLoad = !data || isLoading;
+  // Check if all data arrays are empty
+  const isEmpty = useMemo(() =>
+    books.length === 0 &&
+    booksByFormat.every(format => format.count === 0) &&
+    booksByLang.length === 0 &&
+    booksByGenre.length === 0 &&
+    userTags.length === 0,
+  [books, booksByFormat, booksByLang, booksByGenre, userTags]);
 
   if (isLoading) return (
     <div className="bk_home flex flex-col items-center px-5 antialiased mdTablet:pl-1 pr-5 mdTablet:ml-24 h-screen pt-12">
@@ -50,13 +60,13 @@ function Home() {
     </div>
   );
 
-
-  // Check if all data arrays are empty
-  const isEmpty = books.length === 0 &&
-                  booksByFormat.every(format => format.count === 0) &&
-                  booksByLang.length === 0 &&
-                  booksByGenre.length === 0 &&
-                  userTags.length === 0;
+  if (!isLoading && isEmpty) {
+    return (
+      <div className="bk_home flex flex-col items-center px-5 antialiased mdTablet:pl-1 pr-5 mdTablet:ml-24 h-screen pt-12">
+        <EmptyHomeCard />
+      </div>
+    )
+  }
 
   console.log('data package: ', data);
   console.log('booksByFormat: ', data);
@@ -64,38 +74,33 @@ function Home() {
   return (
     <PageWithErrorBoundary fallbackMessage="Error loading home page">
       <div className="bk_home flex flex-col items-center px-5 antialiased mdTablet:pl-1 pr-5 mdTablet:ml-24 h-screen pt-12">
-        { isEmpty ?
-          <EmptyHomeCard /> :
-          (
-            <div className="pb-20 mdTablet:pb-4 flex flex-col relative w-full max-w-7xl">
-              <Bookshelf
-                category="Recently updated"
-                books={books || []}
-                isLoading={isLoading}
-              />
-              <h2 className="text-left text-2xl font-bold text-white inline-block max-w-full overflow-hidden text-ellipsis whitespace-nowrap select-none mb-4">Statistics</h2>
-              <div className="grid grid-cols-12 gap-6">
-                {/* Format data */}
-                <DonutChartCard bookFormats={booksByFormat}/>
+        <div className="pb-20 mdTablet:pb-4 flex flex-col relative w-full max-w-7xl">
+          <Bookshelf
+            category="Recently updated"
+            books={books || []}
+            isLoading={isLoading}
+          />
+          <h2 className="text-left text-2xl font-bold text-white inline-block max-w-full overflow-hidden text-ellipsis whitespace-nowrap select-none mb-4">Statistics</h2>
+          <div className="grid grid-cols-12 gap-6">
+            {/* Format data */}
+            <DonutChartCard bookFormats={booksByFormat}/>
 
-                {/* Language data */}
-                <BarChartCard
-                  booksByLang={booksByLang}
-                  totalBooks={totalBooks}
-                />
+            {/* Language data */}
+            <BarChartCard
+              booksByLang={booksByLang}
+              totalBooks={totalBooks}
+            />
 
-                {/* Genre data */}
-                <BarChartCard
-                  booksByGenre={booksByGenre}
-                  totalBooks={totalBooks}
-                />
+            {/* Genre data */}
+            <BarChartCard
+              booksByGenre={booksByGenre}
+              totalBooks={totalBooks}
+            />
 
-                {/* Tag Data */}
-                <TableCard userTags={userTags}/>
-              </div>
-            </div>
-          )
-        }
+            {/* Tag Data */}
+            <TableCard userTags={userTags}/>
+          </div>
+        </div>
       </div>
     </PageWithErrorBoundary>
   )
