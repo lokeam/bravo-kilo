@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import { useQuery, QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import Loading from './Loading/Loading';
 import axios from 'axios';
 
 export interface User {
@@ -84,7 +85,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
    // Stop children from rendering until user data is ready
   if (loading) {
-    return <div>Loading...</div>;
+    return <Loading />;
   }
 
   return (

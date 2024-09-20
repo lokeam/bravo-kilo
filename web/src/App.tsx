@@ -18,6 +18,7 @@ import Library from './pages/Library';
 import AuthorGenre from './pages/AuthorGenre';
 import BookDetail from './pages/BookDetail';
 import NotFound from './pages/NotFound';
+import Loading from './components/Loading/Loading';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 
 import './App.css'
@@ -29,7 +30,7 @@ function App() {
       <ThemeProvider>
         <AppProvider>
           <FocusProvider>
-            <Suspense fallback={<h1>Loading...</h1>}>
+            <Suspense fallback={<Loading />}>
               <Routes>
                 <Route path="/bravo-kilo" element={<MtkHome />} />
                 <Route path="/login" element={<Login />}/>

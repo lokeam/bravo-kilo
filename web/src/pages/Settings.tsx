@@ -1,4 +1,5 @@
 import SettingsItem from '../components/SettingsItem/SettingsItem';
+import PageWithErrorBoundary from '../components/ErrorMessages/PageWithErrorBoundary';
 
 function Settings() {
   const settingsData = [
@@ -25,21 +26,23 @@ function Settings() {
   ];
 
   return (
-    <section className="bg-black relative flex flex-col items-center px-5 antialiased mdTablet:pr-5 mdTablet:ml-24 h-screen">
-      <div className="text-left max-w-screen-mdTablet py-24 md:pb-4 flex flex-col relative w-full">
-        <h2 className="mb-4 text-3xl font-bold text-gray-900 dark:text-white">Settings</h2>
-        <div className="grid gap-4 grid-cols-1 sm:gap-6 py-3">
-          {settingsData.map((item, index) => (
-            <SettingsItem
-              key={`${item.label}-${index}`}
-              isLastItem={index === settingsData.length - 1 ? true : false}
-              settingsData={item}
-              variant={item.variant}
-            />
-          ))}
+    <PageWithErrorBoundary fallbackMessage="Error loading settings page">
+      <section className="bg-black relative flex flex-col items-center px-5 antialiased mdTablet:pr-5 mdTablet:ml-24 h-screen">
+        <div className="text-left max-w-screen-mdTablet py-24 md:pb-4 flex flex-col relative w-full">
+          <h2 className="mb-4 text-3xl font-bold text-gray-900 dark:text-white">Settings</h2>
+          <div className="grid gap-4 grid-cols-1 sm:gap-6 py-3">
+            {settingsData.map((item, index) => (
+              <SettingsItem
+                key={`${item.label}-${index}`}
+                isLastItem={index === settingsData.length - 1 ? true : false}
+                settingsData={item}
+                variant={item.variant}
+              />
+            ))}
+          </div>
         </div>
-      </div>
-    </section>
+      </section>
+    </PageWithErrorBoundary>
   );
 }
 

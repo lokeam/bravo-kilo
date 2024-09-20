@@ -5,6 +5,8 @@ import TableCard from '../components/Statistics/TableCard';
 import DonutChartCard from '../components/Statistics/DonutChartCard';
 import EmptyHomeCard from '../components/ErrorMessages/EmptyHomeCard';
 import Loading from '../components/Loading/Loading';
+import PageWithErrorBoundary from '../components/ErrorMessages/PageWithErrorBoundary';
+
 import useHomePageData from '../hooks/useHomeData';
 import { AggregatedHomePageData } from '../types/api';
 
@@ -42,8 +44,12 @@ function Home() {
     };
   }, [data]);
 
-  if (isLoading) return <Loading />;
-  if (error) return <div>Error loading data: {error.message}</div>;
+  if (isLoading) return (
+    <div className="bk_home flex flex-col items-center px-5 antialiased mdTablet:pl-1 pr-5 mdTablet:ml-24 h-screen pt-12">
+      <Loading />
+    </div>
+  );
+
 
   // Check if all data arrays are empty
   const isEmpty = books.length === 0 &&
@@ -52,44 +58,46 @@ function Home() {
                   booksByGenre.length === 0 &&
                   userTags.length === 0;
 
-  if (isEmpty) {
-    return <EmptyHomeCard />;
-  }
+  console.log('data package: ', data);
+  console.log('booksByFormat: ', data);
 
   return (
-    <div className="bk_home flex flex-col items-center px-5 antialiased mdTablet:pl-1 pr-5 mdTablet:ml-24 h-screen pt-28">
+    <PageWithErrorBoundary fallbackMessage="Error loading home page">
+      <div className="bk_home flex flex-col items-center px-5 antialiased mdTablet:pl-1 pr-5 mdTablet:ml-24 h-screen pt-12">
+        { isEmpty ?
+          <EmptyHomeCard /> :
+          (
+            <div className="pb-20 mdTablet:pb-4 flex flex-col relative w-full max-w-7xl">
+              <Bookshelf
+                category="Recently updated"
+                books={books || []}
+                isLoading={isLoading}
+              />
+              <h2 className="text-left text-2xl font-bold text-white inline-block max-w-full overflow-hidden text-ellipsis whitespace-nowrap select-none mb-4">Statistics</h2>
+              <div className="grid grid-cols-12 gap-6">
+                {/* Format data */}
+                <DonutChartCard bookFormats={booksByFormat}/>
 
-      <div className="pb-20 mdTablet:pb-4 flex flex-col relative w-full max-w-7xl">
+                {/* Language data */}
+                <BarChartCard
+                  booksByLang={booksByLang}
+                  totalBooks={totalBooks}
+                />
 
-        <Bookshelf
-          category="Recently updated"
-          books={books || []}
-          isLoading={isLoading}
-        />
+                {/* Genre data */}
+                <BarChartCard
+                  booksByGenre={booksByGenre}
+                  totalBooks={totalBooks}
+                />
 
-        <h2 className="text-left text-2xl font-bold text-white inline-block max-w-full overflow-hidden text-ellipsis whitespace-nowrap select-none mb-4">Statistics</h2>
-
-        <div className="grid grid-cols-12 gap-6">
-          {/* Format data */}
-          <DonutChartCard bookFormats={booksByFormat}/>
-
-          {/* Language data */}
-          <BarChartCard
-            booksByLang={booksByLang}
-            totalBooks={totalBooks}
-          />
-
-          {/* Genre data */}
-          <BarChartCard
-            booksByGenre={booksByGenre}
-            totalBooks={totalBooks}
-          />
-
-          {/* Tag Data */}
-          <TableCard userTags={userTags}/>
-        </div>
+                {/* Tag Data */}
+                <TableCard userTags={userTags}/>
+              </div>
+            </div>
+          )
+        }
       </div>
-    </div>
+    </PageWithErrorBoundary>
   )
 }
 
