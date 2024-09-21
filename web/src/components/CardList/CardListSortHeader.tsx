@@ -33,16 +33,15 @@ function CardListSortHeader ({ sortedBooksCount }: CardListSortHeaderProps) {
 
   return (
     <div className="flex flex-row relative w-full max-w-7xl justify-between items-center text-left text-white border-b-2 border-solid border-zinc-700 pb-6 mb-2">
-      <div className="mt-1">{sortedBooksCount} volumes</div>
+      <div className="mt-1 text-charcoal dark:text-cadet-gray">{sortedBooksCount} volumes</div>
 
       <div className="flex flex-row">
         <button
-          className="flex flex-row justify-between bg-transparent border border-gray-600"
+          className="text-charcoal flex flex-row justify-between bg-transparent border border-gray-600 dark:text-cadet-gray"
           onClick={openModal}
         >
           <PiArrowsDownUp
-            className="pt-1 mr-2"
-            color="white"
+            className="pt-1 mr-2 text-charcoal dark:text-cadet-gray"
             size={22}
           />
           <span>{sortButtonTitle[sortCriteria]}</span>

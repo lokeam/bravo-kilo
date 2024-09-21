@@ -112,21 +112,28 @@ function AutoComplete() {
     }
   }, [data, searchParams, addSearchHistory]);
 
+
+
   return (
     <div
-      className="autocomplete-container w-full"
+    className={`
+      autocomplete-container w-full border rounded-lg dark:bg-maastricht border-gray-600
+      ${
+        highlightedIndex !== null && suggestions.length > 0 ? 'border-t border-x rounded-b-none border-b-black' : ''
+      }
+      `}
       ref={containerRef}
       onFocus={handleFocus}
       onBlur={handleBlur}
     >
-      <form onSubmit={handleSubmit} className="searchbox_container w-full flex relative">
+      <form
+        onSubmit={handleSubmit}
+        className="searchbox_container w-full flex relative">
         <div
-          className={`searchbox ${
-            highlightedIndex !== null ? 'border-t border-x rounded-b-none border-b-black' : 'border'
-          } w-full rounded border-gray-600 flex relative`}
+          className="searchbox__clear_search_field w-full border-none bg-white flex outline-none rounded-full flex-row items-center justify-center dark:bg-maastricht"
         >
           <button
-            className="searchbox__clear_search_field inline-flex outline-none rounded-none flex-row items-center justify-center bg-maastricht"
+            className="searchbox__clear_search_field border-none rounded-lg bg-white inline-flex outline-none flex-row items-center justify-center dark:bg-maastricht"
             type="submit"
           >
             <IoSearchOutline size={24} />
@@ -137,11 +144,11 @@ function AutoComplete() {
             value={query}
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}
-            className={`autocomplete-input bg-maastricht text-az-white font-bold outline-none block w-full pl-4 p-2.5 placeholder:polo-blue placeholder:font-bold`}
+            className={`autocomplete-input w-full bg-white text-az-white font-bold outline-none block  pl-4 p-2.5 placeholder:polo-blue placeholder:font-bold dark:bg-maastricht`}
             placeholder="Add a book via Search"
           />
           <button
-            className="inline-flex outline-none rounded-none flex-row items-center justify-center bg-maastricht"
+            className="inline-flex border-none outline-none rounded-lg flex-row items-center justify-center bg-maastricht"
             onClick={handleClearInput}
             type="button"
           >
@@ -149,17 +156,17 @@ function AutoComplete() {
           </button>
         </div>
       </form>
-      {highlightedIndex !== null && (
+      { highlightedIndex !== null && suggestions.length > 0 && (
         <ul
           className={`autocomplete-suggestions ${
-            highlightedIndex !== null ? 'rounded-t-none border-t-black' : ''
-          } absolute box-border bg-maastricht border border-gray-600 rounded w-full`}
+            highlightedIndex !== null ? 'rounded-t-none border-t-0' : ''
+          } absolute left-0 box-border bg-maastricht border border-gray-600 rounded w-full`}
         >
           {suggestions.map((suggestion, index) => (
             <li
               key={index}
               onClick={() => handleSuggestionClick(suggestion)}
-              className={`cursor-pointer text-az-white font-bold text-left  pl-20 p-2.5 hover:bg-dark-ebony ${
+              className={`cursor-pointer text-az-white border-transparent rounded-t-none rounded-lg font-bold text-left pl-20 p-2.5 hover:bg-dark-ebony ${
                 index === highlightedIndex ? 'bg-dark-ebony' : ''
               }`}
             >

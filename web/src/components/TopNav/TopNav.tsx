@@ -30,13 +30,13 @@ function TopNavigation() {
 
   return (
     <header className="antialiased relative w-full h-auto">
-      <nav className={`${isBookDetailOrSettingsPage ? 'opacity-75' : ''} bg-black fixed border-none flex items-center content-between left-0 right-0 top-0 z-50 pr-8 lg:pr-12 h-[67px] text-white w-full`}>
+      <nav className={`${isBookDetailOrSettingsPage ? 'dark:opacity-75' : ''} bg-white fixed border-none flex items-center content-between left-0 right-0 top-0 z-50 pr-8 lg:pr-12 h-[67px] text-white w-full dark:bg-black`}>
         <Link
-          className={`${isBookDetailOrSettingsPage ? 'block' : 'hidden'} h-13 w-13 px-3 mr-6 inline-block content-center cursor-pointer bg-transparent border-none`}
+          className={`${isBookDetailOrSettingsPage ? 'block' : 'hidden'} h-13 w-13 pl-7 pr-3 mr-6 inline-block content-center cursor-pointer bg-transparent border-none`}
           to={"/library"}
         >
           <ImArrowLeft2
-            className="text-white"
+            className="text-charcoal dark:text-white"
             size={20}
           />
         </Link>
@@ -92,7 +92,7 @@ function TopNavigation() {
                 to={"/library/books/search"}
                 ref={ searchFocusRef }
               >
-                <IoSearchOutline />
+                <IoSearchOutline size={20} className="text-black dark:text-az-white"/>
               </Link>
             </div>
           </div>

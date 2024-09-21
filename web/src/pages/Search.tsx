@@ -20,17 +20,17 @@ function Search() {
       return (
         <div className="text-center pt-28">
           <TbWorldSearch
-            className="mx-auto text-6xl mb-4"
-            size={30}
+            className="mx-auto text-6xl mb-4 text-charcoal dark:text-white"
+            size={38}
           />
-          <p className="text-xl">Search for a book to get started!</p>
+          <p className="text-xl text-black dark:text-white">Search for a book to get started!</p>
         </div>
       );
     }
 
     if (isLoading) {
       return (
-        <div className="bk_searchflex flex-col items-center px-5 antialiased mdTablet:pl-1 pr-5 mdTablet:ml-24 h-screen pt-28">
+        <div className="bk_searchflex flex-col items-center px-5 antialiased mdTablet:pl-1 pr-5 mdTablet:ml-24 h-screen pt-28 ">
           <Loading />
         </div>
       );

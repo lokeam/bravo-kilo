@@ -5,10 +5,10 @@ function SettingsItemThemeBtn() {
 
   return (
     <button
-      className="h-11 justify-stretch"
+      className="h-11 justify-stretch bg-gray-200 text-black dark:bg-gray-800 dark:text-white"
       onClick={toggleTheme}
     >
-      { theme === 'light' ? 'Switch to Dark Mode' : 'Switch to Light Mode' }
+      {theme === 'light' ? 'Switch to Dark Mode' : 'Switch to Light Mode'}
     </button>
   );
 }

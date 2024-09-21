@@ -30,7 +30,7 @@ export default function CardListItemAuthor({ authorName, books }: CardListItemAu
             <BsPerson size={40} />
           </div>
           <div className="card_list__item_copy flex flex-row items-center justify-center text-left pt-1">
-            <span className="block text-sm text-white font-semibold">{authorName}</span>
+            <span className="block text-sm text-black dark:text-white font-semibold">{authorName}</span>
           </div>
         </div>
       </motion.li>

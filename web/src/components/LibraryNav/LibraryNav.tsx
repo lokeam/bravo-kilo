@@ -22,7 +22,7 @@ function LibraryNav() {
               <motion.li
                 key={tab}
                 className={`relative flex items-center text-nowrap cursor-pointer pb-2 ${
-                  activeTab === tab ? 'text-3xl font-bold text-white' : 'text-lg font-semibold text-cadet-gray'
+                  activeTab === tab ? 'text-3xl font-bold text-black dark:text-white' : 'text-lg font-semibold text-cadet-gray'
                 }`}
                 onClick={() => handleTabClick(tab)}
                 animate

@@ -179,11 +179,21 @@ const BookDetail = () => {
               </p>
             </div>
             <div className="bk_book__details flex flex-col text-left mb-4">
-              <h3 className="text-2xl font-bold mb-4">Tagged as:</h3>
+              <h3 className="text-2xl font-bold mb-4">Genres:</h3>
               <div className="bk_book_genres w-full flex flex-row flex-wrap items-center content-evenly gap-6">
                 {book.genres && book.genres.length > 0 && book.genres.map((genre: string, index: number) => (
                   <button key={`${genre}-${index}`} className="border border-gray-500">
                     {genre}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="bk_book__details flex flex-col text-left mb-4">
+              <h3 className="text-2xl font-bold mb-4">Assigned Personal Tags:</h3>
+              <div className="bk_book_genres w-full flex flex-row flex-wrap items-center content-evenly gap-6">
+                {book.tags && book.tags.length > 0 && book.tags.map((tag: string, index: number) => (
+                  <button key={`${tag}-${index}`} className="border border-gray-500">
+                    {tag}
                   </button>
                 ))}
               </div>

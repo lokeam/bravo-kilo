@@ -70,8 +70,8 @@ function CardListItem({ book, isSearchPage }: CardListItemProps) {
             )
           }
           <div className="card_list__item_copy text-left pt-1">
-            <span className="block text-base text-white font-semibold">{title}</span>
-            <span className="block text-sm text-gray-400">by {authors && authors.length > 0 ? authors[0] : 'author data not available'}</span>
+            <span className="block text-base text-black dark:text-white font-semibold">{title}</span>
+            <span className="block text-sm text-gray-500 dark:text-gray-400">by {authors && authors.length > 0 ? authors[0] : 'author data not available'}</span>
             {
               isSearchPage && book.isInLibrary && <div className="block text-sm text-white font-semibold">IN YOUR LIBRARY</div>
             }
@@ -79,9 +79,11 @@ function CardListItem({ book, isSearchPage }: CardListItemProps) {
         </div>
         <button
           onClick={openModal}
-          className="bg-transparent"
+          className="bg-transparent border-charcoal dark:border-transparent"
         >
-          <BsThreeDotsVertical color="white" />
+          <BsThreeDotsVertical
+            className="text-charcoal dark:text-white"
+          />
         </button>
         <Modal
           opened={opened}
@@ -103,7 +105,7 @@ function CardListItem({ book, isSearchPage }: CardListItemProps) {
             onClick={handleEditBookClick}
             >
             <TbEdit
-              className="mr-8"
+              className="mr-8 dark:text-white"
               size={25}
             />
             <span>Edit Title Details</span>

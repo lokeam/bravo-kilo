@@ -40,7 +40,7 @@ function SettingsItemExportBtn() {
   return (
     <div className="grid w-full">
       <button
-        className="h-11 justify-stretch"
+        className="bg-gray-200 dark:bg-gray-800 dark:text-white h-11 justify-stretch"
         disabled={!hasBooks || isLoading}
         onClick={debouncedExport}
       >

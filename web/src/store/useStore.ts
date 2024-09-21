@@ -1,5 +1,3 @@
-// src/store/useStore.ts
-
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 
@@ -72,7 +70,6 @@ const useStore = create<StoreState>()(
           };
         });
       },
-      // Testing Snackbar state
       snackbarMessage: null,
       snackbarOpen: false,
       snackbarVariant: null,
@@ -100,9 +97,8 @@ const useStore = create<StoreState>()(
         sortOrder: state.sortOrder,
         activeTab: state.activeTab,
         searchResults: state.searchResults,
-        searchHistory: state.searchHistory, // Persist search history
-        results: state.results, // Persist results
-        // Persist Snackbar state
+        searchHistory: state.searchHistory,
+        results: state.results,
         snackbarMessage: state.snackbarMessage,
         snackbarOpen: state.snackbarOpen,
         snackbarVariant: state.snackbarVariant,

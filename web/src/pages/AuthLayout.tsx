@@ -24,7 +24,7 @@ const AuthenticatedLayout = () => {
   ), [snackbarMessage, snackbarOpen, snackbarVariant, hideSnackbar]);
 
   return (
-    <div className="authenticated-layout">
+    <div className="authenticated-layout bg-white dark:bg-black">
       <TopNavigation />
       <SideNavigation />
       <div className="content pt-[67px]">

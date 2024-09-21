@@ -8,17 +8,15 @@ interface ThemeProviderProps {
 function ThemeProvider({ children }: ThemeProviderProps) {
   const { theme, loadTheme } = useThemeStore();
 
-  // Load theme from localStorage or system preference on mount
-  useEffect(() => loadTheme(), [loadTheme]);
+  useEffect(() => {
+    loadTheme();
+  }, [loadTheme]);
 
-  // Apply theme to doc
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark');
   }, [theme]);
 
-  return (
-    <>{children}</>
-  );
+  return <>{children}</>;
 }
 
 export default ThemeProvider;
