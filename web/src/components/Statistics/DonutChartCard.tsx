@@ -1,4 +1,4 @@
-import PieChartCardHeader from './DonutChartCardHeader';
+import PieChartCardFooter from './DonutChartCardFooter';
 import DoughnutChart from '../Chart/DonutChart';
 import ErrorCard from './ErrorCard';
 import { BookStatObj } from './BarChartCard';
@@ -15,8 +15,8 @@ function DonutChartCard({ bookFormats = [] }: DonutChartCardProps) {
     datasets: [
       {
         data: formatCountArr,
-        backgroundColor: ['#7C3AED', '#0EA5E9', '#4C1D95'], // Violet and Sky colors
-        hoverBackgroundColor: ['#6D28D9', '#0284C7', '#3F0D87'],
+        backgroundColor: ['#5bf563', '#6a00b9', '#086fe8'],
+        hoverBackgroundColor: ['#5bf563', '#6a00b9', '#086fe8'],
         borderWidth: 0,
       },
     ],
@@ -25,18 +25,21 @@ function DonutChartCard({ bookFormats = [] }: DonutChartCardProps) {
   console.log('formatCountArr: ', formatCountArr);
 
   return(
-    <div className="books_format_card_wrapper flex flex-col col-span-full lgMobile:col-span-6 mdTablet:col-span-4 bg-maastricht shadow-sm rounded-xl">
-      <PieChartCardHeader bookFormats={bookFormats} />
+    <div className="books_format_card_wrapper bg-white flex flex-col col-span-full lgMobile:col-span-6 mdTablet:col-span-4 shadow-xl rounded-xl dark:bg-maastricht dark:border-none ">
 
       { bookFormats && bookFormats.length > 0 ? (
-        <div className="flex-grow pb-4">
-          <div className="flex flex-col col-span-full sm:col-span-6 xl:col-span-4 bg-maastricht shadow-sm rounded-xl">
+        <div className="">
+          <header className="books_format_header border-b border-gray-100 px-5 py-4 dark:border-gray-700/60">
+            <h2 className="text-left text-charcoal text-lg font-semibold dark:text-white">Books By Format</h2>
+          </header>
+          <div className="bg-white flex flex-col col-span-full sm:col-span-6 xl:col-span-4 dark:bg-maastricht">
             <DoughnutChart
               data={chartData}
-              height={260}
-              width={389}
+              height={200}
+              width={200}
             />
           </div>
+          <PieChartCardFooter bookFormats={bookFormats} />
         </div>
       ) : (
         <ErrorCard />

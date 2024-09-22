@@ -10,7 +10,7 @@ interface TagsCardProps {
 function TableCard({ userTags = [] }: TagsCardProps) {
 
   return (
-    <div className="tags_card col-span-full xl:col-span-6 bg-maastricht shadow-sm rounded-xl max-h-[465px]">
+    <div className="tags_card bg-white col-span-full xl:col-span-6 shadow-sm rounded-xl max-h-[465px] dark:bg-maastricht">
       <ChartCardHeader
         hasSubHeaderBg
         topic="Tags"
@@ -21,9 +21,9 @@ function TableCard({ userTags = [] }: TagsCardProps) {
 
             return (
             <li
-              className="flex px-2 border-b border-gray-700/60"
+              className="flex px-2 border-b border-gray-100 dark:border-gray-700/60"
               key={`${index}-${userTag.label}-${userTag.count}`}>
-                <div className={`flex flex-col content-center items-center justify-center w-9 h-9 rounded-full shrink-0 ${hasManyTags ? 'bg-green-600' : 'bg-red-500'} my-2 mr-3`}>
+                <div className={`flex flex-col content-center items-center justify-center w-9 h-9 rounded-full shrink-0 ${hasManyTags ? 'bg-lime-green' : 'bg-strong-violent'} my-2 mr-3`}>
                 { hasManyTags ?
                     <FaTags
                       className="bg-transparent"
@@ -32,7 +32,8 @@ function TableCard({ userTags = [] }: TagsCardProps) {
                     /> :
                     <FaTag
                       className="bg-transparent"
-                      color="text-white"size={22}
+                      color="text-white"
+                      size={22}
                     />
                 }
                 </div>

@@ -52,7 +52,7 @@ function Search() {
 
   return (
     <PageWithErrorBoundary fallbackMessage="Error loading search page">
-      <div className="bk_search flex flex-col items-center px-5 antialiased mdTablet:pl-1 pr-5 mdTablet:ml-24 h-screen">
+      <div className="bk_search min-h-screen bg-cover bg-white flex flex-col items-center px-5 antialiased mdTablet:pl-1 pr-5 mdTablet:ml-24 dark:bg-black">
         { renderContent() }
       </div>
     </PageWithErrorBoundary>

@@ -24,7 +24,12 @@ const DoughnutChart: React.FC<DoughnutChartProps> = ({ data, width, height }) =>
       options: {
         cutout: '80%',
         plugins: {
-          legend: { display: false },
+          legend: {
+            display: true,
+            position: 'bottom',
+            maxHeight: 50,
+            maxWidth: 200,
+          },
           tooltip: {
             titleColor: '#333',
             bodyColor: '#666',
@@ -32,6 +37,7 @@ const DoughnutChart: React.FC<DoughnutChartProps> = ({ data, width, height }) =>
             borderColor: '#ddd',
           },
         },
+        responsive: true,
         maintainAspectRatio: false,
       },
     });
@@ -40,7 +46,7 @@ const DoughnutChart: React.FC<DoughnutChartProps> = ({ data, width, height }) =>
   }, [data]);
 
   return (
-    <div className="flex justify-center px-5">
+    <div className="flex justify-center p-6">
       <canvas
         ref={canvas}
         width={width}

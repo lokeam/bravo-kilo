@@ -10,7 +10,7 @@ function Login() {
 
     <div className="bk_login grid lg:grid-cols-2 h-screen">
       {/* ------  Login  ------ */}
-      <div className="bk_login__cta flex flex-col items-center justify-center px-4 py-6 sm:px-0 lg:py-0">
+      <div className="bk_login__cta bg-black flex flex-col items-center justify-center px-4 py-6 sm:px-0 lg:py-0">
         <div className="max-w-md xl:max-w-xl">
           <h2 className="text-xl font-bold mb-8">Log in to your Bravo Kilo Account</h2>
           <form className="space-y-4 md:space-y-6 w-full max-w-md xl:max-w-xl">

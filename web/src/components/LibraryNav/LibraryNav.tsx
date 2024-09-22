@@ -30,7 +30,7 @@ function LibraryNav() {
                 {tab}
                 { activeTab === tab ? (
                   <motion.div
-                    className="absolute -bottom-2 -left-1 rounded right-0 h-2 bg-majorelle"
+                    className="absolute -bottom-2 -left-1 rounded right-0 h-2 bg-vivid-blue"
                     layoutId="underline"
                   />
                 ) : null}

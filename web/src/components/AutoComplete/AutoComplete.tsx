@@ -136,7 +136,10 @@ function AutoComplete() {
             className="searchbox__clear_search_field border-none rounded-lg bg-white inline-flex outline-none flex-row items-center justify-center dark:bg-maastricht"
             type="submit"
           >
-            <IoSearchOutline size={24} />
+            <IoSearchOutline
+              size={24}
+              className="text-black dark:text-white"
+            />
           </button>
           <input
             ref={inputRef}
@@ -144,15 +147,18 @@ function AutoComplete() {
             value={query}
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}
-            className={`autocomplete-input w-full bg-white text-az-white font-bold outline-none block  pl-4 p-2.5 placeholder:polo-blue placeholder:font-bold dark:bg-maastricht`}
+            className={`autocomplete-input w-full bg-white font-bold outline-none block text-charcoal pl-4 p-2.5 placeholder:polo-blue placeholder:font-bold dark:bg-maastricht dark:text-az-white`}
             placeholder="Add a book via Search"
           />
           <button
-            className="inline-flex border-none outline-none rounded-lg flex-row items-center justify-center bg-maastricht"
+            className="inline-flex border-none outline-none rounded-lg flex-row items-center justify-center bg-transparent"
             onClick={handleClearInput}
             type="button"
           >
-            <IoClose size={18} />
+            <IoClose
+              className="text-black dark:text-white"
+              size={18}
+            />
           </button>
         </div>
       </form>

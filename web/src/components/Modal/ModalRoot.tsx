@@ -35,7 +35,7 @@ function Modal({ opened, onClose, children }: ModalProps) {
 
   return (
     <div
-      className="modal-overlay overflow-hidden top-0 left-0 inset-0 z-30"
+      className="modal-overlay overflow-hidden top-0 left-0 inset-0 z-30 opacity-100"
       data-closing={closing}
       onClick={handleClose}
     >

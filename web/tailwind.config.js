@@ -58,6 +58,12 @@ export default {
         'seljuk': '#4285f4',
         'lilac' :'#9b72cb',
         'carmine': '#d96570',
+        'white-smoke': '#f5f5f5',
+        'vivid-blue': '#086fe8', // brand b,
+        'vivid-blue-l': '#4497f9',
+        'lime-green': '#5bf563', // brand g,
+        'strong-violent': '#6a00b9',  // brand r (p)
+        'strong-violent-l': '#9506ff'
       }
     },
     screens: {
@@ -68,4 +74,3 @@ export default {
   },
   plugins: [],
 }
-

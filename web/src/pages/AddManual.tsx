@@ -142,8 +142,8 @@ const ManualAdd = () => {
 
   return (
     <PageWithErrorBoundary fallbackMessage="Error loading add manual page">
-      <section className="addManual bg-black relative flex flex-col items-center place-content-around px-5 antialiased mdTablet:pr-5 mdTablet:ml-24 h-screen">
-        <div className="text-left max-w-screen-mdTablet py-24 md:pb-4 flex flex-col relative w-full">
+      <section className="addManual bg-white min-h-screen bg-cover relative flex flex-col items-center place-content-around px-5 antialiased mdTablet:pr-5 mdTablet:ml-24 dark:bg-black">
+        <div className="text-left max-w-screen-mdTablet pb-24 md:pb-4 flex flex-col relative w-full">
           <h2 className="mb-4 text-xl font-bold text-gray-900 dark:text-white">Add Book</h2>
           <form className="grid gap-4 grid-cols-2 sm:gap-6" onSubmit={handleSubmit(onSubmit)}>
 

@@ -32,10 +32,10 @@ export default function BarChartCard(props: BarChartCardProps) {
 
   if (isBarChartCardGenres(props)) {
     return (
-      <div className="genre_card col-span-full mdTablet:col-span-4 bg-maastricht shadow-sm rounded-xl max-h-[465px]">
+      <div className="genre_card bg-white col-span-full mdTablet:col-span-4 shadow-xl rounded-xl max-h-[465px] dark:bg-maastricht">
         <ChartCardHeader topic="Genre" />
         <BarChartCardBody
-          bookData={props.booksByGenre} barColor="bg-hepatica-lt/[0.2]"
+          bookData={props.booksByGenre} barColor="bg-vivid-blue/[0.6]"
           totalBooks={props.totalBooks}
         />
       </div>
@@ -44,10 +44,10 @@ export default function BarChartCard(props: BarChartCardProps) {
 
   if (isBarChartCardLanguages(props)) {
     return (
-      <div className="language_card col-span-full lgMobile:col-span-6 mdTablet:col-span-4 bg-maastricht shadow-sm rounded-xl">
+      <div className="language_card bg-white col-span-full lgMobile:col-span-6 mdTablet:col-span-4  shadow-xl rounded-xl dark:bg-maastricht">
         <ChartCardHeader topic="Language" />
         <BarChartCardBody
-          barColor="bg-maya-blue/[0.2]"
+          barColor="bg-lime-green/[0.6]"
           bookData={props.booksByLang}
           isLanguageCard
           totalBooks={props.totalBooks}

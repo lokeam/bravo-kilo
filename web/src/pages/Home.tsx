@@ -73,14 +73,14 @@ function Home() {
 
   return (
     <PageWithErrorBoundary fallbackMessage="Error loading home page">
-      <div className="bk_home flex flex-col items-center px-5 antialiased mdTablet:pl-1 pr-5 mdTablet:ml-24 h-screen pt-12">
+      <div className="bk_home bg-white-smoke flex flex-col items-center px-5 antialiased mdTablet:px-5 mdTablet:ml-24 h-screen pt-12 dark:bg-black">
         <div className="pb-20 mdTablet:pb-4 flex flex-col relative w-full max-w-7xl">
           <Bookshelf
             category="Recently updated"
             books={books || []}
             isLoading={isLoading}
           />
-          <h2 className="text-left text-2xl font-bold text-white inline-block max-w-full overflow-hidden text-ellipsis whitespace-nowrap select-none mb-4">Statistics</h2>
+          <h2 className="text-left text-charcoal text-2xl font-bold inline-block max-w-full overflow-hidden text-ellipsis whitespace-nowrap select-none mb-4 dark:text-white">Statistics</h2>
           <div className="grid grid-cols-12 gap-6">
             {/* Format data */}
             <DonutChartCard bookFormats={booksByFormat}/>

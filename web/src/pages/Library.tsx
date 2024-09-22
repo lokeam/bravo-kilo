@@ -94,7 +94,7 @@ function Library() {
 
   return (
     <PageWithErrorBoundary fallbackMessage="Error loading library">
-      <div className="bk_lib flex flex-col items-center px-5 pt-12 antialiased mdTablet:pl-1 pr-5 mdTablet:ml-24 h-screen">
+      <div className="bk_lib min-h-screen bg-white bg-cover flex flex-col items-center px-5 antialiased mdTablet:pl-1 pr-5 mdTablet:ml-24 dark:bg-black">
         { isEmptyLibrary ?
           <EmptyLibraryCard /> :
           (
