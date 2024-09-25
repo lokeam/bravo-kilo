@@ -37,7 +37,7 @@ function CardListSortHeader ({ sortedBooksCount }: CardListSortHeaderProps) {
 
       <div className="flex flex-row">
         <button
-          className="text-charcoal flex flex-row justify-between bg-transparent border border-gray-600 dark:text-cadet-gray"
+          className="text-charcoal flex flex-row justify-between bg-transparent border border-gray-600 dark:text-cadet-gray dark:border-2 transition duration-500 ease-in-out dark:hover:border-vivid-blue"
           onClick={openModal}
         >
           <PiArrowsDownUp

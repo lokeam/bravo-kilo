@@ -14,6 +14,8 @@ const AuthenticatedLayout = () => {
     hideSnackbar,
   } = useStore();
 
+
+
   const memoizedSnackbar = useMemo(() => (
     <Snackbar
       message={snackbarMessage || ''}
@@ -24,7 +26,7 @@ const AuthenticatedLayout = () => {
   ), [snackbarMessage, snackbarOpen, snackbarVariant, hideSnackbar]);
 
   return (
-    <div className="authenticated-layout h-dvh bg-white dark:bg-black">
+    <div className="authenticated-layout h-dvh bg-white-smoke dark:bg-black">
       <TopNavigation />
       <SideNavigation />
       <div className="content pt-[67px]">

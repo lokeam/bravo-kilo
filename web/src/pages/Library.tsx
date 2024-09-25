@@ -5,10 +5,17 @@ import CardListSortHeader from '../components/CardList/CardListSortHeader';
 import Loading from '../components/Loading/Loading';
 import EmptyLibraryCard from '../components/ErrorMessages/EmptyLibraryCard';
 import PageWithErrorBoundary from '../components/ErrorMessages/PageWithErrorBoundary';
-import { defaultBookGenres, isBookGenresData, GenreData } from '../types/api';
 import { sortBooks } from '../utils/ui';
 import { Book } from '../types/api';
+import {
+  defaultBookGenres,
+  isBookGenresData,
+  GenreData,
+  defaultBookTags,
+  isBookTagsData,
+  TagData,
 
+} from '../types/api';
 import useStore from '../store/useStore';
 import useLibraryData from '../hooks/useLibraryData';
 
@@ -26,6 +33,7 @@ function Library() {
     bookAuthors,
     genres: bookGenres,
     formats: bookFormats,
+    tags: bookTags,
     isLoading,
     isError
   } = useLibraryData();
@@ -60,12 +68,21 @@ function Library() {
   const { allGenres, ...remainingGenres } = safeBookGenres;
   const genreBooks = remainingGenres as { [key: string]: GenreData };
 
+  const safeBookTags = isBookTagsData(bookTags) ?  bookTags : defaultBookTags;
+  console.log('testing safeBookTags: ', safeBookTags);
+
+  const { allTags, ...remainingTags } = safeBookTags;
+  const tagBooks = remainingTags as { [key: string]: TagData };
+
   const renderCardList = () => {
     if (activeTab === 'Authors' && bookAuthors?.allAuthors?.length > 0) {
       return <CardList allAuthors={bookAuthors.allAuthors} authorBooks={bookAuthors} />;
     }
     if (activeTab === 'Genres' && bookGenres?.allGenres?.length > 0) {
       return <CardList allGenres={allGenres} genreBooks={genreBooks} />;
+    }
+    if (activeTab === 'Tags' && bookTags?.allTags?.length > 0) {
+      return <CardList allTags={allTags} tagBooks={tagBooks} />;
     }
     if (sortedBooks?.length > 0) {
       return <CardList books={sortedBooks} isSearchPage={false} />;
@@ -92,9 +109,11 @@ function Library() {
     );
   }
 
+  console.log('bookTags: ', bookTags);
+
   return (
     <PageWithErrorBoundary fallbackMessage="Error loading library">
-      <div className="bk_lib min-h-screen bg-white bg-cover flex flex-col items-center px-5 antialiased mdTablet:pl-1 pr-5 mdTablet:ml-24 dark:bg-black">
+      <div className="bk_lib min-h-screen bg-white bg-cover flex flex-col items-center px-5 antialiased mdTablet:pl-1 pr-5 pt-5 mdTablet:ml-24 dark:bg-black">
         { isEmptyLibrary ?
           <EmptyLibraryCard /> :
           (

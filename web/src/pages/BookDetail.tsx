@@ -4,6 +4,7 @@ import ImagePlaceholder from '../components/CardList/ImagePlaceholder';
 import { fetchBookIDByTitle } from '../service/apiClient.service';
 import useScrollShrink from "../hooks/useScrollShrink";
 import PageWithErrorBoundary from '../components/ErrorMessages/PageWithErrorBoundary';
+import { useThemeStore } from '../store/useThemeStore';
 import Loading from '../components/Loading/Loading';
 import { IoIosAdd } from "react-icons/io";
 import { IoIosWarning } from "react-icons/io";
@@ -38,9 +39,11 @@ const BookDetail = () => {
   const imageRef = useScrollShrink();
   const navigate = useNavigate();
   const location = useLocation();
+  const { theme } = useThemeStore();
 
   const bookFromState = location.state?.book;
   const isInLibrary = bookFromState?.isInLibrary ?? true;
+  const isDarkMode = theme === 'dark';
 
   console.log('Rendering BookDetail component');
   console.log('Decoded title:', decodedTitle);
@@ -93,10 +96,10 @@ const BookDetail = () => {
 
   return (
     <PageWithErrorBoundary fallbackMessage="Error loading book detail page">
-      <div className="bk_edit_book_page_wrapper overflow-x-hidden overflow-y-auto z-10 bg-transparent relative flex flex-col items-center place-content-around px-5 antialiased mdTablet:pr-5 mdTablet:ml-24">
-        <div className="book_coverImage blurBg -z-10"></div>
+      <div className="bk_edit_book_page_wrapper bg-cover min-h-screen overflow-x-hidden overflow-y-auto z-10 bg-white-smoke dark:bg-transparent relative flex flex-col items-center place-content-around px-5 antialiased mdTablet:pr-5 mdTablet:ml-24">
+        <div className={`book_coverImage ${isDarkMode ? 'blurBgDark' : 'blurBg'}  -z-10`}></div>
 
-        <div className="bk_edit_book_page max-w-screen-mdTablet py-20 md:pb-4 flex flex-col relative w-full">
+        <div className="bk_edit_book_page max-w-screen-mdTablet pb-20 md:pb-4 flex flex-col relative w-full">
           <div className="bk_book_thumb relative flex justify-center align-center rounded w-full">
             {book.imageLink && book.imageLink !== "" ? (
               <img
@@ -113,14 +116,14 @@ const BookDetail = () => {
           </div>
 
           <div className="bk_book_title_wrapper flex flex-col justify-center relative mt-6 mb-2 text-center">
-            <h1 className="text-5xl text-center mb-2">{book.title}</h1>
-            {book.subtitle && <h2 className="text-2xl">{book.subtitle}</h2>}
+            <h1 className="text-5xl text-center mb-2 text-black dark:text-white">{book.title}</h1>
+            {book.subtitle && <h2 className="text-2xl text-charcoal dark:text-az-white">{book.subtitle}</h2>}
           </div>
 
           <div className="bk_book_metadata my-3">
-            <div className="text-sm font-bold">BY</div>
-            <div className="">{authors}</div>
-            <div className="">{genres}</div>
+            <div className="text-sm font-bold text-charcoal dark:text-az-white">BY</div>
+            <div className="text-charcoal font-extrabold dark:text-az-white">{authors}</div>
+            <div className=" text-charcoal dark:text-az-white">{genres}</div>
           </div>
 
           <div className="bk_book_cta flex flex-col w-full my-3">
@@ -151,35 +154,35 @@ const BookDetail = () => {
             {book.hasEmptyFields && (
               <MissingInfoWarning emptyFields={book.emptyFields} />
             )}
-            <h3 className="text-2xl font-bold pb-2">Product Details</h3>
+            <h3 className="text-2xl font-bold pb-2 text-black dark:text-white">Product Details</h3>
             <div className="bk_book_metadata flex flex-col mb-4">
-              <p className="my-1 text-cadet-gray">
+              <p className="my-1 text-charcoal dark:text-cadet-gray">
                 <span className="font-bold mr-1">Publish Date:</span>
                 {book.publishDate !== ''
                   ? book.publishDate
                   : 'No publish date available'}
               </p>
-              <p className="my-1 text-cadet-gray">
+              <p className="my-1 text-charcoal dark:text-cadet-gray">
                 <span className="font-bold mr-1">Pages:</span>
                 {book.pageCount !== 0 ? book.pageCount : 'No page count available'}
               </p>
-              <p className="my-1 text-cadet-gray">
+              <p className="my-1 text-charcoal dark:text-cadet-gray">
                 <span className="font-bold mr-1">Language:</span>
                 {book.language !== ''
                   ? book.language
                   : 'No language classification available'}
               </p>
-              <p className="my-1 text-cadet-gray">
+              <p className="my-1 text-charcoal dark:text-cadet-gray">
                 <span className="font-bold mr-1">ISBN-10:</span>
                 {book.isbn10 !== '' ? book.isbn10 : 'No ISBN10 data available'}
               </p>
-              <p className="my-1 text-cadet-gray">
+              <p className="my-1 text-charcoal dark:text-cadet-gray">
                 <span className="font-bold mr-1">ISBN-13:</span>
                 {book.isbn13 !== '' ? book.isbn13 : 'No ISBN13 data available'}
               </p>
             </div>
             <div className="bk_book__details flex flex-col text-left mb-4">
-              <h3 className="text-2xl font-bold mb-4">Genres:</h3>
+              <h3 className="text-2xl font-bold mb-4 text-black dark:text-white">Genres:</h3>
               <div className="bk_book_genres w-full flex flex-row flex-wrap items-center content-evenly gap-6">
                 {book.genres && book.genres.length > 0 && book.genres.map((genre: string, index: number) => (
                   <button key={`${genre}-${index}`} className="border border-gray-500">
@@ -189,7 +192,7 @@ const BookDetail = () => {
               </div>
             </div>
             <div className="bk_book__details flex flex-col text-left mb-4">
-              <h3 className="text-2xl font-bold mb-4">Assigned Personal Tags:</h3>
+              <h3 className="text-2xl font-bold mb-4 text-black dark:text-white">Assigned Personal Tags:</h3>
               <div className="bk_book_genres w-full flex flex-row flex-wrap items-center content-evenly gap-6">
                 {book.tags && book.tags.length > 0 && book.tags.map((tag: string, index: number) => (
                   <button key={`${tag}-${index}`} className="border border-gray-500">
@@ -200,12 +203,12 @@ const BookDetail = () => {
             </div>
             {book.notes !== '' ? (
               <div className="bk_description text-left mb-4">
-                <h3 className="text-2xl font-bold mb-2">Personal Notes</h3>
+                <h3 className="text-2xl font-bold mb-2 text-black dark:text-white">Personal Notes</h3>
                 <p className="text-cadet-gray">{book.notes}</p>
               </div>
             ) : null}
             <div className="bk_description text-left mb-4">
-              <h3 className="text-2xl font-bold pb-2">Book Description</h3>
+              <h3 className="text-2xl font-bold pb-2 text-black dark:text-white">Book Description</h3>
               <p className="text-cadet-gray">
                 {book.description !== ''
                   ? book.description

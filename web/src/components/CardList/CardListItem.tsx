@@ -79,7 +79,7 @@ function CardListItem({ book, isSearchPage }: CardListItemProps) {
         </div>
         <button
           onClick={openModal}
-          className="bg-transparent border-charcoal dark:border-transparent"
+          className="bg-transparent border-charcoal dark:border-2 transition duration-500 ease-in-out dark:hover:border-vivid-blue"
         >
           <BsThreeDotsVertical
             className="text-charcoal dark:text-white"

@@ -45,7 +45,7 @@ function Snackbar({ message, open, duration = 2000, onClose, variant }: Snackbar
       aria-atomic="true"
       aria-live="assertive"
       className={`
-        ${variantStyles[variant]} fixed bottom-48 right-4 transform -translate-x-1/2 text-white px-10 py-4 rounded shadow-lg flex items-center justify-center w-full max-w-sm p-4 mb-4
+        ${variantStyles[variant]} fixed bottom-48 right-4 transform -translate-x-1/2 text-white px-10 py-4 rounded shadow-lg flex items-center justify-center w-full max-w-sm z-50 p-4 mb-4
         ${open ? 'animate-fade-in': 'animate-fade-out'}
       `}
       role="alert"

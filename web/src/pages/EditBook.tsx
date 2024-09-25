@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Controller, useForm, useFieldArray, SubmitHandler } from 'react-hook-form';
-import LanguageSelect from '../components/LanguageSelect/LanguageSelect';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import Markdown from 'react-markdown';
@@ -12,6 +11,11 @@ import useUpdateBook from '../hooks/useUpdateBook';
 import useDeleteBook from '../hooks/useDeleteBook';
 import useFetchBookById from '../hooks/useFetchBookById';
 import Loading from '../components/Loading/Loading';
+import _ from 'lodash';
+import { languages } from '../consts/languages';
+import { TAILWIND_FORM_CLASSES } from '../consts/styleConsts';
+
+
 
 import Modal from '../components/Modal/ModalRoot';
 import BookSummaryBtn from '../components/BookSummaryBtn/BookSummaryBtn';
@@ -68,9 +72,17 @@ const EditBook = () => {
   const navigate = useNavigate();
 
   /* React hook form handlers */
-  const { register, handleSubmit, control, reset, formState: { errors } } = useForm<BookFormData>({
+  const {
+    register,
+    handleSubmit,
+    setError,
+    control,
+    reset,
+    formState: { errors }
+  } = useForm<BookFormData>({
     resolver: zodResolver(bookSchema),
   });
+
 
   const {
     fields: authorFields,
@@ -124,6 +136,29 @@ const EditBook = () => {
   const onSubmit: SubmitHandler<BookFormData> = (data) => {
     console.log(`Form submitted with data ${data}`);
     const defaultDate = new Date().toISOString();
+    const filteredData = {
+      ...data,
+      authors: data.authors.filter(author => author.trim() !== ''),
+      genres: data.genres.filter(genre => genre.trim() !== ''),
+      tags: data.tags.filter(tag => tag.trim() !== ''),
+    };
+    console.log('Filtered data:', filteredData);
+    const validationResult = bookSchema.safeParse(filteredData);
+    console.log('Validation result:', validationResult);
+
+    if (!validationResult.success) {
+      console.log('Validation failed. Errors:', validationResult.error);
+      validationResult.error.issues.forEach(issue => {
+        console.log(`Setting error for ${issue.path.join('.')}: ${issue.message}`);
+        setError(issue.path.join('.') as any, {
+          type: 'manual',
+          message: issue.message
+        });
+      });
+      return;
+    }
+
+
 
     const book: Book = {
       ...data,
@@ -187,177 +222,336 @@ const EditBook = () => {
 
   return (
     <PageWithErrorBoundary fallbackMessage="Error loading edit page">
-      <section className="bg-black relative flex flex-col items-center place-content-around px-5 antialiased mdTablet:pr-5 mdTablet:ml-24 h-screen">
-        <div className="text-left max-w-screen-mdTablet py-24 md:pb-4 flex flex-col relative w-full">
+      <section className="editBook bg-white min-h-screen bg-cover relative flex flex-col items-center place-content-around px-5 antialiased mdTablet:pr-5 mdTablet:ml-24 dark:bg-black">
+        <div className="text-left text-dark max-w-screen-mdTablet pb-24 md:pb-4 flex flex-col relative w-full">
           <h2 className="mb-4 text-xl font-bold text-gray-900 dark:text-white">Edit Book</h2>
           <form className="grid gap-4 grid-cols-2 sm:gap-6" onSubmit={handleSubmit(onSubmit)}>
 
             {/* Title */}
-            <div className="block col-span-2 mdTablet:col-span-1">
-              <label className="block mb-2 text-base font-medium text-gray-900 dark:text-white" htmlFor="title">Title<span className="text-red-600 ml-px">*</span></label>
-              <input className={`bg-maastricht border ${errors.title ? 'border-red-500' : 'border-gray-600'} text-gray-900 text-base rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500 mb-1`} id="title" {...register('title')} />
-              {errors.title && <p className="text-red-500">{errors.title.message}</p>}
+            <div className={TAILWIND_FORM_CLASSES['TWO_COL_WRAPPER']}>
+              <label className={TAILWIND_FORM_CLASSES['LABEL']} htmlFor="title">
+                Title<span className={TAILWIND_FORM_CLASSES['LABEL_ASTERISK']}>*</span>
+              </label>
+              <input
+                className={`${TAILWIND_FORM_CLASSES['INPUT']} ${errors.title ? TAILWIND_FORM_CLASSES['ERROR_BORDER'] : ''} `}
+                id="title"
+                {...register('title')}
+              />
+              {errors.title && <p className={TAILWIND_FORM_CLASSES['ERROR']}>{errors.title.message}</p>}
+
             </div>
 
             {/* Subtitle */}
-            <div className="block col-span-2 mdTablet:col-span-1">
-              <label className="block mb-2 text-base font-medium text-gray-900 dark:text-white" htmlFor="subtitle">Subtitle (if applicable)</label>
-              <input className="bg-maastricht border border-gray-00 text-gray-900 text-base rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500" id="subtitle" {...register('subtitle')} />
-              {errors.subtitle && <p className="text-red-500">{errors.subtitle.message}</p>}
+            <div className={TAILWIND_FORM_CLASSES['TWO_COL_WRAPPER']}>
+              <label
+                className={TAILWIND_FORM_CLASSES['LABEL']}
+                htmlFor="subtitle"
+              >
+                  Subtitle (if applicable)
+              </label>
+              <input
+                className={`${TAILWIND_FORM_CLASSES['INPUT']} ${errors.subtitle ? TAILWIND_FORM_CLASSES['ERROR_BORDER'] : ''} `}
+                id="subtitle" {...register('subtitle')}
+              />
+              {errors.subtitle && <p className={TAILWIND_FORM_CLASSES['ERROR']}>{errors.subtitle.message}</p>}
+
             </div>
 
             {/* Authors Field Array */}
-            <div className="block col-span-2">
-              <label className="block mb-2 text-base font-medium text-gray-900 dark:text-white">Authors<span className="text-red-600 ml-px">*</span></label>
-              <div className={`border ${errors.authors ? 'border-red-500' : 'border-cadet-gray'} rounded p-4 mb-1`}>
-                {authorFields.map((item, index) => (
-                  <div className="flex w-full items-center mb-4 col-span-2" key={item.id}>
-                    <Controller
-                      render={({ field }) => <input {...field} className="bg-maastricht border border-gray-300 text-gray-900 text-base rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5  dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500" />}
-                      name={`authors.${index}`}
-                      control={control}
-                    />
-                    <button type="button" onClick={() => authorFields.length > 1 && removeAuthor(index)}  className="flex flex-row justify-between items-center bg-dark-clay ml-4">
-                      <IoClose size={20}/>
-                    </button>
-                  </div>
-                ))}
-                <button type="button" onClick={() => appendAuthor('')} className="flex flex-row text-base justify-between items-center bg-dark-clay py-2 px-3">
+            <div className={TAILWIND_FORM_CLASSES['ONE_COL_WRAPPER']}>
+              <label className={TAILWIND_FORM_CLASSES['LABEL']}>
+                Authors<span className="text-red-600 ml-px">*</span>
+              </label>
+              <div className={`${TAILWIND_FORM_CLASSES['FIELD_ARR_WRAPPER']} ${errors.authors ? TAILWIND_FORM_CLASSES['ERROR_BORDER'] : ''} `}>
+                <div className={TAILWIND_FORM_CLASSES['FIELD_ARR_COL_WRAPPER']}>
+                  {authorFields.map((item, index) => (
+                    <div className={TAILWIND_FORM_CLASSES['FIELD_ARR_COL_WRAPPER']} key={item.id}>
+                      <Controller
+                        render={({ field }) => (
+                          <div className={TAILWIND_FORM_CLASSES['FIELD_ARR_ROW_WRAPPER']}>
+                            <input
+                              {...field}
+                              className={`${TAILWIND_FORM_CLASSES['INPUT']} ${errors.authors?.[index] ? TAILWIND_FORM_CLASSES['ERROR_BORDER'] : ''}`}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => authorFields.length > 1 && removeAuthor(index)}
+                              className={TAILWIND_FORM_CLASSES['REMOVE_BUTTON']}
+                            >
+                              <IoClose size={20}/>
+                            </button>
+                          </div>
+                        )}
+                        name={`authors.${index}`}
+                        control={control}
+                      />
+                      {errors.authors?.[index] && (
+                        <p className={TAILWIND_FORM_CLASSES['ERROR']}>{errors.authors[index]?.message}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => appendAuthor('')}
+                  className={TAILWIND_FORM_CLASSES['ADD_BUTTON']}
+                >
+
                   <IoAddOutline size={20} className="mr-1"/>
                   Add Author
                 </button>
               </div>
-              {errors.authors && <p className="text-red-500">{errors.authors.message}</p>}
+              {errors.authors && !Array.isArray(errors.authors) && (
+                <p className={TAILWIND_FORM_CLASSES['ERROR']}>{errors.authors.message}</p>
+              )}
             </div>
 
             {/* Genres Field Array */}
-            <div className="block col-span-2">
-              <label className="block mb-2 text-base  font-medium text-gray-900 dark:text-white">Genres<span className="text-red-600 ml-px">*</span></label>
-              <div className={`border ${errors.genres ? 'border-red-500' : 'border-cadet-gray'} rounded p-4 mb-1`}>
-                <div className="flex flex-col sm:gap-6 ">
-                {genreFields.map((item, index) => (
-                    <div key={item.id} className="flex w-full items-center mb-4 col-span-2">
+            <div className={TAILWIND_FORM_CLASSES['ONE_COL_WRAPPER']}>
+              <label className={TAILWIND_FORM_CLASSES['LABEL']}>
+                Genres<span className="text-red-600 ml-px">*</span>
+              </label>
+              <div className={`${TAILWIND_FORM_CLASSES['FIELD_ARR_WRAPPER']} ${errors.genres ? TAILWIND_FORM_CLASSES['ERROR_BORDER']: ''} `}>
+                <div className={TAILWIND_FORM_CLASSES['FIELD_ARR_COL_WRAPPER']}>
+                  {genreFields.map((item, index) => (
+                    <div
+                      key={item.id}
+                      className={TAILWIND_FORM_CLASSES['FIELD_ARR_COL_WRAPPER']}
+                    >
                       <Controller
-                        render={({ field }) => <input {...field} className="bg-maastricht border border-gray-300 text-gray-900 text-base rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5  dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"/>}
+                        render={({ field }) => (
+                          <div className={TAILWIND_FORM_CLASSES['FIELD_ARR_ROW_WRAPPER']}>
+                            <input
+                              {...field}
+                              className={`${TAILWIND_FORM_CLASSES['INPUT']} ${errors.genres?.[index] ? TAILWIND_FORM_CLASSES['ERROR_BORDER'] : ''}`}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => genreFields.length > 1 && removeGenre(index)}
+                              className={TAILWIND_FORM_CLASSES['REMOVE_BUTTON']}
+                            >
+                              <IoClose size={20}/>
+                            </button>
+                          </div>
+                        )}
                         name={`genres.${index}`}
                         control={control}
                       />
-                      <button type="button" onClick={() => genreFields.length > 1 && removeGenre(index)} className="flex flex-row justify-between items-center bg-dark-clay ml-4">
-                        <IoClose size={20}/>
-                      </button>
+                      {errors.genres?.[index] && (
+                        <p className={TAILWIND_FORM_CLASSES['ERROR']}>{errors.genres[index]?.message}</p>
+                      )}
                     </div>
                   ))}
                 </div>
-                <button type="button" onClick={() => appendGenre('')} className="flex flex-row justify-between items-center bg-dark-clay py-2 px-3">
+                <button
+                  type="button"
+                  onClick={() => appendGenre('')}
+                  className={TAILWIND_FORM_CLASSES['ADD_BUTTON']}
+                >
                   <IoAddOutline size={20} className="mr-1"/>
                   Add Genre
                 </button>
               </div>
-              {errors.genres && <p className="text-red-500">{errors.genres.message}</p>}
+              {errors.genres && <p className={TAILWIND_FORM_CLASSES['ERROR']}>{errors.genres.message}</p>}
             </div>
 
             {/* Tags Field Array */}
-            <div className="block col-span-2">
-              <label className="block mb-2 text-base font-medium text-gray-900 dark:text-white">Personal Tags<span className="text-red-600 ml-px">*</span></label>
-              <div className={`border ${errors.tags ? 'border-red-500' : 'border-cadet-gray'} rounded p-4 mb-1`}>
-                <div className="flex flex-col sm:gap-6 ">
-                {tagFields.map((item, index) => (
-                    <div key={item.id} className="flex w-full items-center mb-4 col-span-2">
-                      <Controller
-                        render={({ field }) => <input {...field} className="bg-maastricht border border-gray-300 text-gray-900 text-base rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5  dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"/>}
-                        name={`tags.${index}`}
-                        control={control}
-                      />
-                      <button type="button" onClick={() => tagFields.length > 1 && removeTag(index)} className="flex flex-row justify-between items-center bg-dark-clay ml-4">
-                        <IoClose size={20}/>
-                      </button>
-                    </div>
-                  ))}
+            <div className={TAILWIND_FORM_CLASSES['ONE_COL_WRAPPER']}>
+              <label className={TAILWIND_FORM_CLASSES['LABEL']}>
+                Personal Tags<span className={TAILWIND_FORM_CLASSES['LABEL_ASTERISK']}>*</span>
+              </label>
+              <div className={`${TAILWIND_FORM_CLASSES['FIELD_ARR_WRAPPER']} ${errors.tags ? TAILWIND_FORM_CLASSES['ERROR_BORDER'] : ''} `}>
+                <div className={TAILWIND_FORM_CLASSES['FIELD_ARR_COL_WRAPPER']}>
+                  {tagFields.map((item, index) => (
+                    <div key={item.id} className={TAILWIND_FORM_CLASSES['FIELD_ARR_COL_WRAPPER']}>
+                        <Controller
+                          render={({ field }) => (
+                            <div className={TAILWIND_FORM_CLASSES['FIELD_ARR_ROW_WRAPPER']}>
+                              <input
+                                {...field}
+                                className={`${TAILWIND_FORM_CLASSES['INPUT']} ${errors.tags?.[index] ? TAILWIND_FORM_CLASSES['ERROR_BORDER'] : ''}`}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => tagFields.length > 1 && removeTag(index)}
+                                className={TAILWIND_FORM_CLASSES['REMOVE_BUTTON']}
+                              >
+                                <IoClose size={20}/>
+                              </button>
+                            </div>
+                          )}
+                          name={`tags.${index}`}
+                          control={control}
+                        />
+                      {errors.tags?.[index] && (
+                        <p className={TAILWIND_FORM_CLASSES['ERROR']}>{errors.tags[index]?.message}</p>
+                      )}
+                      </div>
+                    ))}
                 </div>
-                <button type="button" onClick={() => appendTag('')} className="flex flex-row justify-between items-center bg-dark-clay py-2 px-3">
+                <button
+                  type="button"
+                  onClick={() => appendTag('')}
+                  className={TAILWIND_FORM_CLASSES['ADD_BUTTON']}
+                >
                   <IoAddOutline size={20} className="mr-1"/>
                   Add Tag
                 </button>
               </div>
-              {errors.tags && <p className="text-red-500">Please enter at least one personal tag</p>}
+              {errors.tags && <p className={TAILWIND_FORM_CLASSES['ERROR']}>Please enter at least one personal tag</p>}
             </div>
 
             {/* Publish Date */}
-            <div className="block col-span-2">
-              <label htmlFor="publishDate" className="block mb-2  text-base  font-medium text-gray-900 dark:text-white">Publish Date<span className="text-red-600 ml-px">*</span></label>
-              <input type="date" id="publishDate" min="1000-01-01" {...register('publishDate')} className={`bg-maastricht border ${errors.publishDate ? 'border-red-500' : 'border-gray-600'} text-gray-900 text-base rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500 mb-1`}/>
-              {errors.publishDate && <p className="text-red-500">{errors.publishDate.message}</p>}
+            <div className={TAILWIND_FORM_CLASSES['ONE_COL_WRAPPER']}>
+              <label htmlFor="publishDate" className={TAILWIND_FORM_CLASSES['LABEL']}>
+                Publish Date<span className={TAILWIND_FORM_CLASSES['LABEL_ASTERISK']}>*</span>
+              </label>
+              <input
+                type="date"
+                id="publishDate"
+                min="1000-01-01" {...register('publishDate')}
+                className={`${TAILWIND_FORM_CLASSES['INPUT']} ${errors.publishDate ? TAILWIND_FORM_CLASSES['ERROR_BORDER'] : ''} `}
+              />
+              {errors.publishDate && <p className={TAILWIND_FORM_CLASSES['ERROR']}>{errors.publishDate.message}</p>}
             </div>
 
             {/* ISBN10 */}
-            <div className="block col-span-2">
-              <label htmlFor="isbn10" className="block mb-2  text-base  font-medium text-gray-900 dark:text-white">ISBN-10<span className="text-red-600 ml-px">*</span></label>
-              <input id="isbn10" {...register('isbn10')} className={`bg-maastricht border ${errors.isbn10 ? 'border-red-500' : 'border-gray-600'} text-gray-900 text-base rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500 mb-1`} />
-              {errors.isbn10 && <p className="text-red-500">{errors.isbn10.message}</p>}
+            <div className={TAILWIND_FORM_CLASSES['ONE_COL_WRAPPER']}>
+              <label htmlFor="isbn10" className={TAILWIND_FORM_CLASSES['LABEL']}>
+                ISBN-10<span className={TAILWIND_FORM_CLASSES['LABEL_ASTERISK']}>*</span>
+              </label>
+              <input
+                id="isbn10" {...register('isbn10')}
+                className={`${TAILWIND_FORM_CLASSES['INPUT']} ${errors.isbn10 ? TAILWIND_FORM_CLASSES['ERROR_BORDER'] : ''} `}
+              />
+              {errors.isbn10 && <p className={TAILWIND_FORM_CLASSES['ERROR']}>{errors.isbn10.message}</p>}
             </div>
 
             {/* ISBN13 */}
-            <div className="block col-span-2">
-              <label htmlFor="isbn13" className="block mb-2  text-base  font-medium text-gray-900 dark:text-white">ISBN-13<span className="text-red-600 ml-px">*</span></label>
-              <input id="isbn13" {...register('isbn13')} className={`bg-maastricht border ${errors.isbn13 ? 'border-red-500' : 'border-gray-600'} text-gray-900 text-base rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500 mb-1`} />
-              {errors.isbn13 && <p className="text-red-500">{errors.isbn13.message}</p>}
+            <div className={TAILWIND_FORM_CLASSES['ONE_COL_WRAPPER']}>
+              <label htmlFor="isbn13" className={TAILWIND_FORM_CLASSES['LABEL']}>
+                ISBN-13<span className={TAILWIND_FORM_CLASSES['LABEL_ASTERISK']}>*</span>
+              </label>
+              <input
+                id="isbn13" {...register('isbn13')}
+                className={`${TAILWIND_FORM_CLASSES['INPUT']} ${errors.isbn13 ? TAILWIND_FORM_CLASSES['ERROR_BORDER'] : ''} `}
+              />
+              {errors.isbn13 && <p className={TAILWIND_FORM_CLASSES['ERROR']}>{errors.isbn13.message}</p>}
             </div>
 
             {/* Formats */}
-            <div className="col-span-2">
-              <label className="block mb-2 text-base  font-medium text-gray-900 dark:text-white">Formats (select all that apply)<span className="text-red-600 ml-px">*</span></label>
-                <ul className="grid w-full gap-6 lgMobile:grid-cols-3">
-                  {['physical', 'eBook', 'audioBook'].map((format) => (
-                    <li key={format}>
-                      <input
-                        type="checkbox"
-                        id={`formats_${format}`}
-                        {...register('formats')}
-                        value={format}
-                        className="hidden peer"
-                      />
-                      <label htmlFor={`formats_${format}`} className="inline-flex text-center items-center justify-center w-full p-2 text-gray-500 bg-white border-2 border-gray-200 rounded cursor-pointer dark:hover:text-gray-300 dark:border-gray-700 peer-checked:border-margorelle-comp1-g   hover:text-gray-600 dark:peer-checked:text-gray-300 peer-checked:text-gray-600 hover:bg-maastricht dark:text-gray-400 dark:bg-gray-800 dark:hover:bg-gray-700">{format}</label>
-                    </li>
-                  ))}
-                </ul>
-                {errors.formats && <p className="text-red-500">Please select at least one book format</p>}
+            <div className={TAILWIND_FORM_CLASSES['ONE_COL_WRAPPER']}>
+              <label
+                htmlFor="checkbox"
+                className={TAILWIND_FORM_CLASSES['LABEL']}>
+                Formats (select all that apply)<span className={TAILWIND_FORM_CLASSES['LABEL_ASTERISK']}>*</span>
+              </label>
+              <ul className="grid w-full gap-6 lgMobile:grid-cols-3 mb-1">
+                {['physical', 'eBook', 'audioBook'].map((format) => (
+                  <li key={format}>
+                    <input
+                      className="hidden peer"
+                      id={`formats_${format}`}
+                      type="checkbox"
+                      value={format}
+                      {...register('formats')}
+                    />
+                    <label
+                      htmlFor={`formats_${format}`}
+                      className="inline-flex text-center items-center transition duration-500 shadow-sm justify-center w-full p-2 text-charcoal bg-white border-2 border-gray-200 rounded-lg cursor-pointer dark:hover:text-gray-300 dark:border-gray-700 peer-checked:border-lime-500  hover:bg-gray-200 dark:peer-checked:text-gray-300 peer-checked:text-gray-600 dark:text-white dark:bg-gray-800 dark:hover:bg-gray-700"
+                    >
+                      {format}
+                    </label>
+                  </li>
+                ))}
+              </ul>
+              {errors.formats && <p className={TAILWIND_FORM_CLASSES['ERROR']}>Please select at least one book format</p>}
             </div>
 
             {/* Language */}
-            <div className="col-span-2">
-              <LanguageSelect control={control} errors={errors} />
+            <div className={TAILWIND_FORM_CLASSES['ONE_COL_WRAPPER']}>
+              <label
+                htmlFor="language"
+                className={TAILWIND_FORM_CLASSES['LABEL']}>
+                Language <span className={TAILWIND_FORM_CLASSES['LABEL_ASTERISK']}>*</span>
+              </label>
+              <Controller
+                name="language"
+                control={control}
+                render={({ field }) => (
+                  <select
+                    {...field}
+                    className={`${TAILWIND_FORM_CLASSES['TEXT_AREA']} ${errors.language ? TAILWIND_FORM_CLASSES['ERROR_BORDER'] : ''} `}
+                  >
+                    {languages.map((language) => (
+                      <option key={language.value} value={language.value}>
+                        {language.label}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              />
+                {errors.language && <p className={TAILWIND_FORM_CLASSES['ERROR']}>{errors.language.message}</p>}
             </div>
 
             {/* Page Count */}
-            <div className="col-span-2">
-              <label htmlFor="pageCount" className="block mb-2 text-base font-medium text-gray-900 dark:text-white">Page Count<span className="text-red-600 ml-px">*</span></label>
-              <input id="pageCount" type="number" {...register('pageCount', { valueAsNumber: true })} className={`bg-maastricht border ${errors.pageCount ? 'border-red-500' : 'border-gray-600'} text-gray-900 text-base rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500 mb-1`} />
-              {errors.pageCount && <p className="text-red-500">{errors.pageCount.message}</p>}
+            <div className={TAILWIND_FORM_CLASSES['ONE_COL_WRAPPER']}>
+              <label
+                className={TAILWIND_FORM_CLASSES['LABEL']}
+                htmlFor="pageCount"
+              >
+                Page Count<span className={TAILWIND_FORM_CLASSES['LABEL_ASTERISK']}>*</span>
+              </label>
+              <input
+                id="pageCount"
+                type="number"
+                {...register('pageCount', { valueAsNumber: true })}
+                className={`${TAILWIND_FORM_CLASSES['INPUT']} ${errors.pageCount ? TAILWIND_FORM_CLASSES['ERROR_BORDER'] : ''} `}
+              />
+              {errors.pageCount && <p className={TAILWIND_FORM_CLASSES['ERROR']}>{errors.pageCount.message}</p>}
             </div>
-
-            {/* Image Link Field Array */}
-            <div className="col-span-2">
-              <label className="block mb-2 text-base font-medium text-gray-900 dark:text-white">Image Link<span className="text-red-600 ml-px">*</span></label>
-              <input type="url" className={`bg-maastricht border ${errors.imageLink ? 'border-red-500' : 'border-gray-600'} text-gray-900 text-base rounded focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500 mb-1`} id="imageLink" {...register('imageLink')} />
-              {errors.imageLink && <p className="text-red-500">{errors.imageLink.message}</p>}
+            {/* Image Link */}
+            <div className={TAILWIND_FORM_CLASSES['ONE_COL_WRAPPER']}>
+              <label
+                className={TAILWIND_FORM_CLASSES['LABEL']}
+                htmlFor="imageLink"
+              >
+                Image Link<span className={TAILWIND_FORM_CLASSES['LABEL_ASTERISK']}>*</span>
+              </label>
+              <input
+                type="url"
+                id="imageLink"
+                className={`${TAILWIND_FORM_CLASSES['INPUT']} ${errors.imageLink ? TAILWIND_FORM_CLASSES['ERROR_BORDER'] : ''} `}
+                {...register('imageLink')}
+              />
+              {errors.imageLink && <p className={TAILWIND_FORM_CLASSES['ERROR']}>{errors.imageLink.message}</p>}
             </div>
 
             {/* Description */}
-            <div className="col-span-2">
-              <label htmlFor="description" className="block mb-2 text-base font-medium text-gray-900 dark:text-white">Description<span className="text-red-600 ml-px">*</span></label>
+            <div className={TAILWIND_FORM_CLASSES['ONE_COL_WRAPPER']}>
+              <label
+                  htmlFor="description"
+                  className={TAILWIND_FORM_CLASSES['LABEL']}
+                >
+                Description<span className={TAILWIND_FORM_CLASSES['LABEL_ASTERISK']}>*</span>
+              </label>
               <div className="border border-cadet-gray rounded p-4">
-              <textarea id="description" rows={4} {...register('description')} className={`block p-2.5 w-full text-base text-gray-900 bg-maastricht rounded border ${errors.description ? 'border-red-500' : 'border-gray-600'} focus:ring-primary-500 focus:border-primary-500 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500 mb-1`} />
-                <div className="grid w-full gap-6 lgMobile:grid-cols-3">
-                <BookSummaryBtn
-                  title={promptTitle}
-                  authors={promptAuthors}
-                  setAiSummaryPreview={setAiSummaryPreview}
-                  openPreviewModal={openPreviewModal}
-                  isPreviewModalOpen={isPreviewModalOpen}
-                  isManualTrigger={isManualTrigger}
-                  setIsManualTrigger={setIsManualTrigger}
-                />
-
+              <textarea
+                className={`${TAILWIND_FORM_CLASSES['TEXT_AREA']} ${errors.description ? TAILWIND_FORM_CLASSES['ERROR_BORDER'] : ''} `}
+                id="description"
+                rows={4}
+                {...register('description')}
+              />
+                <div className="grid w-full gap-6 lgMobile:grid-cols-3 pt-2">
+                  <BookSummaryBtn
+                    title={promptTitle}
+                    authors={promptAuthors}
+                    setAiSummaryPreview={setAiSummaryPreview}
+                    openPreviewModal={openPreviewModal}
+                    isPreviewModalOpen={isPreviewModalOpen}
+                    isManualTrigger={isManualTrigger}
+                    setIsManualTrigger={setIsManualTrigger}
+                  />
                 </div>
               </div>
 
@@ -365,14 +559,36 @@ const EditBook = () => {
             </div>
 
             {/* Notes */}
-            <div className="col-span-2">
-              <label htmlFor="notes" className="block mb-2 text-base font-medium text-gray-900 dark:text-white">Notes (optional)</label>
-              <textarea id="notes" rows={4} {...register('notes')} className="block p-2.5 w-full text-base text-gray-900 bg-maastricht rounded border border-gray-300 focus:ring-primary-500 focus:border-primary-500  dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500" />
-              {errors.notes && <p className="text-red-500">{errors.notes.message}</p>}
+            <div className={TAILWIND_FORM_CLASSES['ONE_COL_WRAPPER']}>
+              <label
+                htmlFor="notes"
+                className={TAILWIND_FORM_CLASSES['LABEL']}
+              >
+                Notes (optional)
+              </label>
+              <textarea
+                className={TAILWIND_FORM_CLASSES['TEXT_AREA']}
+                id="notes"
+                rows={4}
+                {...register('notes')}
+              />
+              {errors.notes && <p className={TAILWIND_FORM_CLASSES['ERROR']}>{errors.notes.message}</p>}
             </div>
 
-            <button className="bg-majorelle hover:bg-hepatica" type="submit">Update Book</button>
-            <button type="button" onClick={openModal} className="border-red-500 text-red-500 hover:text-white hover:bg-red-600 focus:ring-red-900">Delete Book</button>
+
+            <button
+              className="bg-vivid-blue hover:bg-vivid-blue-d hover:border-vivid-blue transition duration-300 ease-in-out"
+              type="submit"
+            >
+              Update Book
+            </button>
+            <button
+              type="button"
+              onClick={openModal}
+              className="border-red-500 text-red-500 hover:text-white hover:bg-red-600 focus:ring-red-900"
+            >
+              Delete Book
+            </button>
           </form>
 
           {/* Delete Modal */}

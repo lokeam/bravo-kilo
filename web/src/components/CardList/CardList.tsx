@@ -1,6 +1,7 @@
 import CardListItem from './CardListItem'
 import CardListItemAuthor from './CardListItemAuthor';
 import CardListItemGenre from './CardListItemGenre';
+import CardListItemTag from './CardListItemTag';
 import { motion } from 'framer-motion';
 import { Book } from '../../types/api';
 
@@ -27,7 +28,17 @@ export interface CardListItemGenre {
   };
 }
 
-type CardListItemProps = CardListItemDefault | CardListItemAuthor | CardListItemGenre;
+export interface CardListItemTag {
+  allTags: string[];
+  tagBooks: {
+    [index: string]: {
+      bookList: Book[];
+      tagImgs: string[];
+    };
+  };
+}
+
+type CardListItemProps = CardListItemDefault | CardListItemAuthor | CardListItemGenre | CardListItemTag;
 
 // Type Guard Checks
 function isCardListItemDefault(props: CardListItemProps): props is CardListItemDefault {
@@ -42,11 +53,14 @@ function isCardListItemGenre(props: CardListItemProps): props is CardListItemGen
   return 'allGenres' in props && 'genreBooks' in props;
 }
 
+function isCardListItemTag(props: CardListItemProps): props is CardListItemTag {
+  return 'allTags' in props && 'tagBooks' in props;
+}
+
 export default function CardList(props: CardListItemProps) {
 
   // Author Card List
   if (isCardListItemAuthor(props)) {
-    //console.log('Card List Author flag tripped');
     return (
       <motion.div
         className="card_list__wrapper pb-20 md:pb-4 flex flex-col relative w-full max-w-7xl mt-8"
@@ -93,9 +107,33 @@ export default function CardList(props: CardListItemProps) {
     );
   }
 
+
+  // Tag Card List
+  if (isCardListItemTag(props)) {
+    return (
+      <motion.div
+        className="card_list__wrapper pb-20 md:pb-4 flex flex-col relative w-full max-w-7xl mt-8"
+        animate={{ opacity: 1 }}
+        initial={{ opacity: 0 }}
+        exit={{ opacity: 0 }}
+        layout
+      >
+        <ul className="flex flex-col justify-center rounded text-white">
+          {props.allTags.map((tagName: string, index: number) => (
+              <CardListItemTag
+                key={tagName}
+                tagImgs={props.tagBooks[String(index)].tagImgs || []}
+                tagName={tagName}
+                books={props.tagBooks[String(index)].bookList || []}
+              />
+          ))}
+        </ul>
+      </motion.div>
+    );
+  }
+
   // Standard Library.tsx Card List
   if (isCardListItemDefault(props)) {
-    //console.log('Card List Default flag tripped');
     return (
       <motion.div
         className="card_list__wrapper pb-20 md:pb-4 flex flex-col relative w-full max-w-7xl mt-8"

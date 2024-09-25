@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from "../AuthContext";
 import { useFocusContext  } from '../FocusProvider/FocusProvider';
+import { useThemeStore } from '../../store/useThemeStore';
 import Avatar from '../Avatar/Avatar';
 import Modal from '../Modal/Modal';
 import AutoComplete from '../AutoComplete/AutoComplete';
@@ -15,10 +16,15 @@ function TopNavigation() {
   const [opened, setOpened] = useState(false);
   const { logout } = useAuth();
   const { searchFocusRef } = useFocusContext();
+  const { theme } = useThemeStore();
   const location = useLocation();
   const navigate = useNavigate();
-  const isBookDetailOrSettingsPage = location.pathname.includes('library/books/') || location.pathname.includes('settings');
+  const isBookDetailOrSettingsPage = location.pathname.includes('library/books') || location.pathname.includes('settings');
   const isSearchPage = location.pathname.includes('/search');
+  const isBooksRoute = location.pathname.includes('/books');
+  const isAddPage = location.pathname.includes('/add');
+  const isDetailPage = isBooksRoute && !isAddPage && !isSearchPage;
+  const isLightTheme = theme === 'light'
 
   const openModal = () => setOpened(true);
   const closeModal = () => setOpened(false);
@@ -27,11 +33,13 @@ function TopNavigation() {
     navigate(`/settings`);
     closeModal();
   };
+  console.log('--------------');
+  console.log('testing isDetailPage: ', isDetailPage);
 
   //<nav className={`${!isSearchPage ? 'dark:opacity-75' : ''}
   return (
     <header className="antialiased relative w-full h-auto">
-      <nav className={`bg-white fixed border-none flex items-center content-between left-0 right-0 top-0 z-50 pr-8 lg:pr-12 h-[67px] text-white w-full dark:bg-black`}>
+      <nav className={`${isLightTheme && isDetailPage ? 'bg-transparent' : 'bg-white'} fixed border-none flex items-center content-between left-0 right-0 top-0 z-50 pr-8 lg:pr-12 h-[67px] text-white w-full dark:bg-black`}>
         <Link
           className={`${isBookDetailOrSettingsPage ? 'block' : 'hidden'} h-13 w-13 pl-7 pr-3 mr-6 inline-block content-center cursor-pointer bg-transparent border-none`}
           to={"/library"}

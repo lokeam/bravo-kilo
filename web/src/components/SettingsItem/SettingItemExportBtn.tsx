@@ -11,16 +11,20 @@ function SettingsItemExportBtn() {
   const userID = parseInt(user.id || 0, 10);
 
   // Assume useQuery is used to cache the user's books
-  const booksQueryKey = ['userBooks', userID];
+  const booksQueryKey = ['books', userID];
   const { data: cachedBooks } = useQuery({
     queryKey: booksQueryKey,
-    queryFn: () => {}, // Fetching logic for cached books
+    queryFn: () => {},
     enabled: false,
   });
 
   // Check if the user has books cached
   const hasBooks = cachedBooks && cachedBooks.length > 0;
 
+  console.log('************');
+  console.log('userID: ', userID);
+  console.log('checking hasBooks: ', cachedBooks);
+  console.log('checking hasBooks: ', hasBooks);
 
   // Handle the button click
   const handleExport = async () => {
@@ -40,7 +44,7 @@ function SettingsItemExportBtn() {
   return (
     <div className="grid w-full">
       <button
-        className="bg-gray-200 dark:bg-gray-800 dark:text-white h-11 justify-stretch"
+        className="bg-gray-200 dark:bg-gray-800 dark:text-white border-2 dark:border-2 transition duration-500 ease-in-out hover:border-vivid-blue dark:hover:border-vivid-blue h-11 justify-stretch"
         disabled={!hasBooks || isLoading}
         onClick={debouncedExport}
       >

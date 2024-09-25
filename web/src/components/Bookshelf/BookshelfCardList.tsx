@@ -11,7 +11,6 @@ interface BookshelfListProps {
 const BookshelfCardList = ({ cardData = [], isLoading }: BookshelfListProps) => {
   const { theme  } = useThemeStore()
   const isDarkTheme = theme == 'dark';
-  console.log('testing theme: ', theme);
 
   return (
     <div className={`${ isDarkTheme ? 'bookshelf_body_dk' : 'bookshelf_body' } relative w-full z-10 pb-8`}>
