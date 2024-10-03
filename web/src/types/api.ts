@@ -23,12 +23,22 @@ export type Book = {
 export type GenreData = {
   bookList: Book[];
   genreImgs: string[];
-}
+};
 
 export type BookGenresData = {
   allGenres: string[];
   [key: string]: GenreData | string[];
-}
+};
+
+export type TagData = {
+  bookList: Book[];
+  tagImgs: string[];
+};
+
+export type BookTagsData = {
+  allTags: string[];
+  [key: string]: TagData | string[];
+};
 
 // Book Authors/Genres intersection types
 export type BookAuthorsData = {
@@ -43,21 +53,29 @@ export type BookFormatData = {
   physical: Book[];
 };
 
-export function isBookGenresData(data: any): data is BookGenresData {
+export function isBookData(data: any, imgKey: string) {
   return (
     data &&
-    Array.isArray(data.allGenres) &&
+    Array.isArray(data.allGenres || data.allTags) &&
     Object.values(data).some(
       (value) => {
         return (
           value !== null &&
           typeof value === 'object' &&
           'bookList' in value &&
-          'genreImgs' in value
+          imgKey in value
         );
       }
     )
   );
+}
+
+export function isBookGenresData(data: any): data is BookGenresData {
+  return isBookData(data, 'genreImgs');
+}
+
+export function isBookTagsData(data: any): data is BookTagsData {
+  return isBookData(data, 'tagImgs');
 }
 
 export const defaultBookGenres: BookGenresData = {
@@ -68,6 +86,13 @@ export const defaultBookGenres: BookGenresData = {
   },
 };
 
+export const defaultBookTags: BookTagsData = {
+  allTags: [],
+  placeholder: {
+    bookList: [],
+    tagImgs: [],
+  },
+};
 
 export type RawHomepageStats = {
   userBkLang: Record<string, number>;

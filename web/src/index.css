@@ -238,7 +238,6 @@ button:focus-visible {
     grid-auto-columns: var(--grid-max-content-xsmall,calc((100% - (var(--grid-xsmall) - 1)*var(--grid-column-gap-xsmall))/var(--grid-xsmall)));
     grid-template-rows: repeat(var(--grid-rows),max-content);
     row-gap: var(--grid-row-gap-xsmall);
-    scrollbar-color: red;
   }
 
   .bookshelf_grid_library {

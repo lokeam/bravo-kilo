@@ -1,5 +1,5 @@
 import { useQueries } from '@tanstack/react-query';
-import { fetchUserBooks, fetchBooksAuthors, fetchBooksGenres, fetchBooksFormat } from '../service/apiClient.service';
+import { fetchUserBooks, fetchBooksAuthors, fetchBooksGenres, fetchBooksFormat, fetchBooksTags } from '../service/apiClient.service';
 import { useUser } from './useUser';
 
 const useLibraryData = () => {
@@ -32,10 +32,16 @@ const useLibraryData = () => {
         enabled: !!userID && isAuthenticated,
         staleTime: 1000 * 60 * 5,
       },
+      {
+        queryKey: ['booksTags', userID],
+        queryFn: () => fetchBooksTags(userID!),
+        enabled: !!userID && isAuthenticated,
+        staleTime: 1000 * 60 * 5,
+      },
     ],
   });
 
-  const [booksQuery, authorsQuery, genresQuery, formatsQuery] = queries;
+  const [booksQuery, authorsQuery, genresQuery, formatsQuery, tagsQuery] = queries;
 
   return {
     user,
@@ -43,6 +49,7 @@ const useLibraryData = () => {
     authors: authorsQuery.data,
     genres: genresQuery.data,
     formats: formatsQuery.data,
+    tags: tagsQuery.data,
     isLoading: isUserLoading || queries.some(query => query.isLoading),
     isError: queries.some(query => query.isError),
     error: queries.find(query => query.error)?.error,

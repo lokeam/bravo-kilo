@@ -55,6 +55,14 @@ export const fetchBooksGenres = async (userID: number) => {
   return data || {};
 };
 
+export const fetchBooksTags = async (userID: number) => {
+  console.log('=====');
+  console.log('fetchBooksTags called within apiClient service');
+  const { data } = await apiClient.get(`/api/v1/user/books/tags?user=${userID}`);
+  console.log('fetchBooksTags, data: ', data);
+  return data || {};
+}
+
 export const searchBookAPI = async (query: string) => {
   const { data } = await apiClient.get('/api/v1/books/search', {
     params: { query },
@@ -125,8 +133,6 @@ export const exportUserBooks = async (userID: number) => {
   }
 };
 
-
-
 export const verifyUserToken = async () => {
   const { data } = await apiClient.get('/auth/token/verify');
   return data.user;
@@ -162,6 +168,15 @@ export const deleteBook = async(bookID: string) => {
   } catch (error) {
     console.error('Error deleting book', error);
     throw error;
+  }
+};
+
+export const deleteUser = async(userID: number) => {
+  try {
+    const { data } = await apiClient.delete(`/auth/delete-account/${userID}`);
+    return data;
+  } catch {
+    console.log('Error attempting to delete user');
   }
 };
 
