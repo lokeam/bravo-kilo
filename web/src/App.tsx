@@ -23,6 +23,7 @@ import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 
 import './App.css'
 import MtkHome from './pages/MktHome';
+import MktBlogLayout from './components/Mkt/MktBlogLayout';
 
 function App() {
   return (
@@ -34,7 +35,7 @@ function App() {
               <Routes>
                 <Route path="/bravo-kilo" element={<MtkHome />} />
                 <Route path="/login" element={<Login />}/>
-                <Route path="/support" element={<Home />} />
+                <Route path="/support" element={<MktBlogLayout />} />
                 <Route element={<ProtectedRoute><AuthenticatedLayout /></ProtectedRoute>}>
                   <Route path="/home" element={<Home />} />
                   <Route path="/library" element={<Library />} />

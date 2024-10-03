@@ -1,25 +1,38 @@
 import axios from 'axios';
 import { Book } from '../types/api';
 
+let csrfToken: string | null = null;
+
 const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_ENDPOINT,
   withCredentials: true,
 });
 
+
 apiClient.interceptors.response.use(
-  response => response,
+  response => {
+    // Capture CSRF token from response headers
+    const csrfTokenFromHeader = response.headers['x-csrf-token'];
+    if (csrfTokenFromHeader) {
+      csrfToken = csrfTokenFromHeader;
+    }
+    return response;
+  },
   async error => {
     const originalRequest = error.config;
 
-    if (error.response.status === 401 && !originalRequest._retry) {
-      originalRequest._retry = true;
+    // Extract the URL path
+    const urlPath = new URL(originalRequest.url, apiClient.defaults.baseURL).pathname;
 
-      const refreshToken = document.cookie.split('; ').find(row => row.startsWith('refresh_token='));
-      if (!refreshToken) {
-        console.log('No refresh token present, redirecting to login.');
-        window.location.href = '/login';
-        return Promise.reject(error);
-      }
+    // Exclude specific URLs from interceptor logic
+    const excludedUrls = ['/auth/token/verify', '/auth/token/refresh', '/auth/google/signin'];
+    if (excludedUrls.includes(urlPath)) {
+      return Promise.reject(error);
+    }
+
+    // Check if error response and status exist
+    if (error.response && error.response.status === 401 && !originalRequest._retry) {
+      originalRequest._retry = true;
 
       try {
         console.log('apiClient, trying token refresh');
@@ -28,9 +41,24 @@ apiClient.interceptors.response.use(
       } catch (refreshError) {
         console.error('Token refresh failed', refreshError);
         window.location.href = '/login';
+        return Promise.reject(refreshError);
       }
     }
+
     return Promise.reject(error);
+  }
+);
+
+
+apiClient.interceptors.request.use(
+  config => {
+    if (csrfToken && ['post', 'put', 'delete'].includes(config.method?.toLowerCase() || '')) {
+      config.headers['X-CSRF-Token'] = csrfToken;
+    }
+    return config;
+  },
+  error => {
+    return Promise.reject(error)
   }
 );
 
