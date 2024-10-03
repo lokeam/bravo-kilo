@@ -101,3 +101,19 @@ func (u *UserModel) GetByEmail(email string) (*User, error) {
 	}
 	return &user, nil
 }
+
+func (u *UserModel) MarkForDeletion(userID int, deletionTime time.Time) error {
+	ctx, cancel := context.WithTimeout(context.Background(), dbconfig.DBTimeout)
+	defer cancel()
+
+	// Update the user record to mark for deletion
+	statement := `UPDATE users SET deleted_at = $1, updated_at = $2 WHERE id = $3`
+	_, err := u.DB.ExecContext(ctx, statement, deletionTime, time.Now(), userID)
+	if err != nil {
+		u.Logger.Error("User Model - Error marking user for deletion", "error", err)
+		return err
+	}
+
+	u.Logger.Info("User marked for deletion", "userID", userID)
+	return nil
+}

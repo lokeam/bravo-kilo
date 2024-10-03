@@ -8,6 +8,7 @@ import (
 	"golang.org/x/time/rate"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/gorilla/csrf"
 	"github.com/lokeam/bravo-kilo/internal/shared/utils"
 )
 
@@ -58,4 +59,14 @@ func VerifyJWT(next http.Handler) http.Handler {
 func GetUserID(ctx context.Context) (int, bool) {
     userID, ok := ctx.Value(userIDKey).(int)
     return userID, ok
+}
+
+func CSRFTokens(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Get the CSRF token from the request context
+			csrfToken := csrf.Token(r)
+			// Set the token in the response headers
+			w.Header().Set("X-CSRF-Token", csrfToken)
+			next.ServeHTTP(w, r)
+	})
 }

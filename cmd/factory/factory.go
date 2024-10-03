@@ -145,7 +145,7 @@ func NewFactory(db *sql.DB, log *slog.Logger) (*Factory, error) {
 		return nil, err
 	}
 
-	authHandlers, err := auth.NewAuthHandlers(log, authModels)
+	authHandlers, err := auth.NewAuthHandlers(log, authModels, transactionManager)
 	if err != nil {
 		return nil, err
 	}

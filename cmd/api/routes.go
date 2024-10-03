@@ -2,6 +2,7 @@ package main
 
 import (
 	"net/http"
+	"os"
 
 	"github.com/lokeam/bravo-kilo/cmd/middleware"
 	"github.com/lokeam/bravo-kilo/internal/books/handlers"
@@ -10,7 +11,18 @@ import (
 	chimiddleware "github.com/go-chi/chi/middleware"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
+	"github.com/gorilla/csrf"
 )
+
+var isProduction bool
+
+func init() {
+	env := os.Getenv("ENV")
+	if env == "" {
+		env = "development"
+	}
+	isProduction = env == "production"
+}
 
 func (app *application) routes(
 	bookHandlers *handlers.BookHandlers,
@@ -24,9 +36,21 @@ func (app *application) routes(
     AllowedOrigins:   []string{"https://*", "http://*"},
     AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
     AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
-    ExposedHeaders:   []string{"Link"},
+    ExposedHeaders:   []string{"Link", "X-CSRF-Token"},
     AllowCredentials: true,
 	}))
+
+	csrfMiddleware := csrf.Protect(
+		[]byte(os.Getenv("CSRF_AUTH_KEY")),
+		csrf.Secure(isProduction),
+		csrf.HttpOnly(true),
+		csrf.RequestHeader("X-CSRF-Token"),
+		csrf.ErrorHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			http.Error(w, "Forbidden - CSRF token invalid", http.StatusForbidden)
+		})),
+	)
+	mux.Use(csrfMiddleware)
+	mux.Use(middleware.CSRFTokens)
 
 	mux.Get("/auth/google/signin", authHandlers.HandleGoogleSignIn)
 	mux.Get("/auth/google/callback", authHandlers.HandleGoogleCallback)
