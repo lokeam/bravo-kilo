@@ -384,6 +384,39 @@ func (h *BookHandlers) HandleGetBooksByGenres(response http.ResponseWriter, requ
 	}
 }
 
+// Sorting - Get Books by Tag
+func (h *BookHandlers) HandleGetBooksByTags(response http.ResponseWriter, request *http.Request) {
+	// Set Content Security Policy headers
+	utils.SetCSPHeaders(response)
+
+	// Extract user ID from JWT
+	userID, err := utils.ExtractUserIDFromJWT(request)
+	if err != nil {
+		h.logger.Error("Error extracting user ID", "error", err)
+		http.Error(response, err.Error(), http.StatusUnauthorized)
+		return
+	}
+	h.logger.Info("Valid user ID received from token", "userID", userID)
+
+	h.logger.Info("--------")
+	h.logger.Info("HandleGetBooksByTags, about to call tag models")
+	// Get the request context and pass it to GetAllBooksByTags
+	booksByTags, err := h.tagRepo.GetAllBooksByTags(request.Context(), userID)
+	if err != nil {
+		h.logger.Error("Error fetching books by tags", "error", err)
+		http.Error(response, "Error fetching books by tags", http.StatusInternalServerError)
+		return
+	}
+
+	// Set content type and respond with JSON
+	response.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(response).Encode(booksByTags); err != nil {
+		h.logger.Error("Error encoding books by tags response", "error", err)
+		http.Error(response, "Error encoding response", http.StatusInternalServerError)
+	}
+}
+
+
 // Build Homepage Analytics Data Response
 func (h *BookHandlers) HandleGetHomepageData(response http.ResponseWriter, request *http.Request) {
 	// Set Content Security Policy headers

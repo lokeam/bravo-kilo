@@ -3,7 +3,6 @@ package repository
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"time"
@@ -15,13 +14,13 @@ import (
 // BookRepository interface defines methods related to book operations
 type BookRepository interface {
 	InitPreparedStatements() error
-	InsertBook(ctx context.Context, tx *sql.Tx, book Book, userID int, tagsJSON []byte) (int, error)
+	InsertBook(ctx context.Context, tx *sql.Tx, book Book, userID int) (int, error)
 	GetBookByID(id int) (*Book, error)
 	GetBookIdByTitle(title string) (int, error)
 	GetAllBooksByUserID(userID int) ([]Book, error)
 	AddBookToUser(tx *sql.Tx, userID, bookID int) error
 	IsUserBookOwner(userID, bookID int) (bool, error)
-	UpdateBook(ctx context.Context, tx *sql.Tx, book Book, tagsJSON []byte) error
+	UpdateBook(ctx context.Context, tx *sql.Tx, book Book) error
 }
 
 // BookRepositoryImpl implements BookRepository, separating SQL logic to `book_queries.go`
@@ -79,15 +78,15 @@ func (r *BookRepositoryImpl) InitPreparedStatements() error {
 
 	// DEBUG Prepared insert statement for books
 	r.insertBookStmt, err = r.DB.Prepare(`
-		INSERT INTO books (title, subtitle, description, language, page_count, publish_date, image_link, notes, tags, created_at, last_updated, isbn_10, isbn_13)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id`)
+		INSERT INTO books (title, subtitle, description, language, page_count, publish_date, image_link, notes, created_at, last_updated, isbn_10, isbn_13)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING id`)
 	if err != nil {
 		r.Logger.Error("Error preparing insertBookStmt", "error", err)
 		return err
 	}
 
 	// Prepared insert statement for books
-	r.getBookByIDStmt, err = r.DB.Prepare(`
+	r.getBookByIDStmt	, err = r.DB.Prepare(`
 	SELECT id, title, subtitle, description, language, page_count, publish_date,
 		image_link, notes, created_at, last_updated, isbn_10, isbn_13 FROM books WHERE id = $1`)
 	if err != nil {
@@ -125,8 +124,8 @@ func (r *BookRepositoryImpl) InitPreparedStatements() error {
 	// Prepared statement for updating a book
 	r.updateBookStmt, err = r.DB.Prepare(`
 		UPDATE books SET title=$1, subtitle=$2, description=$3, language=$4, page_count=$5,
-			publish_date=$6, image_link=$7, notes=$8, tags=$9, last_updated=$10,
-			isbn_10=$11, isbn_13=$12 WHERE id=$13`)
+			publish_date=$6, image_link=$7, notes=$8, last_updated=$9,
+			isbn_10=$10, isbn_13=$11 WHERE id=$12`)
 	if err != nil {
 		r.Logger.Error("Error preparing updateBookStmt", "error", err)
 		return err
@@ -135,7 +134,7 @@ func (r *BookRepositoryImpl) InitPreparedStatements() error {
 	return nil
 }
 
-func (r *BookRepositoryImpl) InsertBook(ctx context.Context, tx *sql.Tx, book Book, userID int, tagsJSON []byte) (int, error) {
+func (r *BookRepositoryImpl) InsertBook(ctx context.Context, tx *sql.Tx, book Book, userID int) (int, error) {
 	var newId int
 	formattedPublishDate := formatPublishDate(book.PublishDate)
 
@@ -149,7 +148,6 @@ func (r *BookRepositoryImpl) InsertBook(ctx context.Context, tx *sql.Tx, book Bo
 		formattedPublishDate,
 		book.ImageLink,
 		book.Notes,
-		tagsJSON,
 		time.Now(),
 		time.Now(),
 		book.ISBN10,
@@ -196,7 +194,6 @@ func (r *BookRepositoryImpl) GetBookByID(id int) (*Book, error) {
 	defer rows.Close()
 
 	var book Book
-	var tagsJSON []byte
 
 	// Check if rows were returned
 	if rows.Next() {
@@ -222,14 +219,6 @@ func (r *BookRepositoryImpl) GetBookByID(id int) (*Book, error) {
 					return nil, fmt.Errorf("failed to scan book data for ID %d: %w", id, err)
 			}
 
-			// Process tags JSON
-			if len(tagsJSON) > 0 {
-					err = json.Unmarshal(tagsJSON, &book.Tags)
-					if err != nil {
-							r.Logger.Error("Error unmarshaling tags JSON", "bookID", id, "error", err)
-							return nil, fmt.Errorf("failed to unmarshal tags for book ID %d: %w", id, err)
-					}
-			}
 	} else {
 			// No rows returned, book not found
 			r.Logger.Warn("Book not found", "bookID", id)
@@ -362,7 +351,7 @@ func (r *BookRepositoryImpl) GetAllBooksByUserID(userID int) ([]Book, error) {
 	return books, nil
 }
 
-func (r *BookRepositoryImpl) UpdateBook(ctx context.Context, tx *sql.Tx, book Book, tagsJSON []byte) error {
+func (r *BookRepositoryImpl) UpdateBook(ctx context.Context, tx *sql.Tx, book Book) error {
 
 	// Check if the prepared statement is available
 	if r.updateBookStmt != nil {
@@ -375,7 +364,6 @@ func (r *BookRepositoryImpl) UpdateBook(ctx context.Context, tx *sql.Tx, book Bo
 			book.PublishDate,
 			book.ImageLink,
 			book.Notes,
-			tagsJSON,
 			time.Now(),
 			book.ISBN10,
 			book.ISBN13,
@@ -389,8 +377,8 @@ func (r *BookRepositoryImpl) UpdateBook(ctx context.Context, tx *sql.Tx, book Bo
 		// Fallback to raw SQL query
 		r.Logger.Warn("Prepared statement is nil, using raw SQL query")
 		query := `UPDATE books SET title=$1, subtitle=$2, description=$3, language=$4, page_count=$5,
-				  publish_date=$6, image_link=$7, notes=$8, tags=$9, last_updated=$10,
-				  isbn_10=$11, isbn_13=$12 WHERE id=$13`
+				  publish_date=$6, image_link=$7, notes=$8 last_updated=$9,
+				  isbn_10=$10, isbn_13=$11 WHERE id=$12`
 
 		_, err := tx.ExecContext(ctx, query,
 			book.Title,
@@ -401,7 +389,6 @@ func (r *BookRepositoryImpl) UpdateBook(ctx context.Context, tx *sql.Tx, book Bo
 			book.PublishDate,
 			book.ImageLink,
 			book.Notes,
-			tagsJSON,
 			time.Now(),
 			book.ISBN10,
 			book.ISBN13,
@@ -412,7 +399,6 @@ func (r *BookRepositoryImpl) UpdateBook(ctx context.Context, tx *sql.Tx, book Bo
 			return err
 		}
 	}
-
 
 	return nil
 }
@@ -501,7 +487,7 @@ func (r *BookRepositoryImpl) batchFetchBookDetails(ctx context.Context, bookIDs 
 		ARRAY_AGG(DISTINCT a.name) AS author_names,
 		ARRAY_AGG(DISTINCT g.name) AS genre_names,
 		ARRAY_AGG(DISTINCT f.format_type) AS format_types,
-		b.tags
+		COALESCE(ARRAY_AGG(DISTINCT t.name) FILTER (WHERE t.name IS NOT NULL), '{}') AS tag_names
 	FROM books b
 	LEFT JOIN book_authors ba ON b.id = ba.book_id
 	LEFT JOIN authors a ON ba.author_id = a.id
@@ -509,8 +495,10 @@ func (r *BookRepositoryImpl) batchFetchBookDetails(ctx context.Context, bookIDs 
 	LEFT JOIN genres g ON bg.genre_id = g.id
 	LEFT JOIN book_formats bf ON b.id = bf.book_id
 	LEFT JOIN formats f ON bf.format_id = f.id
+	LEFT JOIN book_tags bt ON b.id = bt.book_id
+	LEFT JOIN tags t ON bt.tag_id = t.id
 	WHERE b.id = ANY($1)
-	GROUP BY b.id, b.tags`
+	GROUP BY b.id`
 
 	rows, err := r.DB.QueryContext(ctx, query, pq.Array(bookIDs))
 	if err != nil {
@@ -522,11 +510,10 @@ func (r *BookRepositoryImpl) batchFetchBookDetails(ctx context.Context, bookIDs 
 	// Processing the result rows
 	for rows.Next() {
 		var bookID int
-		var authorNames, genreNames, formatTypes pq.StringArray
-		var tagsJSON []byte
+		var authorNames, genreNames, formatTypes, tagNames pq.StringArray
 
 		// Scan the row
-		if err := rows.Scan(&bookID, &authorNames, &genreNames, &formatTypes, &tagsJSON); err != nil {
+		if err := rows.Scan(&bookID, &authorNames, &genreNames, &formatTypes, &tagNames); err != nil {
 			r.Logger.Error("Error scanning book details", "error", err)
 			return err
 		}
@@ -534,18 +521,11 @@ func (r *BookRepositoryImpl) batchFetchBookDetails(ctx context.Context, bookIDs 
 		// Fetch book from map
 		book := bookIDMap[bookID]
 
-		// Unmarshal tags if needed
-		if len(tagsJSON) > 0 && len(book.Tags) == 0 {
-			if err := json.Unmarshal(tagsJSON, &book.Tags); err != nil {
-				r.Logger.Error("Error unmarshalling tags JSON", "error", err)
-				return err
-			}
-		}
-
 		// Deduplicated authors, genres, and formats are added
 		book.Authors = append(book.Authors, authorNames...)
 		book.Genres = append(book.Genres, genreNames...)
 		book.Formats = append(book.Formats, formatTypes...)
+		book.Tags = append(book.Tags, tagNames...)
 	}
 
 	// Check for errors after row iteration

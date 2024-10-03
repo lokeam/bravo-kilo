@@ -1,19 +1,15 @@
 package repository
 
 import (
-	"container/heap"
 	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"log/slog"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/lokeam/bravo-kilo/internal/dbconfig"
 	"github.com/lokeam/bravo-kilo/internal/shared/collections"
-	"github.com/lokeam/bravo-kilo/internal/shared/customheap"
 )
 
 var isbn10Cache         sync.Map
@@ -32,7 +28,6 @@ type BookCache interface {
 	GetAllBooksTitles(userID int) (*collections.Set, error)
 	GetAllBooksPublishDate(userID int) ([]BookInfo, error)
 	GetBooksByLanguage(ctx context.Context, userID int) (map[string]interface{}, error)
-	GetUserTags(ctx context.Context, userID int) (map[string]interface{}, error)
 	InvalidateCaches(bookID int)
 }
 
@@ -40,9 +35,7 @@ type BookCacheImpl struct {
 	DB               *sql.DB
 	Logger           *slog.Logger
 	insertBookStmt   *sql.Stmt
-	getUserTagsStmt  *sql.Stmt
 	getAllLangStmt   *sql.Stmt
-
 }
 
 func NewBookCache(db *sql.DB, logger *slog.Logger) (BookCache, error) {
@@ -67,16 +60,6 @@ func (b *BookCacheImpl) InitPreparedStatements() error {
 		WHERE ub.user_id = $1
 		GROUP BY language
 		ORDER BY total DESC`)
-	if err != nil {
-		return err
-	}
-
-	b.getUserTagsStmt, err = b.DB.Prepare(`
-	SELECT b.tags
-		FROM books b
-		INNER JOIN user_books ub ON b.id = ub.book_id
-		WHERE ub.user_id = $1
-	`)
 	if err != nil {
 		return err
 	}
@@ -266,95 +249,6 @@ func (b *BookCacheImpl) GetAllBooksPublishDate(userID int) ([]BookInfo, error) {
 	}
 
 	return books, nil
-}
-
-// Tags
-func (b *BookCacheImpl) GetUserTags(ctx context.Context, userID int) (map[string]interface{}, error) {
-	// Check cache with TTL
-	if cacheEntry, found := userTagsCache.Load(userID); found {
-			entry := cacheEntry.(UserTagsCacheEntry)
-			if time.Since(entry.timestamp) < time.Hour {
-					b.Logger.Info("Fetching user tags from cache for user", "userID", userID)
-					return entry.data, nil
-			}
-			// Cache entry expired, delete it
-			userTagsCache.Delete(userID)
-	}
-
-	var rows *sql.Rows
-	var err error
-
-	// Use prepared statement if available
-	if b.getUserTagsStmt != nil {
-			b.Logger.Info("Using prepared statement for fetching user tags")
-			rows, err = b.getUserTagsStmt.QueryContext(ctx, userID)
-	} else {
-			b.Logger.Warn("Prepared statement for fetching user tags unavailable. Falling back to raw SQL query")
-			query := `
-			SELECT b.tags
-			FROM books b
-			INNER JOIN user_books ub ON b.id = ub.book_id
-			WHERE ub.user_id = $1`
-			rows, err = b.DB.QueryContext(ctx, query, userID)
-	}
-
-	if err != nil {
-			b.Logger.Error("Error fetching user tags", "error", err)
-			return nil, err
-	}
-	defer rows.Close()
-
-	// Process the tags and count occurrences
-	tagCount := make(map[string]int)
-
-	for rows.Next() {
-			var tagsJSON []byte
-			if err := rows.Scan(&tagsJSON); err != nil {
-					b.Logger.Error("Error scanning tags", "error", err)
-					return nil, err
-			}
-
-			var tags []string
-			if err := json.Unmarshal(tagsJSON, &tags); err != nil {
-					b.Logger.Error("Error unmarshalling tags JSON", "error", err)
-					return nil, err
-			}
-
-			// Convert spaces to underscores and count occurrences
-			for _, tag := range tags {
-					formattedTag := strings.ReplaceAll(tag, " ", "_")
-					tagCount[formattedTag]++
-			}
-	}
-
-	// Create a max heap for more efficient sorting
-	h := &customheap.TagHeap{}
-	heap.Init(h)
-
-	for tag, count := range tagCount {
-		heap.Push(h, customheap.TagCount{Tag: tag, Count: count})
-	}
-
-	// Create the result array with the new format
-	userTags := make([]map[string]interface{}, 0, len(tagCount))
-	for h.Len() > 0 {
-		tagCount := heap.Pop(h).(customheap.TagCount)
-		userTags = append(userTags, map[string]interface{}{
-					"label":   tagCount.Tag,
-					"count": tagCount.Count,
-			})
-	}
-
-	// Prepare the result
-	result := map[string]interface{}{
-			"userTags":       userTags,
-	}
-
-	// Cache the result
-	userTagsCache.Store(userID, UserTagsCacheEntry{data: result, timestamp: time.Now()})
-	b.Logger.Info("Caching user tags for user", "userID", userID)
-
-	return result, nil
 }
 
 // Languages

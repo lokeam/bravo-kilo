@@ -33,6 +33,7 @@ func (app *application) routes(
 	mux.Get("/auth/token/verify", authHandlers.HandleVerifyToken)
 	mux.Post("/auth/token/refresh", authHandlers.HandleRefreshToken)
 	mux.Post("/auth/signout", authHandlers.HandleSignOut)
+	mux.Delete("/auth/delete-account", authHandlers.HandleDeleteAccount)
 
 	mux.Route("/api/v1/user", func(r chi.Router) {
 		r.Use(middleware.VerifyJWT)
@@ -41,6 +42,7 @@ func (app *application) routes(
 		r.Get("/books/format", bookHandlers.HandleGetBooksByFormat)
 		r.Get("/books/genres", bookHandlers.HandleGetBooksByGenres)
 		r.Get("/books/homepage", bookHandlers.HandleGetHomepageData)
+		r.Get("/books/tags", bookHandlers.HandleGetBooksByTags)
 
 		// Apply rate limiting on uploads and exports"
 		r.With(middleware.RateLimiter).Post("/upload", bookHandlers.UploadCSV)

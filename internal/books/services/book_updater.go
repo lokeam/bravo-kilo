@@ -3,7 +3,6 @@ package services
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 
@@ -72,12 +71,6 @@ func (b *BookUpdaterServiceImpl) UpdateBookEntry(ctx context.Context, book repos
 	b.bookService.NormalizeBookData(&book)
 	b.bookService.SanitizeBookData(&book)
 
-	tagsJSON, err := json.Marshal(book.Tags)
-	if err != nil {
-			b.logger.Error("Error marshalling tags to JSON", "error", err)
-			return err
-	}
-
 	// Start transaction
 	tx, err := b.dbManager.BeginTransaction(ctx)
 	if err != nil {
@@ -86,7 +79,7 @@ func (b *BookUpdaterServiceImpl) UpdateBookEntry(ctx context.Context, book repos
 	}
 	defer tx.Rollback()
 
-	err = b.bookRepo.UpdateBook(ctx, tx, book, tagsJSON)
+	err = b.bookRepo.UpdateBook(ctx, tx, book)
 	if err != nil {
 		return err
 	}

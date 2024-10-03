@@ -3,7 +3,6 @@ package services
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"html"
@@ -121,13 +120,6 @@ func (s *BookServiceImpl) CreateBookEntry(ctx context.Context, book repository.B
 	// Format publish date if only year is provided
 	book.PublishDate = formatPublishDate(book.PublishDate)
 
-	// Marshal JSON tags
-	tagsJSON, err := json.Marshal(book.Tags)
-	if err != nil {
-		s.logger.Error("Error marshaling tags", "error", err)
-		return 0, err
-	}
-
 	// Start transaction
 	tx, err := s.dbManager.BeginTransaction(ctx)
 	if err != nil {
@@ -137,7 +129,7 @@ func (s *BookServiceImpl) CreateBookEntry(ctx context.Context, book repository.B
 	defer tx.Rollback()
 
 	// Insert the book into the books table and associate with the user
-	bookID, err := s.bookRepository.InsertBook(ctx, tx, book, userID, tagsJSON)
+	bookID, err := s.bookRepository.InsertBook(ctx, tx, book, userID)
 	if err != nil {
 		s.logger.Error("Error inserting book", "error", err)
 		return 0, err
@@ -170,6 +162,21 @@ func (s *BookServiceImpl) CreateBookEntry(ctx context.Context, book repository.B
 	)
 	if err != nil {
 		s.logger.Error("Error inserting genres", "error", err)
+		return 0, err
+	}
+
+	// Insert tags
+	err = s.CreateEntries(
+		ctx,
+		tx,
+		bookID,
+		book.Tags,
+		s.tagRepository.GetTagIDByName,
+		s.tagRepository.InsertTag,
+		s.tagRepository.AssociateBookWithTag,
+	)
+	if err != nil {
+		s.logger.Error("Error inserting tags", "error", err)
 		return 0, err
 	}
 

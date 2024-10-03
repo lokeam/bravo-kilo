@@ -60,11 +60,12 @@ func (r *AuthorRepositoryImpl) InitPreparedStatements() error {
 	// Prepared select statement for GetAllBooksByAuthors
 	r.getAllBooksByAuthorsStmt, err = r.DB.Prepare(`
 	SELECT b.id, b.title, b.subtitle, b.description, b.language, b.page_count, b.publish_date,
-				 b.image_link, b.notes, b.created_at, b.last_updated, b.isbn_10, b.isbn_13,
-				 a.name AS author_name,
-				 json_agg(DISTINCT g.name) AS genres,
-				 json_agg(DISTINCT f.format_type) AS formats,
-				 b.tags
+	       b.image_link, b.notes, b.created_at, b.last_updated, b.isbn_10, b.isbn_13,
+	       a.name AS author_name,
+	       json_agg(DISTINCT g.name) AS genres,
+	       json_agg(DISTINCT f.format_type) AS formats,
+	       json_agg(DISTINCT t.name) AS tags,
+	       b.tags
 	FROM books b
 	INNER JOIN book_authors ba ON b.id = ba.book_id
 	INNER JOIN authors a ON ba.author_id = a.id
@@ -73,7 +74,9 @@ func (r *AuthorRepositoryImpl) InitPreparedStatements() error {
 	LEFT JOIN genres g ON bg.genre_id = g.id
 	LEFT JOIN book_formats bf ON b.id = bf.book_id
 	LEFT JOIN formats f ON bf.format_id = f.id
-	WHERE ub.user_id = $1::integer  -- Explicitly cast the user_id to integer
+	LEFT JOIN book_tags bt ON b.id = bt.book_id
+	LEFT JOIN tags t ON bt.tag_id = t.id
+	WHERE ub.user_id = $1::integer
 	GROUP BY b.id, a.name`)
 	if err != nil {
 		return err
@@ -127,7 +130,7 @@ func (r *AuthorRepositoryImpl) GetAllBooksByAuthors(userID int) (map[string]inte
 	       a.name AS author_name,
 	       json_agg(DISTINCT g.name) AS genres,
 	       json_agg(DISTINCT f.format_type) AS formats,
-	       r.tags
+	       json_agg(DISTINCT t.name) AS tags
 	FROM books r
 	INNER JOIN book_authors ba ON r.id = ba.book_id
 	INNER JOIN authors a ON ba.author_id = a.id
@@ -136,6 +139,8 @@ func (r *AuthorRepositoryImpl) GetAllBooksByAuthors(userID int) (map[string]inte
 	LEFT JOIN genres g ON bg.genre_id = g.id
 	LEFT JOIN book_formats bf ON r.id = bf.book_id
 	LEFT JOIN formats f ON bf.format_id = f.id
+	LEFT JOIN book_tags bt ON r.id = bt.book_id
+	LEFT JOIN tags t ON bt.tag_id = t.id
 	WHERE ub.user_id = $1
 	GROUP BY r.id, a.name`
 

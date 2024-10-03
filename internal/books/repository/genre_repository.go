@@ -9,21 +9,15 @@ import (
 	"sort"
 	"strconv"
 	"time"
-
-	"github.com/lib/pq"
 )
 
 type GenreRepository interface {
 	InitPreparedStatements() error
-	AddGenre(ctx context.Context, bookID, genreID int) error
-	AddOrGetGenreID(ctx context.Context, genreName string) (int, error)
 	InsertGenre(ctx context.Context, tx *sql.Tx, genre string) (int, error)
 	GetAllBooksByGenres(ctx context.Context, userID int) (map[string]interface{}, error)
-	GetGenres(ctx context.Context, bookID int) ([]string, error)
 	GetBooksListByGenre(ctx context.Context, userID int) (map[string]interface{}, error)
 	GetGenreIDByName(ctx context.Context, tx *sql.Tx, genreName string, genreID *int) error
 	AssociateBookWithGenre(ctx context.Context, tx *sql.Tx, bookID, genreID int) error
-	RemoveSpecificGenres(ctx context.Context, bookID int, genres []string) error
 }
 
 type GenreRepositoryImpl struct {
@@ -31,7 +25,6 @@ type GenreRepositoryImpl struct {
 	Logger                    *slog.Logger
 	getAllBooksByGenresStmt   *sql.Stmt
 	getBookListByGenreStmt    *sql.Stmt
-	getGenresStmt             *sql.Stmt
 }
 
 
@@ -51,35 +44,28 @@ func (r *GenreRepositoryImpl) InitPreparedStatements() error {
 
 	// Prepared statment for GetAllBooksByGenres
 	r.getAllBooksByGenresStmt, err = r.DB.Prepare(`
-					SELECT b.id, b.title, b.subtitle, b.description, b.language, b.page_count, b.publish_date,
-								 b.image_link, b.notes, b.created_at, b.last_updated, b.isbn_10, b.isbn_13,
-								 json_agg(DISTINCT g.name) AS genres,
-								 json_agg(DISTINCT a.name) AS authors,
-								 json_agg(DISTINCT f.format_type) AS formats,
-								 b.tags
-					FROM books b
-					INNER JOIN user_books ub ON b.id = ub.book_id
-					LEFT JOIN book_genres bg ON b.id = bg.book_id
-					LEFT JOIN genres g ON bg.genre_id = g.id
-					LEFT JOIN book_authors ba ON b.id = ba.book_id
-					LEFT JOIN authors a ON ba.author_id = a.id
-					LEFT JOIN book_formats bf ON b.id = bf.book_id
-					LEFT JOIN formats f ON bf.format_id = f.id
-					WHERE ub.user_id = $1
-					GROUP BY b.id`)
-	if err != nil {
-		return err
-	}
+	SELECT b.id, b.title, b.subtitle, b.description, b.language, b.page_count, b.publish_date,
+	       b.image_link, b.notes, b.created_at, b.last_updated, b.isbn_10, b.isbn_13,
+	       json_agg(DISTINCT g.name) AS genres,
+	       json_agg(DISTINCT a.name) AS authors,
+	       json_agg(DISTINCT f.format_type) AS formats,
+	       json_agg(DISTINCT t.name) AS tags
+	FROM books b
+	INNER JOIN user_books ub ON b.id = ub.book_id
+	LEFT JOIN book_genres bg ON b.id = bg.book_id
+	LEFT JOIN genres g ON bg.genre_id = g.id
+	LEFT JOIN book_authors ba ON b.id = ba.book_id
+	LEFT JOIN authors a ON ba.author_id = a.id
+	LEFT JOIN book_formats bf ON b.id = bf.book_id
+	LEFT JOIN formats f ON bf.format_id = f.id
+	LEFT JOIN book_tags bt ON b.id = bt.book_id
+	LEFT JOIN tags t ON bt.tag_id = t.id
+	WHERE ub.user_id = $1
+	GROUP BY b.id`)
+if err != nil {
+	return err
+}
 	r.Logger.Info("Successfully prepared getAllBooksByGenresStmt")
-	// Prepared select statement for GetGenres
-	r.getGenresStmt, err = r.DB.Prepare(`
-		SELECT g.name
-		FROM genres g
-		JOIN book_genres bg ON g.id = bg.genre_id
-		WHERE bg.book_id = $1`)
-	if err != nil {
-		return err
-	}
 
 	r.getBookListByGenreStmt, err = r.DB.Prepare(`
 	SELECT g.name, COUNT(DISTINCT b.id) AS total_books
@@ -96,7 +82,6 @@ func (r *GenreRepositoryImpl) InitPreparedStatements() error {
 
 	return nil
 }
-
 
 func (r *GenreRepositoryImpl) InsertGenre(ctx context.Context, tx *sql.Tx, genre string) (int, error) {
 	var genreID int
@@ -151,7 +136,7 @@ func (r *GenreRepositoryImpl) GetAllBooksByGenres(ctx context.Context, userID in
 								 json_agg(DISTINCT g.name) AS genres,
 								 json_agg(DISTINCT a.name) AS authors,
 								 json_agg(DISTINCT f.format_type) AS formats,
-								 b.tags
+								 json_agg(DISTINCT t.name) AS tags,
 					FROM books b
 					INNER JOIN user_books ub ON b.id = ub.book_id
 					LEFT JOIN book_genres bg ON b.id = bg.book_id
@@ -160,6 +145,8 @@ func (r *GenreRepositoryImpl) GetAllBooksByGenres(ctx context.Context, userID in
 					LEFT JOIN authors a ON ba.author_id = a.id
 					LEFT JOIN book_formats bf ON b.id = bf.book_id
 					LEFT JOIN formats f ON bf.format_id = f.id
+					LEFT JOIN book_tags bt ON b.id = bt.book_id
+					LEFT JOIN tags t ON bt.tag_id = t.id
 					WHERE ub.user_id = $1
 					GROUP BY b.id`
 			rows, err = r.DB.QueryContext(ctx, query, userID)
@@ -178,7 +165,6 @@ func (r *GenreRepositoryImpl) GetAllBooksByGenres(ctx context.Context, userID in
 	for rows.Next() {
 			var book Book
 			var genresJSON, authorsJSON, formatsJSON, tagsJSON []byte
-
 			// Ensure the scan order matches the SQL query's column order
 			if err := rows.Scan(
 					&book.ID, &book.Title, &book.Subtitle, &book.Description, &book.Language, &book.PageCount,
@@ -240,10 +226,10 @@ func (r *GenreRepositoryImpl) GetAllBooksByGenres(ctx context.Context, userID in
 
 			// Sort the books for each genre by author's last name
 			sort.Slice(booksByGenre[genre], func(i, j int) bool {
-					if len(booksByGenre[genre][i].Authors) > 0 && len(booksByGenre[genre][j].Authors) > 0 {
-							return getLastName(booksByGenre[genre][i].Authors[0]) < getLastName(booksByGenre[genre][j].Authors[0])
-					}
-					return false
+				if len(booksByGenre[genre][i].Authors) > 0 && len(booksByGenre[genre][j].Authors) > 0 {
+						return getLastName(booksByGenre[genre][i].Authors[0]) < getLastName(booksByGenre[genre][j].Authors[0])
+				}
+				return false
 			})
 
 			// Extract the first image for each book in the genre
@@ -262,61 +248,6 @@ func (r *GenreRepositoryImpl) GetAllBooksByGenres(ctx context.Context, userID in
 
 	//r.Logger.Info("Final result being sent to the frontend", "result", result)
 	return result, nil
-}
-
-func (r *GenreRepositoryImpl) GetGenres(ctx context.Context, bookID int) ([]string, error) {
-	// Check cache
-	if cache, found := genresCache.Load(bookID); found {
-		r.Logger.Info("Fetching genres from cache for book", "bookID", bookID)
-		cachedGenres := cache.([]string)
-		return append([]string(nil), cachedGenres...), nil
-	}
-
-	var rows *sql.Rows
-	var err error
-
-	// Use prepared statement if available
-	if r.getGenresStmt != nil {
-		r.Logger.Info("Using prepared statement for fetching genres")
-		rows, err = r.getGenresStmt.QueryContext(ctx, bookID)
-	} else {
-		r.Logger.Warn("Prepared statement for fetching genres is not available. Falling back to raw SQL query")
-		query := `
-		SELECT g.name
-		FROM genres g
-		JOIN book_genres bg ON g.id = bg.genre_id
-		WHERE bg.book_id = $1`
-		rows, err = r.DB.QueryContext(ctx, query, bookID)
-	}
-
-	if err != nil {
-		r.Logger.Error("Error fetching genres", "error", err)
-		return nil, err
-	}
-	defer rows.Close()
-
-	// Collect genres
-	var genres []string
-	for rows.Next() {
-		var genre string
-		if err := rows.Scan(&genre); err != nil {
-			r.Logger.Error("Error scanning genre", "error", err)
-			return nil, err
-		}
-		genres = append(genres, genre)
-	}
-
-	// Check for errors after looping through the rows
-	if err = rows.Err(); err != nil {
-		r.Logger.Error("Error with rows during genres fetch", "error", err)
-		return nil, err
-	}
-
-	// Cache the result
-	genresCache.Store(bookID, genres)
-	r.Logger.Info("Caching genres for book", "bookID", bookID)
-
-	return genres, nil
 }
 
 func (b *GenreRepositoryImpl) GetBooksListByGenre(ctx context.Context, userID int) (map[string]interface{}, error) {
@@ -396,56 +327,11 @@ func (b *GenreRepositoryImpl) GetBooksListByGenre(ctx context.Context, userID in
 	return result, nil
 }
 
-func (b *GenreRepositoryImpl) AddGenre(ctx context.Context, bookID, genreID int) error {
-	statement := `INSERT INTO book_genres (book_id, genre_id) VALUES ($1, $2)`
-	_, err := b.DB.ExecContext(ctx, statement, bookID, genreID)
-	if err != nil {
-		b.Logger.Error("Error adding genre association", "error", err)
-		return err
-	}
-
-	return nil
-}
-
-func (b *GenreRepositoryImpl) AddOrGetGenreID(ctx context.Context, genreName string) (int, error) {
-	var genreID int
-	statement := `
-		INSERT INTO genres (name)
-		VALUES ($1)
-		ON CONFLICT (name) DO UPDATE
-		SET name = EXCLUDED.name
-		RETURNING id`
-	err := b.DB.QueryRowContext(ctx, statement, genreName).Scan(&genreID)
-	if err != nil {
-		b.Logger.Error("Error inserting or updating genre", "error", err)
-		return 0, err
-	}
-	return genreID, nil
-}
-
 func (b *GenreRepositoryImpl) AssociateBookWithGenre(ctx context.Context, tx *sql.Tx, bookID, genreID int) error {
 	statement := `INSERT INTO book_genres (book_id, genre_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`
 	_, err := tx.ExecContext(ctx, statement, bookID, genreID)
 	if err != nil {
 		b.Logger.Error("Error adding author association", "error", err)
-		return err
-	}
-
-	return nil
-}
-
-func (b *GenreRepositoryImpl) RemoveSpecificGenres(ctx context.Context, bookID int, genres []string) error {
-
-	statement := `
-		DELETE FROM book_genres
-		WHERE book_id = $1
-		AND genre_id IN (
-			SELECT id FROM genres WHERE name = ANY($2)
-		)`
-
-	_, err := b.DB.ExecContext(ctx, statement, bookID, pq.Array(genres))
-	if err != nil {
-		b.Logger.Error("Error removing specific genres", "error", err)
 		return err
 	}
 

@@ -15,6 +15,7 @@ import (
 
 	"github.com/lokeam/bravo-kilo/config"
 	"github.com/lokeam/bravo-kilo/internal/shared/models"
+	"github.com/lokeam/bravo-kilo/internal/shared/transaction"
 	"github.com/lokeam/bravo-kilo/internal/shared/utils"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -24,14 +25,15 @@ import (
 )
 
 type AuthHandlers struct {
-	logger  *slog.Logger
-	models  models.Models
+	logger     *slog.Logger
+	models     models.Models
+	dbManager  transaction.DBManager
 }
 
 var claims utils.Claims
 var jwtKey = []byte(os.Getenv("JWT_SECRET_KEY"))
 
-func NewAuthHandlers(logger *slog.Logger, models models.Models) (*AuthHandlers, error) {
+func NewAuthHandlers(logger *slog.Logger, models models.Models, dbManager transaction.DBManager) (*AuthHandlers, error) {
 	if logger == nil {
 		return nil, fmt.Errorf("logger cannot be nil")
 	}
@@ -40,9 +42,14 @@ func NewAuthHandlers(logger *slog.Logger, models models.Models) (*AuthHandlers, 
 		return nil, fmt.Errorf("invalid models passed, user or token model is missing ")
 	}
 
+	if dbManager == nil {
+		return nil, fmt.Errorf("DB Manager cannot be nil")
+	}
+
 	return &AuthHandlers{
 		logger: logger,
 		models: models,
+		dbManager: dbManager,
 	}, nil
 }
 
@@ -425,3 +432,77 @@ func (h *AuthHandlers) HandleSignOut(response http.ResponseWriter, request *http
 	response.WriteHeader(http.StatusOK)
 	response.Write([]byte("Logged out successfully"))
 }
+
+func (h *AuthHandlers) HandleDeleteAccount(response http.ResponseWriter, request *http.Request) {
+	cookie, err := request.Cookie("token")
+	if err != nil {
+		h.logger.Error("Error: No token cookie", "error", err)
+		http.Error(response, "Error: No token cookie", http.StatusUnauthorized)
+		return
+	}
+
+	tokenStr := cookie.Value
+	claims := &utils.Claims{}
+
+	token, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (interface{}, error) {
+		return jwtKey, nil
+	})
+	if err != nil || !token.Valid {
+		h.logger.Error("Error: Invalid token", "error", err)
+		http.Error(response, "Error: Invalid token", http.StatusUnauthorized)
+		return
+	}
+
+	userID := claims.UserID
+
+	// Begin transaction
+	ctx := request.Context()
+	tx, err := h.models.DBManager.BeginTransaction(ctx)
+	if err != nil {
+		h.logger.Error("Error beginning transaction", "error", err)
+		http.Error(response, "Error processing request", http.StatusInternalServerError)
+		return
+	}
+
+	// Soft delete (mark for deletion)
+	deletionTime := time.Now()
+	err = h.models.User.MarkForDeletion(userID, deletionTime)
+	if err != nil {
+		h.logger.Error("Error marking user for deletion", "error", err)
+		h.models.DBManager.RollbackTransaction(tx)
+		http.Error(response, "Error marking user for deletion", http.StatusInternalServerError)
+		return
+	}
+
+	// Delete refresh tokens
+	err = h.models.Token.DeleteByUserID(userID)
+	if err != nil {
+		h.logger.Error("Error deleting refresh tokens", "error", err)
+		h.models.DBManager.RollbackTransaction(tx)
+		http.Error(response, "Error deleting refresh tokens", http.StatusInternalServerError)
+		return
+	}
+
+	// Commit transaction
+	err = h.models.DBManager.CommitTransaction(tx)
+	if err != nil {
+		h.logger.Error("Error committing transaction", "error", err)
+		http.Error(response, "Error processing request", http.StatusInternalServerError)
+		return
+	}
+
+	// Invalidate JWT session cookie
+	http.SetCookie(response, &http.Cookie{
+		Name:     "token",
+		Value:    "",
+		Expires:  time.Now().Add(-1 * time.Hour),
+		HttpOnly: true,
+		Secure:   false,
+		SameSite: http.SameSiteLaxMode,
+		Path:     "/",
+	})
+
+	h.logger.Info("User account marked for deletion and logged out", "userID", userID)
+	response.WriteHeader(http.StatusOK)
+}
+

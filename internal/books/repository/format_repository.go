@@ -52,7 +52,7 @@ func (r *FormatRepositoryImpl) InitPreparedStatements() error {
 		f.format_type,
 		array_to_json(array_agg(DISTINCT a.name)) as authors,
 		array_to_json(array_agg(DISTINCT g.name)) as genres,
-		b.tags
+		COALESCE(b.tags, '[]') AS tags
 	FROM books b
 	INNER JOIN book_formats bf ON b.id = bf.book_id
 	INNER JOIN formats f ON bf.format_id = f.id
@@ -339,7 +339,6 @@ func (b *FormatRepositoryImpl) AssociateFormatWithBooks(ctx context.Context, tx 
 
 	return nil
 }
-
 
 func (b *FormatRepositoryImpl) RemoveSpecificFormats(ctx context.Context, bookID int, formats []string) error {
 	statement := `
