@@ -35,7 +35,6 @@ function Library() {
     formats: bookFormats,
     tags: bookTags,
     isLoading,
-    isError
   } = useLibraryData();
 
   const sortedBooks = useMemo(() => {

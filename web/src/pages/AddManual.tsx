@@ -11,15 +11,49 @@ import { languages } from '../consts/languages';
 import { TAILWIND_FORM_CLASSES } from '../consts/styleConsts';
 
 import { Book } from '../types/api';
+import { BookFormData } from '../types/api';
 import { IoClose } from 'react-icons/io5';
 import { IoAddOutline } from 'react-icons/io5';
+
+function transformBookData(bookData: any, formattedDate: string): BookFormData {
+  return {
+    ...bookData,
+    authors: bookData.authors
+      ? bookData.authors.map((author: string) => ({ author }))
+      : [{ author: '' }],
+    genres: bookData.genres
+      ? bookData.genres.map((genre: string) => ({ genre }))
+      : [{ genre: '' }],
+    tags: bookData.tags
+      ? bookData.tags.map((tag: string) => ({ tag }))
+      : [{ tag: '' }],
+    publishDate: formattedDate,
+    subtitle: bookData.subtitle || '',
+    isbn10: bookData.isbn10 || '',
+    isbn13: bookData.isbn13 || '',
+    formats: bookData.formats || [],
+    language: bookData.language || 'en',
+    pageCount: bookData.pageCount || 0,
+    imageLink: bookData.imageLink || '',
+    description: bookData.description || '',
+    notes: bookData.notes || '',
+    title: bookData.title || '',
+  };
+}
+
 
 const bookSchema = z.object({
   title: z.string().min(1, 'Please enter a title'),
   subtitle: z.string().optional(),
-  authors: z.array(z.string().min(1, 'Author name cannot be empty')).min(1, 'Please enter at least one author'),
-  genres: z.array(z.string().min(1, 'Genre cannot be empty')).min(1, 'Please enter at least one genre'),
-  tags: z.array(z.string().min(1, 'Tag cannot be empty')).min(1, 'At least one tag is required'),
+  authors: z.array(z.object(
+    {author: z.string().min(1, 'Author name cannot be empty'),}
+  )).min(1, 'Please enter at least one author'),
+  genres: z.array(z.object(
+    {genre: z.string().min(1, 'Genre cannot be empty'),}
+  )).min(1, 'Please enter at least one genre'),
+  tags: z.array(z.object(
+    {tag: z.string().min(1, 'Tag cannot be empty'),}
+  )).min(1, 'At least one tag is required'),
   publishDate: z.string().min(1, 'Please enter a date of publication'),
   isbn10: z.string().length(10, 'ISBN-10 must be 10 characters').optional(),
   isbn13: z.string().length(13, 'ISBN-13 must be 13 characters').optional(),
@@ -37,8 +71,6 @@ const bookSchema = z.object({
   }
 );
 
-type BookFormData = z.infer<typeof bookSchema>;
-
 const ManualAdd = () => {
   const { mutate: addBook } = useAddBook();
   const location = useLocation();
@@ -53,27 +85,11 @@ const ManualAdd = () => {
     register,
     reset,
     setValue,
-    setError,
     formState: { errors },
   } = useForm<BookFormData>({
     resolver: zodResolver(bookSchema),
-    defaultValues: {
-      title: '',
-      subtitle: '',
-      authors: [],
-      genres: [],
-      tags: [],
-      publishDate: formattedDate,
-      isbn10: '',
-      isbn13: '',
-      formats: [],
-      language: 'en',
-      pageCount: 0,
-      imageLink: '',
-      description: '',
-      notes: '',
-      ...bookData,
-    },
+    defaultValues: transformBookData(bookData, formattedDate),
+    shouldUseNativeValidation: true,
   });
 
   useEffect(() => {
@@ -126,46 +142,30 @@ const ManualAdd = () => {
   useEffect(() => {
     // Only reset if bookData is actually different
     if (bookData && Object.keys(bookData).length > 0) {
-      reset(bookData);
+      reset(transformBookData(bookData, formattedDate));
     }
-  }, [bookData, reset]);
-
-  // Update publish date when formattedDate changes
-  useEffect(() => {
-    setValue('publishDate', formattedDate);
-  }, [formattedDate, setValue]);
+  }, [bookData, reset, formattedDate]);
 
   const onSubmit: SubmitHandler<BookFormData> = (data) => {
     const defaultDate = new Date().toISOString();
-    const filteredData = {
-      ...data,
-      authors: data.authors.filter(author => author.trim() !== ''),
-      genres: data.genres.filter(genre => genre.trim() !== ''),
-      tags: data.tags.filter(tag => tag.trim() !== ''),
-    };
-    console.log('Filtered data:', filteredData);
-    const validationResult = bookSchema.safeParse(filteredData);
-    console.log('Validation result:', validationResult);
 
-    if (!validationResult.success) {
-      console.log('Validation failed. Errors:', validationResult.error);
-      validationResult.error.issues.forEach(issue => {
-        console.log(`Setting error for ${issue.path.join('.')}: ${issue.message}`);
-        setError(issue.path.join('.') as any, {
-          type: 'manual',
-          message: issue.message
-        });
-      });
-      return;
-    }
-
-    console.log('Validation successful. Proceeding with book creation.');
 
     const book: Book = {
       ...data,
       subtitle: data.subtitle || '',
       createdAt: defaultDate,
       lastUpdated: defaultDate,
+      isbn10: data.isbn10 || '',
+      isbn13: data.isbn13 || '',
+      authors: data.authors
+        .map((authorObj) => authorObj.author.trim())
+        .filter((author) => author !== ''),
+      genres: data.genres
+        .map((genreObj) => genreObj.genre.trim())
+        .filter((genre) => genre !== ''),
+      tags: data.tags
+        .map((tagObj) => tagObj.tag.trim())
+        .filter((tag) => tag !== ''),
     };
 
     addBook(book);
@@ -217,6 +217,8 @@ const ManualAdd = () => {
                   {authorFields.map((item, index) => (
                     <div className={TAILWIND_FORM_CLASSES['FIELD_ARR_COL_WRAPPER']} key={item.id}>
                       <Controller
+                        name={`authors.${index}.author`}
+                        control={control}
                         render={({ field }) => (
                           <div className={TAILWIND_FORM_CLASSES['FIELD_ARR_ROW_WRAPPER']}>
                             <input
@@ -232,8 +234,6 @@ const ManualAdd = () => {
                             </button>
                           </div>
                         )}
-                        name={`authors.${index}`}
-                        control={control}
                       />
                       {errors.authors?.[index] && (
                         <p className={TAILWIND_FORM_CLASSES['ERROR']}>{errors.authors[index]?.message}</p>
@@ -243,7 +243,7 @@ const ManualAdd = () => {
                 </div>
                 <button
                   type="button"
-                  onClick={() => appendAuthor('')}
+                  onClick={() => appendAuthor({author: ''})}
                   className={TAILWIND_FORM_CLASSES['ADD_BUTTON']}
                 >
                   <IoAddOutline size={20} className="mr-1"/>
@@ -268,6 +268,8 @@ const ManualAdd = () => {
                       className={TAILWIND_FORM_CLASSES['FIELD_ARR_COL_WRAPPER']}
                     >
                       <Controller
+                        name={`genres.${index}.genre`}
+                        control={control}
                         render={({ field }) => (
                           <div className={TAILWIND_FORM_CLASSES['FIELD_ARR_ROW_WRAPPER']}>
                             <input
@@ -283,8 +285,7 @@ const ManualAdd = () => {
                             </button>
                           </div>
                         )}
-                        name={`genres.${index}`}
-                        control={control}
+
                       />
                       {errors.genres?.[index] && (
                         <p className={TAILWIND_FORM_CLASSES['ERROR']}>{errors.genres[index]?.message}</p>
@@ -294,7 +295,7 @@ const ManualAdd = () => {
                 </div>
                 <button
                   type="button"
-                  onClick={() => appendGenre('')}
+                  onClick={() => appendGenre({genre: ''})}
                   className={TAILWIND_FORM_CLASSES['ADD_BUTTON']}
                 >
                   <IoAddOutline size={20} className="mr-1"/>
@@ -314,6 +315,9 @@ const ManualAdd = () => {
                   {tagFields.map((item, index) => (
                     <div key={item.id} className={TAILWIND_FORM_CLASSES['FIELD_ARR_COL_WRAPPER']}>
                         <Controller
+                          name={`tags.${index}.tag`}
+                          control={control}
+                          rules={{ required: 'Tag field cannot be empty '}}
                           render={({ field }) => (
                             <div className={TAILWIND_FORM_CLASSES['FIELD_ARR_ROW_WRAPPER']}>
                               <input
@@ -329,10 +333,8 @@ const ManualAdd = () => {
                               </button>
                             </div>
                           )}
-                          name={`tags.${index}`}
-                          control={control}
                         />
-                      {errors.tags?.[index] && (
+                      {Array.isArray(errors.tags) && errors.tags.length > 0 && (
                         <p className={TAILWIND_FORM_CLASSES['ERROR']}>{errors.tags[index]?.message}</p>
                       )}
                       </div>
@@ -340,7 +342,7 @@ const ManualAdd = () => {
                 </div>
                 <button
                   type="button"
-                  onClick={() => appendTag('')}
+                  onClick={() => appendTag({tag: ''})}
                   className={TAILWIND_FORM_CLASSES['ADD_BUTTON']}
                 >
                   <IoAddOutline size={20} className="mr-1"/>

@@ -18,7 +18,9 @@ const login = async (loginData: LoginData): Promise<LoginResponse> => {
 }
 
 export const useLogin = () => {
-  return useMutation<LoginResponse, Error, LoginData>(login);
+  return useMutation<LoginResponse, Error, LoginData>({
+    mutationFn: login,
+  });
 }
 
 const fetchProtectedData = async () => {
@@ -31,5 +33,8 @@ const fetchProtectedData = async () => {
 };
 
 export const useProtectedData = () => {
-  return useQuery('protectedData', fetchProtectedData);
-}
+  return useQuery({
+    queryKey: ['protectedData'],
+    queryFn: fetchProtectedData,
+  });
+};

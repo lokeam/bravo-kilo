@@ -1,25 +1,8 @@
-import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { IoSearchOutline } from 'react-icons/io5';
 import PageWithErrorBoundary from '../components/ErrorMessages/PageWithErrorBoundary';
 
-import Snackbar from '../components/Snackbar/Snackbar';
-
 const AddBookGateway = () => {
-  const [snackbarOpen, setSnackbarOpen] = useState<boolean>(false);
-  const [snackbarVariant, setSnackbarVariant] = useState<'added' | 'updated' | 'removed' | 'error'>('added');
-  const [snackbarMsg, setSnackbarMsg] = useState<string>('');
-
-  const handleShowSnackbar = (variant: 'added' | 'updated' | 'removed' | 'error', msg: string) => {
-    setSnackbarOpen(true);
-    setSnackbarVariant(variant);
-    setSnackbarMsg(msg);
-    setSnackbarOpen(true);
-  };
-
-  const handleCloseSnackbar = () => {
-    setSnackbarOpen(false);
-  }
 
   return (
     <PageWithErrorBoundary fallbackMessage="Error loading home page">
@@ -67,26 +50,7 @@ const AddBookGateway = () => {
                   </NavLink>
               </div>
             </div>
-            {/* <h3>Snackbar poc</h3> */}
-            {/* <button
-              className="block w-full mb-2 bg-green-600 hover:bg-green-800 text-white font-bold py-2 px-4 rounded"
-              onClick={() => handleShowSnackbar('added', 'Added book to your library')}>Add book - Toggle snackbar</button>
-            <button
-              className="block w-full mb-2 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
-              onClick={() => handleShowSnackbar('updated', 'Updated book meta information')}>Update book - Toggle snackbar</button>
-            <button
-              className="block w-full mb-2 bg-slate-500 hover:bg-slate-700 text-white font-bold py-2 px-4 rounded"
-              onClick={() => handleShowSnackbar('removed', 'Book removed from your library')}>Remove book - Toggle snackbar</button>
-            <button
-              className="block w-full mb-2 bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded"
-              onClick={() => handleShowSnackbar('error', 'Error - please try again later')}>Error - Toggle snackbar</button> */}
           </div>
-          {/* <Snackbar
-            message={snackbarMsg}
-            open={snackbarOpen}
-            onClose={handleCloseSnackbar}
-            variant={snackbarVariant}
-          /> */}
         </div>
       </section>
     </PageWithErrorBoundary>

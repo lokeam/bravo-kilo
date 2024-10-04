@@ -10,7 +10,7 @@ function Search() {
   const [searchParams] = useSearchParams();
   const query = searchParams.get('query') || '';
   const { searchHistory } = useSearchStore();
-  const { isLoading, error } = useBookSearch(query);
+  const { isLoading } = useBookSearch(query);
 
   const searchEntry = searchHistory[query];
   const books = searchEntry ? searchEntry.results : [];

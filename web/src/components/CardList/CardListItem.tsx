@@ -88,7 +88,6 @@ function CardListItem({ book, isSearchPage }: CardListItemProps) {
         <Modal
           opened={opened}
           onClose={closeModal}
-          title=""
         >
           <button
             className="flex flex-row justify-items-start items-center bg-transparent w-full mr-1"

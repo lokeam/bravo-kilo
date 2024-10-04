@@ -1,15 +1,14 @@
 import { useAuth } from "../AuthContext";
-import { User } from "../AuthContext";
 
 
 export default function Avatar() {
   console.log('Avatar root');
   const { user } = useAuth();
 
-  console.log('User from autAuth: ',user);
+  console.log('User from autAuth: ', user);
 
-  // if (!isUser(user)) return null;
-  const { picture, firstName, lastName } = user;
+  const firstName = user?.firstName ?? 'N';
+  const lastName = user?.lastName ?? 'A';
 
   const createInitials = (firstName = 'N', lastName='A') => {
     return firstName[0]+lastName[0];
@@ -17,36 +16,8 @@ export default function Avatar() {
 
   const userInitials = createInitials(firstName, lastName);
 
-  // Development: Save sizes for Design audit
-  const avatarSize = {
-    'sm': 'h-10 w-10',
-    'md': 'h-20 w-20',
-    'lg': 'h-32 w-32'
-  };
-
   console.log('Avatar component firstName: ', firstName);
   console.log('Avatar component userInitials: ', userInitials)
-
-
-
-
-/*
-        {
-          picture === '' || picture === undefined ? (
-            <div className="relative inline-flex items-center justify-center overflow-hidden bg-gray-600 h-10 w-10 rounded-full">
-              <span className="font-medium text-gray-600 dark:text-gray-300">{userInitials}</span>
-            </div>
-          ) : (
-            <img
-              alt={`User avatar for ${firstName}`}
-              className={`rounded-full ${avatarSize['sm']}`}
-              src={picture}
-            />
-          )
-        }
-
-*/
-
 
 
   return (

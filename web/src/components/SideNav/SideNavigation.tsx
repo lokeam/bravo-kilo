@@ -10,7 +10,7 @@ import { TbEdit } from "react-icons/tb";
 import { IoSearchOutline } from 'react-icons/io5';
 
 function SideNavigation() {
-  const { addManualRef, searchFocusRef } = useFocusContext();
+  const { addManualRef } = useFocusContext();
 
   return (
     <SideNavWrapper

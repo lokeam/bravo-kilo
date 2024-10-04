@@ -11,7 +11,7 @@ import useHomePageData from '../hooks/useHomeData';
 import { AggregatedHomePageData } from '../types/api';
 
 function Home() {
-  const { data, isLoading, error } = useHomePageData();
+  const { data, isLoading } = useHomePageData();
 
   const { books, booksByFormat, totalBooks, booksByLang, booksByGenre, userTags } = useMemo(() => {
     const defaultData: AggregatedHomePageData = {

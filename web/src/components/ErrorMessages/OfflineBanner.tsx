@@ -1,4 +1,3 @@
-import React from 'react';
 import { useNetworkStatus } from '../NetworkStatusProvider/NetworkStatusProvider';
 import { MdOutlineSignalWifiConnectedNoInternet4 } from "react-icons/md";
 

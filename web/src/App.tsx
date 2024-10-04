@@ -20,10 +20,7 @@ import BookDetail from './pages/BookDetail';
 import NotFound from './pages/NotFound';
 import Loading from './components/Loading/Loading';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
-
 import './App.css'
-import MtkHome from './pages/MktHome';
-import MktBlogLayout from './components/Mkt/MktBlogLayout';
 
 function App() {
   return (
@@ -33,9 +30,8 @@ function App() {
           <FocusProvider>
             <Suspense fallback={<Loading />}>
               <Routes>
-                <Route path="/bravo-kilo" element={<MtkHome />} />
+                <Route path="/bravo-kilo" element={<Login />} />
                 <Route path="/login" element={<Login />}/>
-                <Route path="/support" element={<MktBlogLayout />} />
                 <Route element={<ProtectedRoute><AuthenticatedLayout /></ProtectedRoute>}>
                   <Route path="/home" element={<Home />} />
                   <Route path="/library" element={<Library />} />

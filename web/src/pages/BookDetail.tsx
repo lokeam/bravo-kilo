@@ -59,12 +59,6 @@ const BookDetail = () => {
       return fetchBookIDByTitle(decodedTitle);
     },
     enabled: isInLibrary,
-    onSuccess: (data) => {
-      console.log('Successfully fetched book ID:', data);
-    },
-    onError: (error) => {
-      console.error('Error fetching book ID:', error);
-    },
   });
 
   console.log('Fetched bookID:', bookID);

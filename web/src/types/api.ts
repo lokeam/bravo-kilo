@@ -9,12 +9,13 @@ export type Book = {
   authors: string[];
   imageLink?: string;
   genres: string[];
+  tags?: string[] | undefined;
   notes?: string;
   formats?: ('physical' | 'eBook' | 'audioBook')[];
   createdAt?: string;
   lastUpdated?: string;
-  isbn10: string;
-  isbn13: string;
+  isbn10?: string;
+  isbn13?: string;
   isInLibrary?: boolean;
   hasEmptyFields?: boolean;
   emptyFields?: string[];
@@ -122,4 +123,21 @@ export type AggregatedHomePageData = {
   books: Book[];
   booksByFormat: BooksByFormat;
   homepageStats: HomepageStatistics;
+};
+
+export type BookFormData = {
+  title: string;
+  subtitle?: string;
+  authors: { author: string }[]; // React Hook Form needs field array strings saved in an object
+  genres: { genre: string }[];
+  tags: { tag: string }[];
+  publishDate: string;
+  isbn10: string;
+  isbn13: string;
+  formats: ("physical" | "eBook" | "audioBook")[] | undefined;
+  language: string;
+  pageCount: number;
+  imageLink: string;
+  description: string;
+  notes: string;
 };

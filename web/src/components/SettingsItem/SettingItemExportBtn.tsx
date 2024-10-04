@@ -1,20 +1,23 @@
 import { useState } from 'react';
-import { useAuth } from '../AuthContext';
 import { useQuery } from '@tanstack/react-query';
+import { useUser } from '../../hooks/useUser';
 import useDebounce from '../../hooks/useDebounceLD';
 import { exportUserBooks } from '../../service/apiClient.service';
 
 function SettingsItemExportBtn() {
-  const { user } = useAuth();
+  const { data: user} = useUser();
+  const userID = user?.id;
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [ error, setError] = useState<string | null>(null);
-  const userID = parseInt(user.id || 0, 10);
 
   // Assume useQuery is used to cache the user's books
   const booksQueryKey = ['books', userID];
   const { data: cachedBooks } = useQuery({
     queryKey: booksQueryKey,
-    queryFn: () => {},
+    queryFn: async () => {
+      // Fetch user books here
+      return [];
+    },
     enabled: false,
   });
 
@@ -31,7 +34,11 @@ function SettingsItemExportBtn() {
     setIsLoading(true);
     setError(null);
     try {
-      await exportUserBooks(userID);
+      if (userID !== undefined) {
+        await exportUserBooks(userID);
+      } else {
+        throw new Error("User ID is not available");
+      }
     } catch(error) {
       setError("Failed to export books. Please try again later.");
     } finally {

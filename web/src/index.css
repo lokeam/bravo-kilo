@@ -103,7 +103,7 @@ button:focus-visible {
 }
 
 @media (min-width: 769px) {
-  padding-bottom: 10px
+  padding-bottom: 10px;
 }
 
 /* Debug ---- bookshelf styles */

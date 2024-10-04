@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { Controller, useForm, useFieldArray, SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -11,15 +11,12 @@ import useUpdateBook from '../hooks/useUpdateBook';
 import useDeleteBook from '../hooks/useDeleteBook';
 import useFetchBookById from '../hooks/useFetchBookById';
 import Loading from '../components/Loading/Loading';
-import _ from 'lodash';
 import { languages } from '../consts/languages';
 import { TAILWIND_FORM_CLASSES } from '../consts/styleConsts';
 
-
-
 import Modal from '../components/Modal/ModalRoot';
 import BookSummaryBtn from '../components/BookSummaryBtn/BookSummaryBtn';
-import { Book } from '../types/api';
+import { BookFormData } from '../types/api';
 
 import { IoClose } from 'react-icons/io5';
 import { IoAddOutline } from 'react-icons/io5';
@@ -51,7 +48,23 @@ const bookSchema = z.object({
   }
 );
 
-type BookFormData = z.infer<typeof bookSchema>;
+type BookFormData = {
+  title: string;
+  subtitle?: string;
+  authors: { author: string }[]; // React Hook Form needs field array strings saved in an object
+  genres: { genre: string }[];
+  tags: { tag: string }[];
+  publishDate: string;
+  isbn10: string;
+  isbn13: string;
+  formats: ("physical" | "eBook" | "audioBook")[] | undefined;
+  language: string;
+  pageCount: number;
+  imageLink: string;
+  description: string;
+  notes: string;
+}
+
 
 const EditBook = () => {
   // Delete Modal state
@@ -69,7 +82,6 @@ const EditBook = () => {
   const { data: book, isLoading, isError } = useFetchBookById(bookID as string, !!bookID);
   const { mutate: updateBook } = useUpdateBook(bookID as string);
   const { mutate: deleteBook } = useDeleteBook();
-  const navigate = useNavigate();
 
   /* React hook form handlers */
   const {
@@ -90,7 +102,7 @@ const EditBook = () => {
     remove: removeAuthor
   } = useFieldArray({
     control,
-    name: 'authors' as const,
+    name: "authors" as const,
   });
 
   const {
@@ -115,13 +127,15 @@ const EditBook = () => {
     if (book) {
       const publishDateFormattedBook = {
         ...book,
-        publishDate: book.publishDate ? new Date(book.publishDate).toISOString().split('T')[0] : ''
+        publishDate: book.publishDate ? new Date(book.publishDate).toISOString().split('T')[0] : '',
+        authors: book.authors?.map((author) => ({ author })) || [],
+        genres: book.genres?.map((genre) => ({ genre })) || [],
+        tags: book.tags?.map((tag) => ({ tag })) || [],
       };
       reset(publishDateFormattedBook);
     }
-
-    console.log(`useEffect fetched book data: ${book}`);
   }, [book, reset]);
+
 
   // Debug useEffect for Preview Modal
   useEffect(() => {
@@ -138,9 +152,9 @@ const EditBook = () => {
     const defaultDate = new Date().toISOString();
     const filteredData = {
       ...data,
-      authors: data.authors.filter(author => author.trim() !== ''),
-      genres: data.genres.filter(genre => genre.trim() !== ''),
-      tags: data.tags.filter(tag => tag.trim() !== ''),
+      authors: data.authors.filter(item => item.author.trim() !== '').map(item => item.author),
+      genres: data.genres.filter(item => item.genre.trim() !== '').map(item => item.genre),
+      tags: data.tags.filter(item => item.tag.trim() !== '').map(item => item.tag),
     };
     console.log('Filtered data:', filteredData);
     const validationResult = bookSchema.safeParse(filteredData);
@@ -158,13 +172,16 @@ const EditBook = () => {
       return;
     }
 
-
-
-    const book: Book = {
+    const book = {
       ...data,
       id: Number(bookID),
       createdAt: defaultDate,
       lastUpdated: defaultDate,
+      isbn10: data.isbn10 || '',
+      isbn13: data.isbn13 || '',
+      authors: data.authors.map((authorObj) => authorObj.author),
+      genres: data.genres.map((genreObj) => genreObj.genre),
+      tags: data.tags.map((tagObj) => tagObj.tag),
     };
 
     updateBook(book);
@@ -267,6 +284,8 @@ const EditBook = () => {
                   {authorFields.map((item, index) => (
                     <div className={TAILWIND_FORM_CLASSES['FIELD_ARR_COL_WRAPPER']} key={item.id}>
                       <Controller
+                        name={`authors.${index}.author`}
+                        control={control}
                         render={({ field }) => (
                           <div className={TAILWIND_FORM_CLASSES['FIELD_ARR_ROW_WRAPPER']}>
                             <input
@@ -282,8 +301,6 @@ const EditBook = () => {
                             </button>
                           </div>
                         )}
-                        name={`authors.${index}`}
-                        control={control}
                       />
                       {errors.authors?.[index] && (
                         <p className={TAILWIND_FORM_CLASSES['ERROR']}>{errors.authors[index]?.message}</p>
@@ -293,7 +310,7 @@ const EditBook = () => {
                 </div>
                 <button
                   type="button"
-                  onClick={() => appendAuthor('')}
+                  onClick={() => appendAuthor({author: ''})}
                   className={TAILWIND_FORM_CLASSES['ADD_BUTTON']}
                 >
 
@@ -319,6 +336,8 @@ const EditBook = () => {
                       className={TAILWIND_FORM_CLASSES['FIELD_ARR_COL_WRAPPER']}
                     >
                       <Controller
+                        name={`genres.${index}.genre`}
+                        control={control}
                         render={({ field }) => (
                           <div className={TAILWIND_FORM_CLASSES['FIELD_ARR_ROW_WRAPPER']}>
                             <input
@@ -334,8 +353,6 @@ const EditBook = () => {
                             </button>
                           </div>
                         )}
-                        name={`genres.${index}`}
-                        control={control}
                       />
                       {errors.genres?.[index] && (
                         <p className={TAILWIND_FORM_CLASSES['ERROR']}>{errors.genres[index]?.message}</p>
@@ -345,7 +362,7 @@ const EditBook = () => {
                 </div>
                 <button
                   type="button"
-                  onClick={() => appendGenre('')}
+                  onClick={() => appendGenre({genre: ''})}
                   className={TAILWIND_FORM_CLASSES['ADD_BUTTON']}
                 >
                   <IoAddOutline size={20} className="mr-1"/>
@@ -365,6 +382,8 @@ const EditBook = () => {
                   {tagFields.map((item, index) => (
                     <div key={item.id} className={TAILWIND_FORM_CLASSES['FIELD_ARR_COL_WRAPPER']}>
                         <Controller
+                          name={`tags.${index}.tag`}
+                          control={control}
                           render={({ field }) => (
                             <div className={TAILWIND_FORM_CLASSES['FIELD_ARR_ROW_WRAPPER']}>
                               <input
@@ -380,8 +399,6 @@ const EditBook = () => {
                               </button>
                             </div>
                           )}
-                          name={`tags.${index}`}
-                          control={control}
                         />
                       {errors.tags?.[index] && (
                         <p className={TAILWIND_FORM_CLASSES['ERROR']}>{errors.tags[index]?.message}</p>
@@ -391,7 +408,7 @@ const EditBook = () => {
                 </div>
                 <button
                   type="button"
-                  onClick={() => appendTag('')}
+                  onClick={() => appendTag({tag: ''})}
                   className={TAILWIND_FORM_CLASSES['ADD_BUTTON']}
                 >
                   <IoAddOutline size={20} className="mr-1"/>
@@ -592,7 +609,7 @@ const EditBook = () => {
           </form>
 
           {/* Delete Modal */}
-          <Modal opened={opened} onClose={closeModal} title="Danger zone">
+          <Modal opened={opened} onClose={closeModal}>
             <div className="flex items-center justify-center">
               <IoIosWarning size={30} />
             </div>

@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage, StateStorage } from 'zustand/middleware';
 
 export interface SearchResult {
+  id?: number | undefined;
   title: string;
   description: string;
   language: string;
@@ -65,7 +66,9 @@ const useSearchStore = create<SearchStoreState>()(
             results: {
               ...state.results,
               ...results.reduce((acc, result) => {
-                acc[result.id] = result;
+                if (result.id !== undefined) {
+                  acc[result.id] = result;
+                }
                 return acc;
               }, {} as { [id: number]: SearchResult }),
             },

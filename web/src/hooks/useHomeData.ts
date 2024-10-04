@@ -3,7 +3,7 @@ import { useUser } from './useUser';
 import useFetchBooks from './useFetchBooks';
 import useFetchBooksFormat from './useFetchBooksFormat';
 import useFetchHomepageData from './useFetchHomepageData';
-import { AggregatedHomePageData } from '../types/api';
+import { AggregatedHomePageData, BooksByFormat } from '../types/api';
 
 const useHomePageData = () => {
   const { data: user, isLoading: isUserLoading, isAuthenticated } = useUser();
@@ -37,8 +37,15 @@ const useHomePageData = () => {
   }, [errorBooks, errorFormat, errorStats]);
 
   const data: AggregatedHomePageData | null = useMemo(() => {
-    if (books && booksByFormat && homepageStats) {
-      return { books, booksByFormat, homepageStats };
+    if (books && homepageStats && booksByFormat) {
+
+      const formattedBooksByFormat: BooksByFormat = {
+        physical: Array.isArray(booksByFormat.physical)? booksByFormat.physical : [],
+        eBook: Array.isArray(booksByFormat.eBook) ? booksByFormat.eBook : [],
+        audioBook: Array.isArray(booksByFormat.audioBook) ?  booksByFormat.audioBook : [],
+      };
+
+      return { books, booksByFormat: formattedBooksByFormat, homepageStats };
     }
     return null;
   }, [books, booksByFormat, homepageStats]);

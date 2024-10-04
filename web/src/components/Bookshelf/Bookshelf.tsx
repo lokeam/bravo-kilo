@@ -11,9 +11,16 @@ interface BookShelfProps {
 }
 
 const Bookshelf = ({ books, category, isLoading }: BookShelfProps) => {
+  // const lastUpdatedBooks = books?.slice().sort((a, b) => {
+  //   return new Date(b.lastUpdated).getTime() - new Date(a.lastUpdated).getTime();
+  // });
+
   const lastUpdatedBooks = books?.slice().sort((a, b) => {
-    return new Date(b.lastUpdated).getTime() - new Date(a.lastUpdated).getTime();
+    const dateA = a.lastUpdated ? new Date(a.lastUpdated).getTime() : 0;
+    const dateB = b.lastUpdated ? new Date(b.lastUpdated).getTime() : 0;
+    return dateB - dateA;
   });
+
 
   return (
     <section className="bookshelf_wrapper pb-4 md:pb-4 flex flex-col relative w-full max-w-7xl">
