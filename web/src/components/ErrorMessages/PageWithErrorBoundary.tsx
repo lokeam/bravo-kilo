@@ -1,3 +1,4 @@
+import React from 'react';
 import { ReactNode } from 'react';
 import { ErrorBoundary } from 'react-error-boundary';
 import ErrorFallbackPage from '../../pages/ErrorFallback';
@@ -7,7 +8,7 @@ interface PageWithErrorBoundaryProps {
   fallbackMessage: string;
 }
 
-function PageWithErrorBoundary({ children, fallbackMessage }: PageWithErrorBoundaryProps) {
+const PageWithErrorBoundary: React.FC<PageWithErrorBoundaryProps> = ({ children, fallbackMessage }) => {
   return (
     <ErrorBoundary FallbackComponent={(props) => <ErrorFallbackPage {...props} message={fallbackMessage} />}>
       {children}

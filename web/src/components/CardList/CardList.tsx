@@ -5,7 +5,6 @@ import CardListItemTag from './CardListItemTag';
 import { motion } from 'framer-motion';
 import { Book } from '../../types/api';
 
-
 type CardListItemDefault = {
   books: Book[];
   isSearchPage?: boolean;

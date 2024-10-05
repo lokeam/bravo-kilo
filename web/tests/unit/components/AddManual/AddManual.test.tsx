@@ -4,7 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import userEvent from '@testing-library/user-event';
 import { test, expect, afterEach, beforeEach, describe, vi,  } from 'vitest';
 import useAddBook from '../../../../src/hooks/useAddBook';
-import AddManual from '../../../../src/pages/AddManual';
+import ManualAddBook from '../../../../src/pages/ManualAddBook';
 import '@testing-library/jest-dom';
 
 vi.mock('react-router-dom', async (importOriginal) => {
@@ -18,7 +18,7 @@ vi.mock('react-router-dom', async (importOriginal) => {
 
 vi.mock('../../../../src/hooks/useAddBook');
 
-describe('AddManual Component', () => {
+describe('ManualAddBook Component', () => {
   beforeEach(() => {
     vi.mocked(useAddBook).mockReturnValue({ mutate: vi.fn() });
   });
@@ -31,7 +31,7 @@ describe('AddManual Component', () => {
   test('allows user to check and uncheck formats', () => {
     render(
       <MemoryRouter>
-        <AddManual />
+        <ManualAddBook />
       </MemoryRouter>
     );
 
@@ -68,7 +68,7 @@ describe('AddManual Component', () => {
   test('handles form input and displays validation errors correctly', async () => {
     render(
       <MemoryRouter>
-        <AddManual />
+        <ManualAddBook />
       </MemoryRouter>
     );
 
@@ -103,7 +103,7 @@ describe('AddManual Component', () => {
 
   // Test validation
   test('shows validation errors for missing or invalid data', async () => {
-    render(<AddManual />);
+    render(<ManualAddBook />);
 
     console.log('Before clicking submit'); // This will log before the click event
 
@@ -119,7 +119,7 @@ describe('AddManual Component', () => {
   test('handles adding and removing authors correctly', async () => {
     render(
       <MemoryRouter>
-        <AddManual />
+        <ManualAddBook />
       </MemoryRouter>
     );
 

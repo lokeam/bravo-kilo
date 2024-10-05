@@ -9,7 +9,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import Home from './pages/Home';
 import EditBook from './pages/EditBook';
 import AddBookGateway from './pages/AddBookGateway';
-import AddManual from './pages/AddManual';
+import ManualAddBook from './pages/ManualAddBook';
 import AddUpload from './pages/AddUpload';
 import Search from './pages/Search';
 import Settings from './pages/Settings';
@@ -38,8 +38,8 @@ function App() {
                   <Route path="/library/:authorID" element={<AuthorGenre />} />
                   <Route path="/library/:genreID" element={<AuthorGenre /> }/>
                   <Route path="/library/books/add/gateway" element={<AddBookGateway />} />
-                  <Route path="/library/books/add/manual" element={<AddManual /> }/>
-                  <Route path="/library/books/add/search" element={<AddManual /> }/>
+                  <Route path="/library/books/add/manual" element={<ManualAddBook /> }/>
+                  <Route path="/library/books/add/search" element={<ManualAddBook /> }/>
                   <Route path="/library/books/add/upload" element={<AddUpload /> }/>
                   <Route path="/library/books/search" element={<Search />} />
                   <Route path="/library/books/:bookTitle" element={<BookDetail />} />
