@@ -15,10 +15,12 @@ apiClient.interceptors.response.use(
     const csrfTokenFromHeader = response.headers['x-csrf-token'];
     if (csrfTokenFromHeader) {
       csrfToken = csrfTokenFromHeader;
+      console.log('CSRF token captured:', csrfToken);
     }
     return response;
   },
   async error => {
+    console.error('Response error:', error);
     const originalRequest = error.config;
 
     // Extract the URL path
@@ -54,10 +56,12 @@ apiClient.interceptors.request.use(
   config => {
     if (csrfToken && ['post', 'put', 'delete'].includes(config.method?.toLowerCase() || '')) {
       config.headers['X-CSRF-Token'] = csrfToken;
+      console.log('CSRF token added to request:', csrfToken);
     }
     return config;
   },
   error => {
+    console.error('Request error:', error);
     return Promise.reject(error)
   }
 );

@@ -11,10 +11,15 @@ interface LoginData {
 }
 
 const login = async (loginData: LoginData): Promise<LoginResponse> => {
-  const response = await axios.post('google/signin', loginData);
-
-  document.cookie = `token=${response.data.token}; HttpOnly; Secure`
-  return response.data;
+  try {
+    const response = await axios.post('google/signin', loginData);
+    document.cookie = `token=${response.data.token}; HttpOnly; Secure`;
+    console.log('Login successful, token set:', response.data.token);
+    return response.data;
+  } catch (error) {
+    console.error('Login error:', error);
+    throw error;
+  }
 }
 
 export const useLogin = () => {
@@ -24,12 +29,17 @@ export const useLogin = () => {
 }
 
 const fetchProtectedData = async () => {
-  const token = document.cookie.split('; ').find(row => row.startsWith('token='))?.split('=')[1];
-  const response = await axios.get('/api/protected', {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-
-  return response.data;
+  try {
+    const token = document.cookie.split('; ').find(row => row.startsWith('token='))?.split('=')[1];
+    const response = await axios.get('/api/protected', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    console.log('Protected data fetched:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching protected data:', error);
+    throw error;
+  }
 };
 
 export const useProtectedData = () => {

@@ -272,7 +272,7 @@ func (h *AuthHandlers) HandleGoogleCallback(response http.ResponseWriter, reques
 	})
 
 	// Redirect to the frontend dashboard
-	dashboardURL := fmt.Sprintf("http://localhost:5173/library")
+	dashboardURL := "http://localhost:5173/library"
 	http.Redirect(response, request, dashboardURL, http.StatusSeeOther)
 
 	h.logger.Info("JWT successfully sent to FE with status code: ", "info", http.StatusSeeOther)
