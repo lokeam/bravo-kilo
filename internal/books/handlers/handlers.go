@@ -11,12 +11,12 @@ import (
 	"github.com/lokeam/bravo-kilo/internal/books/services"
 
 	"github.com/go-playground/validator/v10"
-	"github.com/lokeam/bravo-kilo/internal/shared/utils"
+	"github.com/lokeam/bravo-kilo/internal/shared/types"
 	"github.com/microcosm-cc/bluemonday"
 	"golang.org/x/time/rate"
 )
 
-var claims utils.Claims
+var claims types.Claims
 var jwtKey = []byte(os.Getenv("JWT_SECRET_KEY"))
 
 // Handlers struct to hold the logger, models, and new components

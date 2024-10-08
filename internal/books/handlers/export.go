@@ -3,12 +3,13 @@ package handlers
 import (
 	"net/http"
 
-	"github.com/lokeam/bravo-kilo/internal/shared/utils"
+	"github.com/lokeam/bravo-kilo/config"
+	"github.com/lokeam/bravo-kilo/internal/shared/jwt"
 )
 
 // HandleExportUserBooks exports a user's books as a CSV file
 func (h *BookHandlers) HandleExportUserBooks(response http.ResponseWriter, request *http.Request) {
-	userID, err := utils.ExtractUserIDFromJWT(request)
+	userID, err := jwt.ExtractUserIDFromJWT(request, config.AppConfig.JWTPublicKey)
 	if err != nil {
 		h.logger.Error("Error extracting userID from JWT", "error", err)
 		http.Error(response, "Unauthorized access", http.StatusUnauthorized)

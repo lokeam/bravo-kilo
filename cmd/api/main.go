@@ -5,6 +5,8 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/joho/godotenv"
 	factory "github.com/lokeam/bravo-kilo/cmd/factory"
@@ -12,6 +14,7 @@ import (
 	"github.com/lokeam/bravo-kilo/internal/books/handlers"
 	"github.com/lokeam/bravo-kilo/internal/shared/driver"
 	authHandlers "github.com/lokeam/bravo-kilo/internal/shared/handlers/auth"
+	"github.com/lokeam/bravo-kilo/internal/shared/jwt"
 	"github.com/lokeam/bravo-kilo/internal/shared/logger"
 )
 
@@ -25,6 +28,25 @@ type application struct {
 }
 
 func main() {
+	// Ensure logs are flushed on exit
+	defer func() {
+		if err := recover(); err != nil {
+				logger.Log.Error("Panic occurred", "error", err)
+		}
+		os.Stdout.Sync()
+	}()
+
+    // Set up signal handling
+    sigChan := make(chan os.Signal, 1)
+    signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
+    go func() {
+        <-sigChan
+        logger.Log.Info("Received interrupt, shutting down...")
+        os.Stdout.Sync()
+        os.Exit(0)
+    }()
+
 	// Load environment variables
 	err := godotenv.Load(".env")
 	handler := slog.NewJSONHandler(os.Stdout, nil)
@@ -35,6 +57,9 @@ func main() {
 	// Initialize logger
 	logger.Init()
 	log := logger.Log
+
+	// Init jwt logger
+	jwt.InitLogger(log)
 
 	// Check if upload directory is set
 	uploadDir := os.Getenv("UPLOAD_DIR")
@@ -61,7 +86,7 @@ func main() {
 	// Init factory for api
 	factory, err := factory.NewFactory(db.SQL, log)
 	if err != nil {
-		log.Error("Error initializing factory", err)
+		log.Error("Error initializing factory", "error",err)
 		return
 	}
 

@@ -1,12 +1,10 @@
 package utils
 
 import (
-	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"net/url"
-	"os"
 	"regexp"
 	"strings"
 
@@ -44,7 +42,6 @@ type IndustryID struct {
 	Type         string  `json:"type"`
 }
 
-var jwtKey = []byte(os.Getenv("JWT_SECRET_KEY"))
 var logger *slog.Logger
 
 func InitLogger(l *slog.Logger) {
@@ -171,26 +168,6 @@ func IsFromAllowedDomain(domain string, allowedDomains []string) bool {
 func SetCSPHeaders(response http.ResponseWriter) {
 	csp := "default-src 'self'; img-src 'self' https://google.com https://unsplash.com"
 	response.Header().Set("Content-Security-Policy", csp)
-}
-
-func ExtractUserIDFromJWT(request *http.Request) (int, error) {
-	cookie, err := request.Cookie("token")
-	if err != nil {
-		return 0, errors.New("no token cookie")
-	}
-
-	tokenStr := cookie.Value
-	claims := &Claims{}
-
-	// Parse JWT token
-	token, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (interface{}, error) {
-		return jwtKey, nil
-	})
-	if err != nil || !token.Valid {
-		return 0, errors.New("invalid token")
-	}
-
-	return claims.UserID, nil
 }
 
 // FindDifference returns the elements in A but not in B.

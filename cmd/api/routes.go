@@ -32,8 +32,9 @@ func (app *application) routes(
 	mux := chi.NewRouter()
 
 	mux.Use(chimiddleware.Recoverer)
+	mux.Use(middleware.LogHeaders)
 	mux.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{"https://*", "http://*"},
+		AllowedOrigins:   []string{"http://localhost:5173"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
 		ExposedHeaders:   []string{"Link", "X-CSRF-Token"},
@@ -70,7 +71,7 @@ func (app *application) routes(
 			r.Get("/books/genres", bookHandlers.HandleGetBooksByGenres)
 			r.Get("/books/homepage", bookHandlers.HandleGetHomepageData)
 			r.Get("/books/tags", bookHandlers.HandleGetBooksByTags)
-			// Apply rate limiting on uploads and exports
+			// Apply rate limiting on uploads + exports
 			r.With(middleware.RateLimiter).Post("/upload", bookHandlers.UploadCSV)
 			r.With(middleware.RateLimiter).Get("/export", bookHandlers.HandleExportUserBooks)
 		})

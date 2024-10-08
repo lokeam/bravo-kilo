@@ -11,11 +11,17 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
+	"github.com/lokeam/bravo-kilo/config"
+	"github.com/lokeam/bravo-kilo/internal/shared/crypto"
 	"github.com/lokeam/bravo-kilo/internal/shared/models"
 	"github.com/lokeam/bravo-kilo/internal/shared/transaction"
+	"github.com/lokeam/bravo-kilo/internal/shared/types"
 	"github.com/lokeam/bravo-kilo/internal/shared/utils"
+
+	"errors"
 
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/golang-jwt/jwt/v5"
@@ -28,15 +34,13 @@ type AuthHandlers struct {
 	dbManager  transaction.DBManager
 }
 
-var claims utils.Claims
 var (
 	oidcProvider *oidc.Provider
 	oidcVerifier *oidc.IDTokenVerifier
 	oauth2Config *oauth2.Config
-	jwtKey =     []byte(os.Getenv("JWT_SECRET_KEY"))
 	isProduction bool
 )
-
+var ErrNoRefreshToken = errors.New("no valid refresh token found")
 func init() {
 	env := os.Getenv("ENV")
 	if env == "" {
@@ -119,7 +123,7 @@ func (h *AuthHandlers) HandleGoogleSignIn(response http.ResponseWriter, request 
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 		Secure:   isProduction,
-		Path:     "/", // Why are we setting path here
+		Path:     "/",
 	})
 
 	url := oauth2Config.AuthCodeURL(
@@ -242,15 +246,20 @@ func (h *AuthHandlers) HandleGoogleCallback(response http.ResponseWriter, reques
 
 	// Create a JWT for the session
 	expirationTime := time.Now().Add(60 * time.Minute)
-	claims := &utils.Claims{
+	claims := &types.Claims{
 			UserID: userId,
 			RegisteredClaims: jwt.RegisteredClaims{
 					ExpiresAt: jwt.NewNumericDate(expirationTime),
 			},
 	}
 
-	jwtToken := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	jwtString, err := jwtToken.SignedString(jwtKey)
+	if config.AppConfig.JWTPrivateKey == nil {
+		h.logger.Error("JWT private key not found")
+		http.Error(response, "JWT private key not found", http.StatusInternalServerError)
+		return
+	}
+
+	jwtString, err := crypto.SignToken(claims, config.AppConfig.JWTPrivateKey)
 	if err != nil {
 			h.logger.Error("Error generating JWT", "error", err)
 			http.Error(response, "Error generating JWT", http.StatusInternalServerError)
@@ -269,12 +278,38 @@ func (h *AuthHandlers) HandleGoogleCallback(response http.ResponseWriter, reques
 			Secure:   isProduction,
 			SameSite: http.SameSiteLaxMode,
 			Path:     "/",
+			Domain: "",
 	})
+	h.logger.Info("JWT cookie set",
+		"name", "token",
+		"value", jwtString[:10]+"...", // Log only the first 10 characters for security
+		"expires", expirationTime,
+		"secure", isProduction,
+		"sameSite", http.SameSiteLaxMode,
+		"path", "/",
+	)
+	// Set a non-HttpOnly cookie for testing
+	http.SetCookie(response, &http.Cookie{
+		Name:     "test_cookie",
+		Value:    "test_value",
+		Expires:  time.Now().Add(24 * time.Hour),
+		HttpOnly: false,
+		Secure:   false,
+		SameSite: http.SameSiteLaxMode,
+		Path:     "/",
+	})
+	h.logger.Info("Test cookie set",
+		"name", "test_cookie",
+		"value", "test_value",
+	)
 
 	// Redirect to the frontend dashboard
 	dashboardURL := "http://localhost:5173/library"
 	http.Redirect(response, request, dashboardURL, http.StatusSeeOther)
-
+	h.logger.Info("Redirecting to frontend",
+		"url", dashboardURL,
+		"statusCode", http.StatusSeeOther,
+	)
 	h.logger.Info("JWT successfully sent to FE with status code: ", "info", http.StatusSeeOther)
 }
 
@@ -289,18 +324,28 @@ func (h *AuthHandlers) GetUserAccessToken(request *http.Request) (*oauth2.Token,
 	}
 
 	tokenStr := cookie.Value
-	claims := &utils.Claims{}
-	token, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (interface{}, error) {
-			return jwtKey, nil
-	})
+	token, err := crypto.VerifyToken(tokenStr, config.AppConfig.JWTPublicKey)
 	if err != nil || !token.Valid {
 			h.logger.Error("Error: Invalid token", "error", err)
 			return nil, fmt.Errorf("invalid token")
 	}
 
+	claims, ok := token.Claims.(*types.Claims)
+	if !ok {
+		h.logger.Error("Error: Claims are not of type *types.Claims", "error", err)
+		return nil, fmt.Errorf("invalid token claims")
+	}
+
 	// Get the refresh token for the user from the database
+	h.logger.Info("Attempting to retrieve refresh token", "userID", claims.UserID)
+
+	// Get refresh token from DB
 	refreshToken, err := h.models.Token.GetRefreshTokenByUserID(claims.UserID)
 	if err != nil {
+		if strings.Contains(err.Error(), "No refresh token found") {
+			return nil, ErrNoRefreshToken
+		}
+
 			h.logger.Error("Error retrieving refresh token from DB", "error", err)
 			return nil, fmt.Errorf("could not retrieve refresh token from DB")
 	}
@@ -324,41 +369,65 @@ func (h *AuthHandlers) GetUserAccessToken(request *http.Request) (*oauth2.Token,
 	return newToken, nil
 }
 
-
 // Verify JWT Token
 func (h *AuthHandlers) HandleVerifyToken(response http.ResponseWriter, request *http.Request) {
+	h.logger.Info("********************************")
+	h.logger.Info("HandleVerifyToken called")
+
+  // Log all cookies
+  for _, cookie := range request.Cookies() {
+		h.logger.Info("Received cookie", "name", cookie.Name, "value", cookie.Value)
+	}
+
 	cookie, err := request.Cookie("token")
 	if err != nil {
-    h.logger.Error("Error: No token cookie", "error", err)
-    http.Error(response, "Error: No token cookie", http.StatusUnauthorized)
-    return
+			h.logger.Error("Error: No token cookie", "error", err)
+			http.Error(response, "Error: No token cookie", http.StatusUnauthorized)
+			return
 	}
+	h.logger.Info("Token cookie found", "cookieValue", cookie.Value[:10]+"...")
 
 	tokenStr := cookie.Value
-	claims := &utils.Claims{}
 
-	token, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (interface{}, error) {
-			return jwtKey, nil
-	})
-	if err != nil || !token.Valid {
-    h.logger.Error("Error: Invalid token", "error", err)
-    http.Error(response, "Invalid token", http.StatusUnauthorized)
-    return
+	token, err := crypto.VerifyToken(tokenStr, config.AppConfig.JWTPublicKey)
+	if err != nil {
+			h.logger.Error("Error verifying token", "error", err)
+			http.Error(response, "Invalid token", http.StatusUnauthorized)
+			return
 	}
+
+	h.logger.Info("Token verified successfully")
+
+	claims, ok := token.Claims.(*types.Claims)
+	if !ok {
+			h.logger.Error("Error: Claims are not of type *types.Claims")
+			http.Error(response, "Invalid token claims", http.StatusUnauthorized)
+			return
+	}
+
+	// Log individual claims
+	h.logger.Info("Parsed claims", "userID", claims.UserID, "expiresAt", claims.ExpiresAt)
 
 	user, err := h.models.User.GetByID(claims.UserID)
 	if err != nil {
-    h.logger.Error("Error: User not found", "error", err)
-    http.Error(response, "User not found", http.StatusInternalServerError)
-    return
+			h.logger.Error("Error: User not found", "error", err, "userID", claims.UserID)
+			http.Error(response, "User not found", http.StatusInternalServerError)
+			return
 	}
 
-	h.logger.Info("User info retrieved!", "user", user)
+	h.logger.Info("User info retrieved", "userID", user.ID, "email", user.Email)
 
 	response.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(response).Encode(map[string]interface{}{
+	err = json.NewEncoder(response).Encode(map[string]interface{}{
 			"user": user,
 	})
+	if err != nil {
+			h.logger.Error("Error encoding user data to JSON", "error", err)
+			http.Error(response, "Error encoding response", http.StatusInternalServerError)
+			return
+	}
+
+	h.logger.Info("HandleVerifyToken completed successfully - text updated")
 }
 
 // Refresh Token
@@ -374,32 +443,51 @@ func (h *AuthHandlers) HandleRefreshToken(response http.ResponseWriter, request 
 	oldTokenStr := cookie.Value
 
 	// Parse old token
-	claims := &utils.Claims{}
-	token, err := jwt.ParseWithClaims(oldTokenStr, claims, func(token *jwt.Token) (interface{}, error) {
-		return jwtKey, nil
-	})
+	claims := &types.Claims{}
+	token, err := crypto.VerifyToken(oldTokenStr, config.AppConfig.JWTPublicKey)
 	if err != nil || !token.Valid {
 		h.logger.Error("Error: Invalid refresh token", "error", err)
 		http.Error(response, "Invalid refresh token", http.StatusUnauthorized)
 		return
 	}
 
+	// Extract claims from the token
+	claims, ok := token.Claims.(*types.Claims)
+	if !ok {
+		h.logger.Error("Error: Claims are not of type *types.Claims")
+		http.Error(response, "Invalid token claims", http.StatusUnauthorized)
+		return
+	}
+
+    // Check if the token is about to expire
+	if time.Until(claims.ExpiresAt.Time) > 5*time.Minute {
+		h.logger.Info("Token is not close to expiration, no need to refresh")
+		http.Error(response, "Token is not close to expiration", http.StatusBadRequest)
+		return
+	}
+
 	// Generate new token (1 week)
 	expirationTime := time.Now().Add(7 * 24 * time.Hour)
-	newClaims := &utils.Claims{
+	newClaims := &types.Claims{
 		UserID: claims.UserID,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(expirationTime),
 		},
 	}
 
-	newToken := jwt.NewWithClaims(jwt.SigningMethodHS256, newClaims)
-	newTokenStr, err := newToken.SignedString(jwtKey)
+	newTokenStr, err := crypto.SignToken(newClaims, config.AppConfig.JWTPrivateKey)
 	if err != nil {
 		h.logger.Error("Error generating new JWT", "error", err)
 		http.Error(response, "Error generating new JWT", http.StatusInternalServerError)
 		return
 	}
+
+    // Log the values before calling Rotate
+    h.logger.Info("Rotating token",
+			"userID", claims.UserID,
+			"newToken", newTokenStr,
+			"oldToken", oldTokenStr,
+			"expiry", expirationTime)
 
 	// Rotate the refresh one
 	err = h.models.Token.Rotate(claims.UserID, newTokenStr, oldTokenStr, expirationTime)
@@ -446,11 +534,9 @@ func (h *AuthHandlers) HandleSignOut(response http.ResponseWriter, request *http
 	}
 
 	tokenStr := cookie.Value
-	claims := &utils.Claims{}
+	claims := &types.Claims{}
 
-	token, err := jwt.ParseWithClaims(tokenStr, claims, func(t *jwt.Token) (interface{}, error) {
-		return jwtKey, nil
-	})
+	token, err := crypto.VerifyToken(tokenStr, config.AppConfig.JWTPublicKey)
 	if err != nil || !token.Valid {
 		h.logger.Error("Error: Invalid token", "error", err)
 		http.Error(response, "Error: Invalid token", http.StatusUnauthorized)
@@ -478,11 +564,9 @@ func (h *AuthHandlers) HandleDeleteAccount(response http.ResponseWriter, request
 	}
 
 	tokenStr := cookie.Value
-	claims := &utils.Claims{}
+	claims := &types.Claims{}
 
-	token, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (interface{}, error) {
-		return jwtKey, nil
-	})
+	token, err := crypto.VerifyToken(tokenStr, config.AppConfig.JWTPublicKey)
 	if err != nil || !token.Valid {
 		h.logger.Error("Error: Invalid token", "error", err)
 		http.Error(response, "Error: Invalid token", http.StatusUnauthorized)
@@ -541,4 +625,3 @@ func (h *AuthHandlers) HandleDeleteAccount(response http.ResponseWriter, request
 	h.logger.Info("User account marked for deletion and logged out", "userID", userID)
 	response.WriteHeader(http.StatusOK)
 }
-

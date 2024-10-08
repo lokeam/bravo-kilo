@@ -7,7 +7,9 @@ import (
 	"strconv"
 
 	"github.com/lokeam/bravo-kilo/cmd/middleware"
+	"github.com/lokeam/bravo-kilo/config"
 	"github.com/lokeam/bravo-kilo/internal/books/repository"
+	"github.com/lokeam/bravo-kilo/internal/shared/jwt"
 	"github.com/lokeam/bravo-kilo/internal/shared/utils"
 
 	"golang.org/x/text/cases"
@@ -20,7 +22,7 @@ import (
 // Validate Ownership
 func (h *BookHandlers) ValidateBookOwnership(request *http.Request) (int, int, error) {
 	// Extract user ID from JWT
-	userID, err := utils.ExtractUserIDFromJWT(request)
+	userID, err := jwt.ExtractUserIDFromJWT(request, config.AppConfig.JWTPublicKey)
 	if err != nil {
 			return 0, 0, fmt.Errorf("unauthorized: %w", err)
 	}
@@ -47,16 +49,19 @@ func (h *BookHandlers) ValidateBookOwnership(request *http.Request) (int, int, e
 
 // Get all User Books
 func (h *BookHandlers) HandleGetAllUserBooks(response http.ResponseWriter, request *http.Request) {
+	h.logger.Info("HandleGetAllUserBooks called")
+
 	// Set Content Security Policy headers
 	utils.SetCSPHeaders(response)
 
 	// Extract user ID from JWT
-	userID, err := utils.ExtractUserIDFromJWT(request)
+	userID, err := jwt.ExtractUserIDFromJWT(request, config.AppConfig.JWTPublicKey)
 	if err != nil {
 		h.logger.Error("Error extracting user ID", "error", err)
 		http.Error(response, err.Error(), http.StatusUnauthorized)
 		return
 	}
+	h.logger.Info("User ID extracted successfully", "userID", userID)
 
 	books, err := h.bookRepo.GetAllBooksByUserID(userID)
 	if err != nil {
@@ -64,6 +69,7 @@ func (h *BookHandlers) HandleGetAllUserBooks(response http.ResponseWriter, reque
 		http.Error(response, "Error fetching books", http.StatusInternalServerError)
 		return
 	}
+	h.logger.Info("Books fetched successfully", "count", len(books))
 
 	// Reverse Normalize Book Data
 	h.bookService.ReverseNormalizeBookData(&books)
@@ -75,18 +81,22 @@ func (h *BookHandlers) HandleGetAllUserBooks(response http.ResponseWriter, reque
 
 	response.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(response).Encode(dbResponse); err != nil {
+		h.logger.Error("Error encoding response", "error", err)
 		http.Error(response, "Error encoding response", http.StatusInternalServerError)
 		return
 	}
+	h.logger.Info("HandleGetAllUserBooks completed successfully")
 }
 
 // Retrieve books by a specific author
 func (h *BookHandlers) HandleGetBooksByAuthors(response http.ResponseWriter, request *http.Request) {
+	h.logger.Info("HandleGetBooksByAuthors called")
+
 	// Set Content Security Policy headers
 	utils.SetCSPHeaders(response)
 
 	// Grab token from cookie
-	userID, err := utils.ExtractUserIDFromJWT(request)
+	userID, err := jwt.ExtractUserIDFromJWT(request, config.AppConfig.JWTPublicKey)
 	if err != nil {
 		h.logger.Error("Error extracting user ID", "error", err)
 		http.Error(response, err.Error(), http.StatusUnauthorized)
@@ -100,11 +110,14 @@ func (h *BookHandlers) HandleGetBooksByAuthors(response http.ResponseWriter, req
 			http.Error(response, "Error fetching books by authors", http.StatusInternalServerError)
 			return
 	}
+	h.logger.Info("Books by authors fetched successfully", "authorCount", len(booksByAuthors))
 
 	response.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(response).Encode(booksByAuthors); err != nil {
+			h.logger.Error("Error encoding response", "error", err)
 			http.Error(response, "Error encoding response", http.StatusInternalServerError)
 	}
+	h.logger.Info("HandleGetBooksByAuthors completed successfully")
 }
 
 // Get Single Book by ID
@@ -113,7 +126,7 @@ func (h *BookHandlers) HandleGetBookByID(response http.ResponseWriter, request *
 	utils.SetCSPHeaders(response)
 
 	// Extract and ignore userID from JWT
-	_, err := utils.ExtractUserIDFromJWT(request)
+	_, err := jwt.ExtractUserIDFromJWT(request, config.AppConfig.JWTPublicKey)
 	if err != nil {
 		h.logger.Error("Error extracting user ID", "error", err)
 		http.Error(response, err.Error(), http.StatusUnauthorized)
@@ -149,7 +162,7 @@ func (h *BookHandlers) HandleGetBookByID(response http.ResponseWriter, request *
 // Get a Single Book's ID by title
 func (h *BookHandlers) HandleGetBookIDByTitle(response http.ResponseWriter, request *http.Request) {
 	// Extract and ignore user ID from JWT
-	_, err := utils.ExtractUserIDFromJWT(request)
+	_, err := jwt.ExtractUserIDFromJWT(request, config.AppConfig.JWTPublicKey)
 	if err != nil {
 		h.logger.Error("Error extracting userID", "error", err)
 		http.Error(response, err.Error(), http.StatusUnauthorized)
@@ -326,16 +339,19 @@ func (h *BookHandlers) HandleDeleteBook(response http.ResponseWriter, request *h
 
 // Sorting - Get Books by Format
 func (h *BookHandlers) HandleGetBooksByFormat(response http.ResponseWriter, request *http.Request) {
+	h.logger.Info("HandleGetBooksByFormat called")
+
 	// Set Content Security Policy headers
 	utils.SetCSPHeaders(response)
 
 	// Extract user ID from JWT
-	userID, err := utils.ExtractUserIDFromJWT(request)
+	userID, err := jwt.ExtractUserIDFromJWT(request, config.AppConfig.JWTPublicKey)
 	if err != nil {
 		h.logger.Error("Error extracting user ID", "error", err)
 		http.Error(response, err.Error(), http.StatusUnauthorized)
 		return
 	}
+	h.logger.Info("Valid user ID received from token", "userID", userID)
 
 	// Get books by format
 	booksByFormat, err := h.formatRepo.GetAllBooksByFormat(userID)
@@ -344,6 +360,7 @@ func (h *BookHandlers) HandleGetBooksByFormat(response http.ResponseWriter, requ
 		http.Error(response, "Error fetching books by format", http.StatusInternalServerError)
 		return
 	}
+	h.logger.Info("Books by format fetched successfully", "formatCount", len(booksByFormat))
 
 	for format, books := range booksByFormat {
 		h.bookService.ReverseNormalizeBookData(&books)
@@ -351,16 +368,22 @@ func (h *BookHandlers) HandleGetBooksByFormat(response http.ResponseWriter, requ
 	}
 
 	response.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(response).Encode(booksByFormat)
+	if err := json.NewEncoder(response).Encode(booksByFormat); err != nil {
+		h.logger.Error("Error encoding response", "error", err)
+		http.Error(response, "Error encoding response", http.StatusInternalServerError)
+	}
+	h.logger.Info("HandleGetBooksByFormat completed successfully")
 }
 
 // Sorting - Get Books by Genre
 func (h *BookHandlers) HandleGetBooksByGenres(response http.ResponseWriter, request *http.Request) {
+	h.logger.Info("HandleGetBooksByGenres called")
+
 	// Set Content Security Policy headers
 	utils.SetCSPHeaders(response)
 
 	// Extract user ID from JWT
-	userID, err := utils.ExtractUserIDFromJWT(request)
+	userID, err := jwt.ExtractUserIDFromJWT(request, config.AppConfig.JWTPublicKey)
 	if err != nil {
 		h.logger.Error("Error extracting user ID", "error", err)
 		http.Error(response, err.Error(), http.StatusUnauthorized)
@@ -375,22 +398,25 @@ func (h *BookHandlers) HandleGetBooksByGenres(response http.ResponseWriter, requ
 		http.Error(response, "Error fetching books by genres", http.StatusInternalServerError)
 		return
 	}
-
-	// h.logger.Info("Books fetched successfully", "booksByGenres", booksByGenres)
+	h.logger.Info("Books by genres fetched successfully", "genreCount", len(booksByGenres))
 
 	response.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(response).Encode(booksByGenres); err != nil {
+		h.logger.Error("Error encoding response", "error", err)
 		http.Error(response, "Error encoding response", http.StatusInternalServerError)
 	}
+	h.logger.Info("HandleGetBooksByGenres completed successfully")
 }
 
 // Sorting - Get Books by Tag
 func (h *BookHandlers) HandleGetBooksByTags(response http.ResponseWriter, request *http.Request) {
+	h.logger.Info("HandleGetBooksByTags called")
+
 	// Set Content Security Policy headers
 	utils.SetCSPHeaders(response)
 
 	// Extract user ID from JWT
-	userID, err := utils.ExtractUserIDFromJWT(request)
+	userID, err := jwt.ExtractUserIDFromJWT(request, config.AppConfig.JWTPublicKey)
 	if err != nil {
 		h.logger.Error("Error extracting user ID", "error", err)
 		http.Error(response, err.Error(), http.StatusUnauthorized)
@@ -398,8 +424,6 @@ func (h *BookHandlers) HandleGetBooksByTags(response http.ResponseWriter, reques
 	}
 	h.logger.Info("Valid user ID received from token", "userID", userID)
 
-	h.logger.Info("--------")
-	h.logger.Info("HandleGetBooksByTags, about to call tag models")
 	// Get the request context and pass it to GetAllBooksByTags
 	booksByTags, err := h.tagRepo.GetAllBooksByTags(request.Context(), userID)
 	if err != nil {
@@ -407,6 +431,7 @@ func (h *BookHandlers) HandleGetBooksByTags(response http.ResponseWriter, reques
 		http.Error(response, "Error fetching books by tags", http.StatusInternalServerError)
 		return
 	}
+	h.logger.Info("Books by tags fetched successfully", "tagCount", len(booksByTags))
 
 	// Set content type and respond with JSON
 	response.Header().Set("Content-Type", "application/json")
@@ -414,6 +439,7 @@ func (h *BookHandlers) HandleGetBooksByTags(response http.ResponseWriter, reques
 		h.logger.Error("Error encoding books by tags response", "error", err)
 		http.Error(response, "Error encoding response", http.StatusInternalServerError)
 	}
+	h.logger.Info("HandleGetBooksByTags completed successfully")
 }
 
 
@@ -423,7 +449,7 @@ func (h *BookHandlers) HandleGetHomepageData(response http.ResponseWriter, reque
 	utils.SetCSPHeaders(response)
 
 	// Extract user ID from JWT
-	userID, err := utils.ExtractUserIDFromJWT(request)
+	userID, err := jwt.ExtractUserIDFromJWT(request, config.AppConfig.JWTPublicKey)
 	if err != nil {
 		h.logger.Error("Error extracting user ID", "error", err)
 		http.Error(response, err.Error(), http.StatusUnauthorized)

@@ -8,7 +8,8 @@ import (
 	"time"
 
 	"github.com/google/generative-ai-go/genai"
-	"github.com/lokeam/bravo-kilo/internal/shared/utils"
+	"github.com/lokeam/bravo-kilo/config"
+	"github.com/lokeam/bravo-kilo/internal/shared/jwt"
 	"google.golang.org/api/option"
 )
 
@@ -28,7 +29,7 @@ func cacheSet(key string, value string) {
 func (h *BookHandlers) HandleGetGeminiBookSummary(response http.ResponseWriter, request *http.Request) {
 	// Extract user ID from JWT
 	h.logger.Info("Handling Google Gemini request")
-	_, err := utils.ExtractUserIDFromJWT(request)
+	_, err := jwt.ExtractUserIDFromJWT(request, config.AppConfig.JWTPublicKey)
 	if err != nil {
 		h.logger.Error("Error extracting user ID", "error", err)
 		return

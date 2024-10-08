@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/golang-jwt/jwt/v5"
+	"github.com/lokeam/bravo-kilo/cmd/middleware"
 	"github.com/lokeam/bravo-kilo/internal/books/repository"
 	auth "github.com/lokeam/bravo-kilo/internal/shared/handlers/auth"
 	"github.com/lokeam/bravo-kilo/internal/shared/utils"
@@ -177,12 +177,25 @@ func (h *SearchHandlers) HandleSearchBooks(response http.ResponseWriter, request
 	response.Header().Set("Pragma", "no-cache")
 	response.Header().Set("Expires", "0")
 
+
+	// Get userID from context
+	userID, ok := request.Context().Value(middleware.UserIDKey).(int)
+	if !ok {
+			h.logger.Error("Failed to get userID from context")
+			http.Error(response, "Unauthorized", http.StatusUnauthorized)
+			return
+	}
+
 	// Get user's access token
 	accessToken, err := h.authHandlers.GetUserAccessToken(request)
 	if err != nil {
-			h.logger.Error("Error retrieving user access token", "error", err)
-			http.Error(response, "Error retrieving access token", http.StatusUnauthorized)
-			return
+		h.logger.Error("Error retrieving user access token", "error", err)
+		if err == auth.ErrNoRefreshToken {
+				http.Error(response, "No valid refresh token found", http.StatusUnauthorized)
+		} else {
+				http.Error(response, "Error retrieving access token", http.StatusInternalServerError)
+		}
+		return
 	}
 
 	// Use the access token to call the Google Books API
@@ -219,27 +232,6 @@ func (h *SearchHandlers) HandleSearchBooks(response http.ResponseWriter, request
 	formattedBooks := h.formatGoogleBooksResponse(response, booksData)
 	// h.logger.Info("---------------")
 	// h.logger.Info("Showing formattedBooks, pre-check:", "formattedBooks", formattedBooks)
-
-	// Get user ID from JWT
-	cookie, err := request.Cookie("token")
-	if err != nil {
-			h.logger.Error("No token cookie", "error", err)
-			http.Error(response, "No token cookie", http.StatusUnauthorized)
-			return
-	}
-
-	tokenStr := cookie.Value
-	claims := &utils.Claims{}
-	jwtToken, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (interface{}, error) {
-			return jwtKey, nil
-	})
-	if err != nil || !jwtToken.Valid {
-			h.logger.Error("Invalid token", "error", err)
-			http.Error(response, "Invalid token", http.StatusUnauthorized)
-			return
-	}
-
-	userID := claims.UserID
 
 	// Create hash sets for user's existing library data
 	isbn10Set, err := h.bookCache.GetAllBooksISBN10(userID)

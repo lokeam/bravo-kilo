@@ -121,8 +121,8 @@ func NewFactory(db *sql.DB, log *slog.Logger) (*Factory, error) {
 
 	// Initialize models for auth
 	authModels := models.Models{
-		User:  &models.UserModel{DB: db},
-		Token: &models.TokenModel{DB: db},
+		User:  &models.UserModel{DB: db, Logger: log},
+		Token: &models.TokenModel{DB: db, Logger: log},
 	}
 
 	// Initialize handlers
