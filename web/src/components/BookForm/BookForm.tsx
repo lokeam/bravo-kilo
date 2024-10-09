@@ -292,7 +292,7 @@ function BookForm({
             className={`${TAILWIND_FORM_CLASSES['INPUT']} ${errors.publishDate ? TAILWIND_FORM_CLASSES['ERROR_BORDER'] : ''} `}
           />
           {errors.publishDate && <p className={TAILWIND_FORM_CLASSES['ERROR']}>{errors.publishDate.message}</p>}
-          {!bookDataEmpty && dateWarning && <p className="text-yellow-500">{dateWarning}</p>}
+          {!bookDataEmpty && dateWarning && <p className="text-orange-500 dark:text-yellow-500">{dateWarning}</p>}
         </div>
 
         {/* ISBN10 */}
@@ -338,7 +338,7 @@ function BookForm({
                 />
                 <label
                   htmlFor={`formats_${format}`}
-                  className="inline-flex text-center items-center transition duration-500 shadow-sm justify-center w-full p-2 text-charcoal bg-white border-2 border-gray-200 rounded-lg cursor-pointer dark:hover:text-gray-300 dark:border-gray-700 peer-checked:border-lime-500  hover:bg-gray-200 dark:peer-checked:text-gray-300 peer-checked:text-gray-600 dark:text-white dark:bg-gray-800 dark:hover:bg-gray-700"
+                  className="inline-flex text-center items-center transition duration-500 shadow-sm justify-center w-full p-2 text-charcoal bg-white border-2 border-gray-200 rounded-lg cursor-pointer dark:hover:text-gray-300 dark:border-gray-700/60 peer-checked:border-lime-500  hover:bg-gray-200 dark:peer-checked:text-gray-300 peer-checked:text-gray-600 dark:text-white dark:bg-gray-800 dark:hover:bg-gray-700"
                 >
                   {format}
                 </label>
@@ -361,7 +361,7 @@ function BookForm({
             render={({ field }) => (
               <select
                 {...field}
-                className={`${TAILWIND_FORM_CLASSES['TEXT_AREA']} ${errors.language ? TAILWIND_FORM_CLASSES['ERROR_BORDER'] : ''} `}
+                className={`${TAILWIND_FORM_CLASSES['INPUT']} ${errors.language ? TAILWIND_FORM_CLASSES['ERROR_BORDER'] : ''} `}
               >
                 {languages.map((language) => (
                   <option key={language.value} value={language.value}>
@@ -416,9 +416,9 @@ function BookForm({
           >
             Description<span className={TAILWIND_FORM_CLASSES['LABEL_ASTERISK']}>*</span>
           </label>
-          <div className="border border-cadet-gray rounded p-4">
+          <div className={TAILWIND_FORM_CLASSES['FIELD_ARR_WRAPPER']}>
             <textarea
-              className={`${TAILWIND_FORM_CLASSES['TEXT_AREA']} ${errors.description ? TAILWIND_FORM_CLASSES['ERROR_BORDER'] : ''} `}
+              className={`${TAILWIND_FORM_CLASSES['INPUT']} ${errors.description ? TAILWIND_FORM_CLASSES['ERROR_BORDER'] : ''} `}
               id="description"
               rows={4}
               {...register('description')}
@@ -438,7 +438,7 @@ function BookForm({
             Notes (optional)
           </label>
           <textarea
-            className={TAILWIND_FORM_CLASSES['TEXT_AREA']}
+            className={TAILWIND_FORM_CLASSES['INPUT']}
             id="notes"
             rows={4}
             {...register('notes')}
@@ -448,7 +448,7 @@ function BookForm({
 
         {/* Submit Button */}
         <button
-          className="bg-vivid-blue hover:bg-vivid-blue-d hover:border-vivid-blue transition duration-300 ease-in-out"
+          className="bg-vivid-blue hover:bg-vivid-blue-d hover:border-vivid-blue-d dark:bg-vivid-blue dark:hover:bg-vivid-blue-d dark:hover:border-vivid-blue-d dark:hover:text-white transition duration-500 ease-in-out"
           type="submit"
         >
           {isEditMode ? 'Update Book' : 'Add Book' }
@@ -459,7 +459,7 @@ function BookForm({
           <button
             type="button"
             onClick={onDelete}
-            className="border-red-500 text-red-500 hover:text-white hover:bg-red-600 focus:ring-red-900"
+            className="border-red-500 text-red-500 hover:text-white dark:hover:text-white hover:bg-red-600 focus:ring-red-900 hover:border-red-900 dark:hover:bg-red-900 dark:hover:border-red-900  transition duration-500 ease-in-out"
           >
             Delete Book
           </button>

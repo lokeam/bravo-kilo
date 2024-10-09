@@ -44,8 +44,7 @@ function Home() {
       userTags: homepageStats.userTags?.userTags || [],
     };
   }, [data]);
-  //const isInitialLoad = !data || isLoading;
-  // Check if all data arrays are empty
+
   const isEmpty = useMemo(() =>
     books.length === 0 &&
     booksByFormat.every(format => format.count === 0) &&
@@ -69,11 +68,11 @@ function Home() {
   }
 
   console.log('data package: ', data);
-  console.log('booksByFormat: ', data);
+  console.log('books.length: ', books.length || 0);
 
   return (
     <PageWithErrorBoundary fallbackMessage="Error loading home page">
-      <div className="bk_home bg-white-smoke flex flex-col items-center px-5 antialiased mdTablet:px-5 mdTablet:ml-24 h-screen pt-12 dark:bg-black">
+      <div className="bk_home bg-white-smoke dark:bg-dark-tone-ink flex flex-col items-center px-5 antialiased mdTablet:px-5 mdTablet:ml-24 h-screen pt-12">
         <div className="pb-20 mdTablet:pb-4 flex flex-col relative w-full max-w-7xl">
           <Bookshelf
             category="Recently updated"
@@ -83,7 +82,7 @@ function Home() {
           <h2 className="text-left text-charcoal text-2xl font-bold inline-block max-w-full overflow-hidden text-ellipsis whitespace-nowrap select-none mb-4 dark:text-white">Statistics</h2>
           <div className="grid grid-cols-12 gap-6">
             {/* Format data */}
-            <DonutChartCard bookFormats={booksByFormat}/>
+            <DonutChartCard totalBooks={books.length || 0} bookFormats={booksByFormat}/>
 
             {/* Language data */}
             <BarChartCard

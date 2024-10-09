@@ -32,7 +32,6 @@ function Modal({ opened, onClose, children }: ModalProps) {
   };
 
   if (!opened && !closing) return null;
-
   return (
     <div
       className="modal-overlay overflow-hidden top-0 left-0 inset-0 z-30 opacity-100"
@@ -40,7 +39,7 @@ function Modal({ opened, onClose, children }: ModalProps) {
       onClick={handleClose}
     >
       <div
-        className={`modal-content w-full lg:w-[400px] absolute lg:relative ${closing ? "" : "bottom-0"}`}
+        className="modal-content bg-white dark:bg-eight-ball text-charcoal dark:text-az-white dark:border dark:border-gray-700/60"
         onClick={(e) => e.stopPropagation()}
       >
         {children}

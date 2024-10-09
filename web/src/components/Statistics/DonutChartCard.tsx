@@ -5,13 +5,14 @@ import { BookStatObj } from './BarChartCard';
 
 type DonutChartCardProps = {
   bookFormats: BookStatObj[];
+  totalBooks: number;
 }
 
-function DonutChartCard({ bookFormats = [] }: DonutChartCardProps) {
+function DonutChartCard({ bookFormats = [], totalBooks = 0 }: DonutChartCardProps) {
 
   const formatCountArr = bookFormats.map((book) => book.count);
   const chartData = {
-    labels: ['Physical Books', 'eBooks', 'Audio Book'],
+    labels: ['Physical Books', 'eBooks', 'Audio Books'],
     datasets: [
       {
         data: formatCountArr,
@@ -22,21 +23,22 @@ function DonutChartCard({ bookFormats = [] }: DonutChartCardProps) {
     ],
   };
 
-  console.log('formatCountArr: ', formatCountArr);
+  console.log('totalBooks: ', totalBooks);
 
   return(
-    <div className="books_format_card_wrapper bg-white flex flex-col col-span-full lgMobile:col-span-6 mdTablet:col-span-4 shadow-xl rounded-xl dark:bg-maastricht dark:border-none ">
+    <div className="books_format_card_wrapper bg-white flex flex-col col-span-full lgMobile:col-span-6 mdTablet:col-span-4 shadow-xl rounded-xl dark:bg-eight-ball dark:border dark:border-gray-700/60">
 
       { bookFormats && bookFormats.length > 0 ? (
         <div className="">
           <header className="books_format_header border-b border-gray-100 px-5 py-4 dark:border-gray-700/60">
             <h2 className="text-left text-charcoal text-lg font-semibold dark:text-white">Books By Format</h2>
           </header>
-          <div className="bg-white flex flex-col col-span-full sm:col-span-6 xl:col-span-4 dark:bg-maastricht">
+          <div className="bg-white dark:bg-eight-ball flex flex-col col-span-full sm:col-span-6 xl:col-span-4">
             <DoughnutChart
               data={chartData}
               height={200}
               width={200}
+              centerText={`${totalBooks.toString()} Total`}
             />
           </div>
           <PieChartCardFooter bookFormats={bookFormats} />

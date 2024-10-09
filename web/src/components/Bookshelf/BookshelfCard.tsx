@@ -16,7 +16,10 @@ const BookshelfCard = ({ book }: CardProps) => {
   };
 
   return (
-    <div className="card_wrapper bg-white relative box-border min-w-0 h-full cursor-pointer rounded-lg truncate dark:bg-maastricht" onClick={handleCardClick}>
+    <div
+      className="card_wrapper bg-white dark:bg-eight-ball relative box-border min-w-0 h-full cursor-pointer rounded-lg truncate dark:border dark:border-gray-700/60 transition duration-500 ease-in-out border hover:border-vivid-blue dark:hover:border-vivid-blue"
+      onClick={handleCardClick}
+    >
       <div className="card_thumbnail rounded-md relative ">
         <div className="card_thumbnail_container relative rounded-md w-full">
           <img
@@ -29,11 +32,11 @@ const BookshelfCard = ({ book }: CardProps) => {
       </div>
       <div className="card_copy flex flex-col gap-x-4 items-baseline truncate mt-2">
         <div className="copy_container flex flex-col text-left">
-          <a href="/" className="title text-charcoal w-full truncate dark:text-white">{title}</a>
+          <a href="/" className="title text-charcoal w-full truncate dark:text-white transition duration-500 ease-in-out hover:text-lime-green dark:hover:text-lime-green">{title}</a>
           <div className="author_container">
             <span className="author_details">
               <div className="author_text text-sm text-gray-400 relative w-full">
-                <a className="relative w-full text-cadet-gray" href="/">{authors[0]}</a>
+                <a className="relative w-full text-cadet-gray transition duration-500 ease-in-out hover:text-lime-green dark:hover:text-lime-green" href="/">{authors[0]}</a>
               </div>
             </span>
           </div>

@@ -1,4 +1,6 @@
 import { useMemo } from 'react';
+import { useAuth } from '../components/AuthContext';
+import { Navigate } from 'react-router-dom';
 import { Outlet } from 'react-router-dom';
 import TopNavigation from '../components/TopNav/TopNav';
 import SideNavigation from '../components/SideNav/SideNavigation';
@@ -7,14 +9,13 @@ import Snackbar from '../components/Snackbar/Snackbar';
 import useStore from '../store/useStore';
 
 const AuthenticatedLayout = () => {
+  const { isAuthenticated } = useAuth();
   const {
     snackbarMessage,
     snackbarOpen,
     snackbarVariant,
     hideSnackbar,
   } = useStore();
-
-
 
   const memoizedSnackbar = useMemo(() => (
     <Snackbar
@@ -25,11 +26,15 @@ const AuthenticatedLayout = () => {
     />
   ), [snackbarMessage, snackbarOpen, snackbarVariant, hideSnackbar]);
 
+  if (!isAuthenticated) {
+    return <Navigate to="/login" />;
+  }
+
   return (
-    <div className="authenticated-layout h-dvh bg-white-smoke dark:bg-black">
+    <div className="authenticated-layout h-dvh bg-white dark:bg-black">
       <TopNavigation />
       <SideNavigation />
-      <div className="content pt-[67px]">
+      <div className="content pt-[67px] bg-white dark:bg-black">
         <OfflineBanner />
         {memoizedSnackbar}
         <Outlet />

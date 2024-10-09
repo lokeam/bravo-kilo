@@ -31,8 +31,6 @@ function CardListItem({ book, isSearchPage }: CardListItemProps) {
   const { authors, id, imageLink, title } = book;
   const titleSubdomain = encodeURIComponent(title);
 
-  //console.log('card list item, book: ', book);
-
   const handleBookClick = () => {
     navigate(`/library/books/${titleSubdomain}`, { state: { book } });
   };
@@ -79,7 +77,7 @@ function CardListItem({ book, isSearchPage }: CardListItemProps) {
         </div>
         <button
           onClick={openModal}
-          className="bg-transparent border-charcoal dark:border-2 transition duration-500 ease-in-out dark:hover:border-vivid-blue"
+          className="border-charcoal dark:border-gray-700/60 dark:border-2 transition duration-500 ease-in-out hover:border-vivid-blue dark:hover:border-vivid-blue bg-transparent"
         >
           <BsThreeDotsVertical
             className="text-charcoal dark:text-white"
@@ -90,7 +88,7 @@ function CardListItem({ book, isSearchPage }: CardListItemProps) {
           onClose={closeModal}
         >
           <button
-            className="flex flex-row justify-items-start items-center bg-transparent w-full mr-1"
+            className="flex flex-row justify-items-start items-center w-full mr-1 transition duration-500 ease-in-out hover:border-vivid-blue dark:hover:border-vivid-blue bg-transparent"
             onClick={handleBookClick}
           >
             <MdMenuBook
@@ -100,7 +98,7 @@ function CardListItem({ book, isSearchPage }: CardListItemProps) {
             <span>Title Details</span>
           </button>
           <button
-            className="flex flex-row justify-items-start items-center bg-transparent w-full mr-1"
+            className="flex flex-row justify-items-start items-center w-full mr-1 transition duration-500 ease-in-out hover:border-vivid-blue dark:hover:border-vivid-blue bg-transparent"
             onClick={handleEditBookClick}
             >
             <TbEdit

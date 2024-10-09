@@ -115,7 +115,7 @@ const EditBook = () => {
 
   return (
     <PageWithErrorBoundary fallbackMessage="Error loading edit page">
-      <section className="editBook bg-white min-h-screen bg-cover relative flex flex-col items-center place-content-around px-5 antialiased mdTablet:pr-5 mdTablet:ml-24 dark:bg-black">
+      <section className="editBook bg-white dark:bg-black min-h-screen bg-cover relative flex flex-col items-center place-content-around px-5 antialiased mdTablet:pr-5 mdTablet:ml-24">
         <div className="text-left text-dark max-w-screen-mdTablet pb-24 md:pb-4 flex flex-col relative w-full">
           <h2 className="mb-4 text-xl font-bold text-gray-900 dark:text-white">Edit Book</h2>
           <BookForm

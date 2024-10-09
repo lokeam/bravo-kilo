@@ -16,7 +16,7 @@ interface MissingInfoWarningProps {
 
 const MissingInfoWarning = ({emptyFields}: MissingInfoWarningProps) => {
   return (
-    <div className="p-4 mb-4 border border-yellow-300 rounded-lg text-yellow-300">
+    <div className="p-4 mb-4 border border-orange-500 text-orange-500 dark:border-yellow-300 dark:text-yellow-300 rounded-lg ">
       <div className="bk_book_metadata flex flex-col">
         <div className="flex flex-row pb-3">
           <IoIosWarning size={25} className='mr-2'/>
@@ -27,7 +27,7 @@ const MissingInfoWarning = ({emptyFields}: MissingInfoWarningProps) => {
             <li key={`${emptyFieldStr}-${index}`} className="font-bold">{emptyFieldStr}</li>
           ))}
         </ul>
-        <p className="text-yellow-300">You may enter placeholder data if you want to save this book in your library, but you'll need the official information if you want your entry to be identifiable by search.</p>
+        <p className="text-orange-500 dark:text-yellow-300">You may enter placeholder data if you want to save this book in your library, but you'll need the official information if you want your entry to be identifiable by search.</p>
       </div>
     </div>
   );
@@ -50,6 +50,7 @@ const BookDetail = () => {
   console.log('bookFromState:', bookFromState);
   console.log('isInLibrary:', isInLibrary);
   console.log('enabled:', !!decodedTitle && !isInLibrary);
+  console.log('isDarkMode:', isDarkMode);
 
 
   const { data: bookID, isLoading, isError } = useQuery({
@@ -91,7 +92,7 @@ const BookDetail = () => {
   return (
     <PageWithErrorBoundary fallbackMessage="Error loading book detail page">
       <div className="bk_edit_book_page_wrapper bg-cover min-h-screen overflow-x-hidden overflow-y-auto z-10 bg-white-smoke dark:bg-transparent relative flex flex-col items-center place-content-around px-5 antialiased mdTablet:pr-5 mdTablet:ml-24">
-        <div className={`book_coverImage ${isDarkMode ? 'blurBgDark' : 'blurBg'}  -z-10`}></div>
+        <div className={`book_coverImage ${!isDarkMode ? '' : 'blurBg'}  -z-10`}></div>
 
         <div className="bk_edit_book_page max-w-screen-mdTablet pb-20 md:pb-4 flex flex-col relative w-full">
           <div className="bk_book_thumb relative flex justify-center align-center rounded w-full">
@@ -126,7 +127,7 @@ const BookDetail = () => {
                 onClick={() =>
                   navigate(`/library/books/add/search`, { state: { book } })
                 }
-                className="flex items-center justify-center rounded bg-hepatica font-bold"
+                className="flex items-center justify-center rounded border font-bold bg-vivid-blue hover:bg-vivid-blue-d dark:border-vivid-blue dark:bg-vivid-blue dark:hover:bg-vivid-blue-d dark:hover:border-vivid-blue-d transition duration-500 ease-in-out"
               >
                 <IoIosAdd className="h-8 w-8 mr-4" />
                 Add Book to Library
@@ -136,7 +137,7 @@ const BookDetail = () => {
                 onClick={() =>
                   navigate(`/library/books/${bookID}/edit`, { state: { book } })
                 }
-                className="flex items-center justify-center rounded bg-majorelle hover:bg-hepatica font-bold"
+                className="flex items-center justify-center rounded font-bold bg-vivid-blue hover:bg-vivid-blue-d dark:via-vivid-blue dark:hover:via-vivid-blue-d dark:hover:border-vivid-blue-d transition duration-500 ease-in-out"
               >
                 <TbEdit className="h-8 w-8 mr-4" />
                 Edit Book Information
@@ -179,7 +180,7 @@ const BookDetail = () => {
               <h3 className="text-2xl font-bold mb-4 text-black dark:text-white">Genres:</h3>
               <div className="bk_book_genres w-full flex flex-row flex-wrap items-center content-evenly gap-6">
                 {book.genres && book.genres.length > 0 && book.genres.map((genre: string, index: number) => (
-                  <button key={`${genre}-${index}`} className="border border-gray-500">
+                  <button key={`${genre}-${index}`} className="bg-white-smoke dark:bg-black text-black dark:text-white border border-gray-500 cursor-default hover:border-strong-violent dark:hover:border-strong-violent transition duration-500 ease-in-out">
                     {genre}
                   </button>
                 ))}
@@ -189,7 +190,7 @@ const BookDetail = () => {
               <h3 className="text-2xl font-bold mb-4 text-black dark:text-white">Assigned Personal Tags:</h3>
               <div className="bk_book_genres w-full flex flex-row flex-wrap items-center content-evenly gap-6">
                 {book.tags && book.tags.length > 0 && book.tags.map((tag: string, index: number) => (
-                  <button key={`${tag}-${index}`} className="border border-gray-500">
+                  <button key={`${tag}-${index}`} className="bg-white-smoke dark:bg-black text-black dark:text-white border border-gray-500 cursor-default hover:border-strong-violent dark:hover:border-strong-violent transition duration-500 ease-in-out">
                     {tag}
                   </button>
                 ))}
@@ -198,12 +199,12 @@ const BookDetail = () => {
             {book.notes !== '' ? (
               <div className="bk_description text-left mb-4">
                 <h3 className="text-2xl font-bold mb-2 text-black dark:text-white">Personal Notes</h3>
-                <p className="text-cadet-gray">{book.notes}</p>
+                <p className="text-charcoal dark:text-cadet-gray">{book.notes}</p>
               </div>
             ) : null}
             <div className="bk_description text-left mb-4">
               <h3 className="text-2xl font-bold pb-2 text-black dark:text-white">Book Description</h3>
-              <p className="text-cadet-gray">
+              <p className="text-charcoal dark:text-cadet-gray">
                 {book.description !== ''
                   ? book.description
                   : 'No book description available'}

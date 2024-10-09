@@ -65,15 +65,13 @@ const BookSummaryBtn = (
     refetch();
   }, 2000);
 
-  //console.log('Book Summary Button - prompt to send: ', prompt);
-
   return (
     <>
       <button
-        className="book_summary p-[1.75px] transtion group flex h-[45.19px] w-auto items-center justify-center rounded-lg bg-gradient-to-r from-seljuk from-11.63% via-lilac via-40.43% to-carmine to-68.07% text-white duration-300 hover:bg-gray-700"
+        className="book_summary p-[1.75px] transtion group flex h-[45.19px] w-auto items-center justify-center rounded-lg bg-gradient-to-r from-seljuk from-11.63% via-lilac via-40.43% to-carmine to-68.07% text-white duration-300 hover:bg-gray-300 dark:hover:bg-gray-300 hover:shadow-md hover:text-white"
         onClick={handleClick}
         type="button">
-        <span className="book_summary_bg flex h-full w-full items-center justify-center rounded-lg bg-black transition duration-300 ease-in-out hover:bg-gray-700">
+        <span className="book_summary_bg flex h-full w-full items-center justify-center rounded-lg bg-white dark:bg-black text-charcoal dark:text-white transition duration-300 ease-in-out hover:bg-gray-700 dark:hover:bg-gray-700 hover:text-white dark:hover:text-white">
           {isLoading ? 'Generating...' : 'Summarize Book with AI'}
         </span>
 

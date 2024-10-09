@@ -19,9 +19,9 @@ function LibraryNav() {
   );
 
   return (
-    <div className="bookshelf_body relative w-full z-10 pb-8 box-border">
+    <div className={`${ isDarkTheme ? 'bookshelf_body_dk' : 'libNav_bsb_lt' } relative w-full z-10 pb-8 box-border`}>
       <AnimatePresence mode="wait">
-        <div className={`${ isDarkTheme ? 'bookshelf_body_dk' : 'bookshelf_body' } box-content overflow-visible w-full`}>
+        <div className="overflow-visible w-full">
           <ul className="bookshelf_grid_library text-left box-border grid grid-flow-col auto-cols-auto items-stretch gap-x-2.5 overflow-x-auto overflow-y-auto overscroll-x-none scroll-smooth snap-start snap-x snap-mandatory list-none m-0 pl-2 pb-5">
             {['All', 'Audiobooks', 'eBooks', 'Printed Books', 'Authors', 'Genres', 'Tags'].map((tab) => (
               <motion.li

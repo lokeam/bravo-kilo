@@ -35,11 +35,11 @@ function TopNavigation() {
   };
   console.log('--------------');
   console.log('testing isDetailPage: ', isDetailPage);
+  console.log('isLightTheme: ', isLightTheme);
 
-  //<nav className={`${!isSearchPage ? 'dark:opacity-75' : ''}
   return (
-    <header className="antialiased relative w-full h-auto">
-      <nav className={`${isLightTheme && isDetailPage ? 'bg-transparent' : 'bg-white'} fixed border-none flex items-center content-between left-0 right-0 top-0 z-50 pr-8 lg:pr-12 h-[67px] text-white w-full dark:bg-black`}>
+    <header className="antialiased relative w-full h-auto z-50">
+      <nav className="bg-white dark:bg-black fixed border-none flex items-center content-between left-0 right-0 top-0 pr-8 lg:pr-12 h-[67px] text-white w-full">
         <Link
           className={`${isBookDetailOrSettingsPage ? 'block' : 'hidden'} h-13 w-13 pl-7 pr-3 mr-6 inline-block content-center cursor-pointer bg-transparent border-none`}
           to={"/library"}
@@ -67,7 +67,7 @@ function TopNavigation() {
             title=""
           >
             <button
-              className="flex flex-row justify-items-start items-center bg-transparent mr-1"
+              className="flex flex-row justify-items-start items-center mr-1 transition duration-500 ease-in-out hover:border-vivid-blue dark:hover:border-vivid-blue bg-transparent"
               onClick={handleSettingsClick}
             >
               <IoMdSettings
@@ -77,7 +77,7 @@ function TopNavigation() {
               <span>Settings</span>
             </button>
             <button
-              className="flex flex-row justify-items-start items-center bg-transparent mr-1"
+              className="flex flex-row justify-items-start items-center mr-1 transition duration-500 ease-in-out hover:border-vivid-blue dark:hover:border-vivid-blue bg-transparent"
               onClick={logout}
             >
               <MdLogout

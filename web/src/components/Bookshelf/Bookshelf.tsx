@@ -11,9 +11,6 @@ interface BookShelfProps {
 }
 
 const Bookshelf = ({ books, category, isLoading }: BookShelfProps) => {
-  // const lastUpdatedBooks = books?.slice().sort((a, b) => {
-  //   return new Date(b.lastUpdated).getTime() - new Date(a.lastUpdated).getTime();
-  // });
 
   const lastUpdatedBooks = books?.slice().sort((a, b) => {
     const dateA = a.lastUpdated ? new Date(a.lastUpdated).getTime() : 0;

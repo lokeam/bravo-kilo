@@ -10,7 +10,7 @@ interface TagsCardProps {
 function TableCard({ userTags = [] }: TagsCardProps) {
 
   return (
-    <div className="tags_card bg-white col-span-full xl:col-span-6 shadow-sm rounded-xl max-h-[465px] dark:bg-maastricht">
+    <div className="tags_card bg-white dark:bg-eight-ball col-span-full xl:col-span-6 shadow-sm rounded-xl max-h-[465px] dark:border dark:border-gray-700/60">
       <ChartCardHeader
         hasSubHeaderBg
         topic="Tags"

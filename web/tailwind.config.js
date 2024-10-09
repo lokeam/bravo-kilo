@@ -61,9 +61,12 @@ export default {
         'white-smoke': '#f5f5f5',
         'vivid-blue': '#086fe8', // brand b,
         'vivid-blue-l': '#4497f9',
+        'vivid-blue-d': '#054289',
         'lime-green': '#5bf563', // brand g,
         'strong-violent': '#6a00b9',  // brand r (p)
-        'strong-violent-l': '#9506ff'
+        'strong-violent-l': '#9506ff',
+        'dark-tone-ink': '#121212',
+        'eight-ball': '#05070a'
       }
     },
     screens: {

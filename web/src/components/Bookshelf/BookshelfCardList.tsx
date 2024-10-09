@@ -2,6 +2,7 @@ import React from 'react';
 import BookshelfCard from './BookshelfCard';
 import { Book } from '../../types/api';
 import { useThemeStore } from '../../store/useThemeStore';
+import Loading from '../Loading/Loading';
 
 interface BookshelfListProps {
   cardData: Book[];
@@ -19,11 +20,11 @@ const BookshelfCardList = ({ cardData = [], isLoading }: BookshelfListProps) => 
           <ul className="bookshelf_grid box-border grid grid-flow-col items-stretch gap-x-2.5 overflow-x-auto overflow-y-auto overscroll-x-none scroll-smooth snap-start snap-x snap-mandatory list-none m-0 pu-4 pb-8">
             {
               isLoading ? (
-                <div>Loading data...</div>
+                <Loading />
               ) : cardData.length > 0 ? (
                 cardData.map((book) => (
                   <li
-                    className="shadow-lg rounded-lg dark:border-dark-clay dark:shadow-none"
+                    className="shadow-lg rounded-lg dark:shadow-none "
                     key={`${book.id}-${book.title}`}
                   >
                     <BookshelfCard

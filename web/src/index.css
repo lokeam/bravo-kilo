@@ -9,9 +9,6 @@
 
   color-scheme: light dark;
   color: rgba(255, 255, 255, 0.87);
-  /*background-color: #242424;*/
-  /*background-color: #0F172A;*/
-  /*background-color: #000;*/
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -26,7 +23,7 @@ html {
 }
 
 html.dark {
-  background-color: #000;
+  background-color: #121212;
 }
 
 /* Hide the scrollbar visually */
@@ -147,7 +144,6 @@ button:focus-visible {
   }
 
   .card_wrapper:hover {
-    background-color: #343434;
     border-radius: 6px;
   }
 
@@ -161,7 +157,6 @@ button:focus-visible {
   }
 /* refactor styles */
   .bookshelf_body {
-
     /* Standard Properties */
     scrollbar-color: #086fe8 #f5f5f5;
     scrollbar-width: thin;
@@ -196,27 +191,26 @@ button:focus-visible {
     }
   }
 
-  .bookshelf_body_dk {
-
+  .libNav_bsb_lt {
     /* Standard Properties */
-    scrollbar-color: #086fe8 #000;
+    scrollbar-color: #086fe8 #fff;
     scrollbar-width: thin;
 
     /* Safari */
     ::-webkit-scrollbar {
       /** the scrollbar */
-      background-color: #111827;
+      background-color: #fff;
     }
     ::-webkit-scrollbar-button {
       /** the up- and down- arrow buttons on the scrollbar */
     }
     ::-webkit-scrollbar-track {
       /** the progress bar track of the scrollbar */
-      background-color: #111827;
+      background-color: #fff;
     }
     ::-webkit-scrollbar-track-piece {
       /** the progress bar track NOT covered by the handle */
-      background-color: #111827;
+      background-color: #fff;
     }
     ::-webkit-scrollbar-thumb {
       /** the draggable scrolling handle */
@@ -224,11 +218,46 @@ button:focus-visible {
     }
     ::-webkit-scrollbar-corner {
       /** the bottom corner of the scrollbar, where both horizontal and vertical scrollbar meet */
-      background-color: #111827;
+      background-color: #fff;
     }
     ::-webkit-resizer {
       /** the draggable resizing handle that appears at the bottom corner of some elements */
-      background-color: #111827;
+      background-color: #fff;
+    }
+  }
+
+  .bookshelf_body_dk {
+    /* Standard Properties */
+    scrollbar-color: #086fe8 #121212;
+    scrollbar-width: thin;
+
+    /* Safari */
+    ::-webkit-scrollbar {
+      /** the scrollbar */
+      background-color: #121212;
+    }
+    ::-webkit-scrollbar-button {
+      /** the up- and down- arrow buttons on the scrollbar */
+    }
+    ::-webkit-scrollbar-track {
+      /** the progress bar track of the scrollbar */
+      background-color: #121212;
+    }
+    ::-webkit-scrollbar-track-piece {
+      /** the progress bar track NOT covered by the handle */
+      background-color: #121212;
+    }
+    ::-webkit-scrollbar-thumb {
+      /** the draggable scrolling handle */
+      background-color: #05070a;
+    }
+    ::-webkit-scrollbar-corner {
+      /** the bottom corner of the scrollbar, where both horizontal and vertical scrollbar meet */
+      background-color: #121212;
+    }
+    ::-webkit-resizer {
+      /** the draggable resizing handle that appears at the bottom corner of some elements */
+      background-color: #121212;
     }
   }
 

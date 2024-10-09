@@ -1,6 +1,5 @@
 import React from 'react';
 import ModalRoot from './ModalRoot';
-import ModalHeader from './ModalHeader';
 import ModalBody from './ModalBody';
 import './Modal.css';
 
@@ -11,17 +10,13 @@ interface ModalProps {
   children: React.ReactNode;
 }
 
-function Modal({ opened, onClose, title, children }: ModalProps) {
+function Modal({ opened, onClose, children }: ModalProps) {
   return (
     <ModalRoot
       opened={opened}
       onClose={onClose}
     >
-      <div className="modal-container flex flex-col-reverse h-auto">
-        <ModalHeader
-          title={title}
-          onClose={onClose}
-        />
+      <div className="modal-container">
         <ModalBody>{children}</ModalBody>
       </div>
     </ModalRoot>

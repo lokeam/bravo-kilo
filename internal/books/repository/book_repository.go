@@ -562,7 +562,6 @@ func (r *BookRepositoryImpl) findEmptyFields(book *Book) ([]string, bool) {
 		{book.ImageLink == "", "imageLink"},
 		{len(book.Genres) == 0, "genres"},
 		{len(book.Formats) == 0, "formats"},
-		{len(book.Tags) == 0, "tags"},
 	}
 
 	var emptyFields []string
