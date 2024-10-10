@@ -42,7 +42,7 @@ const AddBookGateway = () => {
                     Import a List of Books (.csv)
                   </NavLink>
                   <NavLink
-                    className="block w-full text-white hover:text-white bg-strong-violent hover:bg-strong-violent-l focus:ring-4 focus:outline-none focus:ring-primary-300 font-medium rounded-lg text-sm px-5 py-2.5 text-center transition duration-500 ease-in-out"
+                    className="block w-full text-white hover:text-white bg-strong-violet hover:bg-strong-violet-l focus:ring-4 focus:outline-none focus:ring-primary-300 font-medium rounded-lg text-sm px-5 py-2.5 text-center transition duration-500 ease-in-out"
                     to={"/library/books/add/manual"}
                     end
                   >

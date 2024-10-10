@@ -99,6 +99,7 @@ export type RawHomepageStats = {
   userBkLang: Record<string, number>;
   userBkGenres: Record<string, number>;
   userTags: Record<string, number>;
+  userAuthors: Record<string, number>;
 };
 
 export type BooksByFormat = {
@@ -113,6 +114,9 @@ export type HomepageStatistics = {
   };
   userBkGenres: {
     booksByGenre: Array<{ label: string; count: number }>;
+  };
+  userAuthors: {
+    booksByAuthor: Array<{ label: string; count: number }>;
   };
   userTags: {
     userTags: Array<{ label: string; count: number }>;

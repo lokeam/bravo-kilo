@@ -9,10 +9,19 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/lib/pq"
 	"github.com/lokeam/bravo-kilo/internal/dbconfig"
 )
+
+var authorListWithBookCountCache sync.Map
+
+type AuthorListWithBookCountCacheEntry struct {
+    data      map[string]interface{}
+    timestamp time.Time
+}
 
 type AuthorRepository interface {
 	InitPreparedStatements() error
@@ -22,15 +31,17 @@ type AuthorRepository interface {
 	GetAuthorsForBook(bookID int) ([]string, error)
 	GetAuthorsForBooks(bookIDs []int) (map[int][]string, error)
 	GetAuthorIDByName(ctx context.Context, tx *sql.Tx, authorName string, authorID *int) error
+	GetAuthorsListWithBookCount(ctx context.Context, userID int) (map[string]interface{}, error)
 	GetBooksByAuthor(authorName string) ([]Book, error)
 	BatchInsertAuthors(ctx context.Context, tx *sql.Tx, bookID int, authors []string) error
 }
 
 type AuthorRepositoryImpl struct {
-	DB                        *sql.DB
-	Logger                    *slog.Logger
-	getAllBooksByAuthorsStmt  *sql.Stmt
-	getAuthorsForBooksStmt    *sql.Stmt
+	DB                              *sql.DB
+	Logger                          *slog.Logger
+	getAllBooksByAuthorsStmt        *sql.Stmt
+	getAuthorsForBooksStmt          *sql.Stmt
+	getAuthorsListWithBookCountStmt  *sql.Stmt
 }
 
 func NewAuthorRepository(db *sql.DB, logger *slog.Logger) (AuthorRepository, error) {
@@ -53,6 +64,20 @@ func (r *AuthorRepositoryImpl) InitPreparedStatements() error {
 		FROM authors a
 		JOIN book_authors ba ON a.id = ba.author_id
 		WHERE ba.book_id = ANY($1)`)
+	if err != nil {
+		return err
+	}
+
+	// Prepared select statement for GetAuthorListWithBookCount
+	r.getAuthorsListWithBookCountStmt, err = r.DB.Prepare(`
+	SELECT a.name, COUNT(DISTINCT b.id) AS total_books
+	FROM authors a
+	INNER JOIN book_authors ba ON a.id = ba.author_id
+	INNER JOIN books b ON ba.book_id = b.id
+	INNER JOIN user_books ub ON b.id = ub.book_id
+	WHERE ub.user_id = $1
+	GROUP BY a.name
+	ORDER BY total_books DESC`)
 	if err != nil {
 		return err
 	}
@@ -420,6 +445,93 @@ func (r *AuthorRepositoryImpl) GetBooksByAuthor(authorName string) ([]Book, erro
 	}
 
 	return books, nil
+}
+
+func (r *AuthorRepositoryImpl) GetAuthorsListWithBookCount(ctx context.Context, userID int) (map[string]interface{}, error) {
+	const cacheTTL = time.Hour
+
+	// Check cache with TTL
+	if cacheEntry, found := authorListWithBookCountCache.Load(userID); found {
+			entry := cacheEntry.(AuthorListWithBookCountCacheEntry)
+			if time.Since(entry.timestamp) < cacheTTL {
+					r.Logger.Info("Fetching authors list with book count from cache for user", "userID", userID)
+					return entry.data, nil
+			}
+			authorListWithBookCountCache.Delete(userID) // Cache entry expired, delete it
+	}
+
+	var rows *sql.Rows
+	var err error
+
+	// Try re-initializing if the prepared statement is nil
+	if r.getAuthorsListWithBookCountStmt == nil {
+		r.Logger.Warn("getAuthorsListWithBookCountStmt is nil, attempting to reinitialize")
+		err = r.InitPreparedStatements()
+		if err != nil {
+				r.Logger.Error("Failed to re-initialize prepared statements", "error", err)
+				return nil, fmt.Errorf("failed to initialize prepared statements: %w", err)
+		}
+		r.Logger.Info("Successfully reinitialized getAuthorsListWithBookCountStmt")
+	}
+
+	// Use prepared statement if available
+	if r.getAuthorsListWithBookCountStmt != nil {
+		r.Logger.Info("Using prepared statement for fetching authors list with book count")
+		rows, err = r.getAuthorsListWithBookCountStmt.QueryContext(ctx, userID)
+	} else {
+		r.Logger.Warn("Prepared statement for fetching authors list with book count unavailable. Falling back to raw SQL query")
+		query := `
+				SELECT a.name, COUNT(DISTINCT b.id) AS total_books
+				FROM authors a
+				INNER JOIN book_authors ba ON a.id = ba.author_id
+				INNER JOIN books b ON ba.book_id = b.id
+				INNER JOIN user_books ub ON b.id = ub.book_id
+				WHERE ub.user_id = $1
+				GROUP BY a.name
+				ORDER BY total_books DESC`
+		rows, err = r.DB.QueryContext(ctx, query, userID)
+	}
+
+	if err != nil {
+		r.Logger.Error("Error fetching authors list with book count", "error", err)
+		return nil, err
+	}
+
+	defer rows.Close()
+
+	var booksByAuthor []map[string]interface{}
+
+	for rows.Next() {
+		var authorName string
+		var count int
+		if err := rows.Scan(&authorName, &count); err != nil {
+				r.Logger.Error("Error scanning author data", "error", err)
+				return nil, err
+		}
+
+		booksByAuthor = append(booksByAuthor, map[string]interface{}{
+			"label": authorName,
+			"count": count,
+		})
+	}
+
+	if err = rows.Err(); err != nil {
+			r.Logger.Error("Error iterating rows", "error", err)
+			return nil, err
+	}
+
+	result := map[string]interface{}{
+			"booksByAuthor": booksByAuthor,
+	}
+
+	// Cache the result with TTL
+	authorListWithBookCountCache.Store(userID, AuthorListWithBookCountCacheEntry{
+			data:      result,
+			timestamp: time.Now(),
+	})
+	r.Logger.Info("Caching authors list with book count for user", "userID", userID)
+
+	return result, nil
 }
 
 func (r *AuthorRepositoryImpl) BatchInsertAuthors(ctx context.Context, tx *sql.Tx, bookID int, authors []string) error {

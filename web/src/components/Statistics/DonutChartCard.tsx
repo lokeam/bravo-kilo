@@ -24,16 +24,14 @@ function DonutChartCard({ bookFormats = [], totalBooks = 0 }: DonutChartCardProp
   };
 
   console.log('totalBooks: ', totalBooks);
-
   return(
-    <div className="books_format_card_wrapper bg-white flex flex-col col-span-full lgMobile:col-span-6 mdTablet:col-span-4 shadow-xl rounded-xl dark:bg-eight-ball dark:border dark:border-gray-700/60">
-
+    <div className="donut_card_wrapper bg-white flex flex-col col-span-full mdTablet:col-span-4 shadow-xl rounded-xl dark:bg-eight-ball dark:border dark:border-gray-700/60">
       { bookFormats && bookFormats.length > 0 ? (
-        <div className="">
-          <header className="books_format_header border-b border-gray-100 px-5 py-4 dark:border-gray-700/60">
+        <>
+          <header className="donut_card_header border-b border-gray-100 px-5 py-4 dark:border-gray-700/60">
             <h2 className="text-left text-charcoal text-lg font-semibold dark:text-white">Books By Format</h2>
           </header>
-          <div className="bg-white dark:bg-eight-ball flex flex-col col-span-full sm:col-span-6 xl:col-span-4">
+          <div className="bg-white dark:bg-eight-ball flex flex-col">
             <DoughnutChart
               data={chartData}
               height={200}
@@ -42,7 +40,7 @@ function DonutChartCard({ bookFormats = [], totalBooks = 0 }: DonutChartCardProp
             />
           </div>
           <PieChartCardFooter bookFormats={bookFormats} />
-        </div>
+        </>
       ) : (
         <ErrorCard />
       )}

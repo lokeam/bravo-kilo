@@ -180,7 +180,7 @@ const BookDetail = () => {
               <h3 className="text-2xl font-bold mb-4 text-black dark:text-white">Genres:</h3>
               <div className="bk_book_genres w-full flex flex-row flex-wrap items-center content-evenly gap-6">
                 {book.genres && book.genres.length > 0 && book.genres.map((genre: string, index: number) => (
-                  <button key={`${genre}-${index}`} className="bg-white-smoke dark:bg-black text-black dark:text-white border border-gray-500 cursor-default hover:border-strong-violent dark:hover:border-strong-violent transition duration-500 ease-in-out">
+                  <button key={`${genre}-${index}`} className="bg-white-smoke dark:bg-black text-black dark:text-white border border-gray-500 cursor-default hover:border-strong-violet dark:hover:border-strong-violet transition duration-500 ease-in-out">
                     {genre}
                   </button>
                 ))}
@@ -190,7 +190,7 @@ const BookDetail = () => {
               <h3 className="text-2xl font-bold mb-4 text-black dark:text-white">Assigned Personal Tags:</h3>
               <div className="bk_book_genres w-full flex flex-row flex-wrap items-center content-evenly gap-6">
                 {book.tags && book.tags.length > 0 && book.tags.map((tag: string, index: number) => (
-                  <button key={`${tag}-${index}`} className="bg-white-smoke dark:bg-black text-black dark:text-white border border-gray-500 cursor-default hover:border-strong-violent dark:hover:border-strong-violent transition duration-500 ease-in-out">
+                  <button key={`${tag}-${index}`} className="bg-white-smoke dark:bg-black text-black dark:text-white border border-gray-500 cursor-default hover:border-strong-violet dark:hover:border-strong-violet transition duration-500 ease-in-out">
                     {tag}
                   </button>
                 ))}

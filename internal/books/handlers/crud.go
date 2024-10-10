@@ -460,6 +460,7 @@ func (h *BookHandlers) HandleGetHomepageData(response http.ResponseWriter, reque
 	userTagsChan := make(chan map[string]interface{}, 1)
 	userLangChan := make(chan map[string]interface{}, 1)
 	userGenresChan := make(chan map[string]interface{}, 1)
+	userAuthorsChan := make(chan map[string]interface{}, 1)
 	errorChan := make(chan error, 1)
 
 	// Goroutine for GetUserTags
@@ -493,10 +494,20 @@ func (h *BookHandlers) HandleGetHomepageData(response http.ResponseWriter, reque
 		userGenresChan <- genres
 	}()
 
-	// Collect results from channels
-	var userTags, userBkLang, userBkGenres interface{}
+	// Goroutine for GetAuthorsListWithBookCount
+	go func() {
+		authors, err := h.authorRepo.GetAuthorsListWithBookCount(request.Context(), userID)
+		if err != nil {
+			errorChan <- err
+			return
+		}
+		userAuthorsChan <- authors
+	}()
 
-	for i := 0; i < 3; i++ {
+	// Collect results from channels
+	var userTags, userBkLang, userBkGenres, userAuthors interface{}
+
+	for i := 0; i < 4; i++ {
 		select {
 		case tags := <-userTagsChan:
 			userTags = tags
@@ -504,6 +515,8 @@ func (h *BookHandlers) HandleGetHomepageData(response http.ResponseWriter, reque
 			userBkLang = langs
 		case genres := <-userGenresChan:
 			userBkGenres = genres
+		case authors := <-userAuthorsChan:
+			userAuthors = authors
 		case err := <-errorChan:
 			h.logger.Error("Error fetching homepage data", "error", err)
 			http.Error(response, "Error fetching homepage data", http.StatusInternalServerError)
@@ -516,6 +529,7 @@ func (h *BookHandlers) HandleGetHomepageData(response http.ResponseWriter, reque
 		"userTags":    userTags,
 		"userBkLang":  userBkLang,
 		"userBkGenres": userBkGenres,
+		"userAuthors": userAuthors,
 	}
 
 	response.Header().Set("Content-Type", "application/json")

@@ -34,7 +34,6 @@ type BookCache interface {
 type BookCacheImpl struct {
 	DB               *sql.DB
 	Logger           *slog.Logger
-	insertBookStmt   *sql.Stmt
 	getAllLangStmt   *sql.Stmt
 }
 

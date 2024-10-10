@@ -13,11 +13,16 @@ import { AggregatedHomePageData } from '../types/api';
 function Home() {
   const { data, isLoading } = useHomePageData();
 
-  const { books, booksByFormat, totalBooks, booksByLang, booksByGenre, userTags } = useMemo(() => {
+  const { books, booksByFormat, totalBooks, booksByLang, booksByGenre, userTags, booksByAuthor } = useMemo(() => {
     const defaultData: AggregatedHomePageData = {
       books: [],
       booksByFormat: { audioBook: [], physical: [], eBook: [] },
-      homepageStats: { userBkLang: { booksByLang: [] }, userBkGenres: { booksByGenre: [] }, userTags: { userTags: [] } }
+      homepageStats: {
+        userBkLang: { booksByLang: [] },
+        userBkGenres: { booksByGenre: [] },
+        userTags: { userTags: [] },
+        userAuthors: { booksByAuthor: [] }
+      }
     };
 
     if (!data) return {
@@ -26,7 +31,8 @@ function Home() {
       booksByFormat: [],
       booksByLang: [],
       booksByGenre: [],
-      userTags: []
+      userTags: [],
+      booksByAuthor: [],
     };
 
     const { books = [], booksByFormat = { physical: [], eBook: [], audioBook: [] }, homepageStats = defaultData.homepageStats } = data;
@@ -42,6 +48,7 @@ function Home() {
       booksByLang: homepageStats.userBkLang?.booksByLang || [],
       booksByGenre: homepageStats.userBkGenres?.booksByGenre || [],
       userTags: homepageStats.userTags?.userTags || [],
+      booksByAuthor: homepageStats.userAuthors?.booksByAuthor || [],
     };
   }, [data]);
 
@@ -50,8 +57,9 @@ function Home() {
     booksByFormat.every(format => format.count === 0) &&
     booksByLang.length === 0 &&
     booksByGenre.length === 0 &&
+    booksByAuthor.length === 0 &&
     userTags.length === 0,
-  [books, booksByFormat, booksByLang, booksByGenre, userTags]);
+  [books, booksByFormat, booksByLang, booksByGenre, booksByAuthor, userTags]);
 
   if (isLoading) return (
     <div className="bk_home flex flex-col items-center px-5 antialiased mdTablet:pl-1 pr-5 mdTablet:ml-24 h-screen pt-12">
@@ -67,7 +75,10 @@ function Home() {
     )
   }
 
+  console.log('===========');
   console.log('data package: ', data);
+  console.log('booksByAuthor: ', booksByAuthor);
+
   console.log('books.length: ', books.length || 0);
 
   return (
@@ -80,13 +91,20 @@ function Home() {
             isLoading={isLoading}
           />
           <h2 className="text-left text-charcoal text-2xl font-bold inline-block max-w-full overflow-hidden text-ellipsis whitespace-nowrap select-none mb-4 dark:text-white">Statistics</h2>
-          <div className="grid grid-cols-12 gap-6">
-            {/* Format data */}
-            <DonutChartCard totalBooks={books.length || 0} bookFormats={booksByFormat}/>
+          <div className="box-border grid grid-cols-12 gap-6">
 
-            {/* Language data */}
+            {/* Format data */}
+            <DonutChartCard
+              totalBooks={books.length || 0}
+              bookFormats={booksByFormat}
+            />
+
+            {/* Tag Data */}
+            <TableCard userTags={userTags}/>
+
+            {/* Author data */}
             <BarChartCard
-              booksByLang={booksByLang}
+              booksByAuthor={booksByAuthor}
               totalBooks={totalBooks}
             />
 
@@ -96,8 +114,13 @@ function Home() {
               totalBooks={totalBooks}
             />
 
-            {/* Tag Data */}
-            <TableCard userTags={userTags}/>
+            {/* Language data */}
+            <BarChartCard
+              booksByLang={booksByLang}
+              totalBooks={totalBooks}
+            />
+
+
           </div>
         </div>
       </div>

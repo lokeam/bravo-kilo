@@ -16,8 +16,12 @@ interface BarChartCardLanguages {
   totalBooks: number;
 }
 
-type BarChartCardProps = BarChartCardGenres | BarChartCardLanguages;
+interface BarChartCardAuthors {
+  booksByAuthor: BookStatObj[];
+  totalBooks: number;
+}
 
+type BarChartCardProps = BarChartCardGenres | BarChartCardLanguages | BarChartCardAuthors;
 
 // Type Guard Checks
 function isBarChartCardGenres(props: BarChartCardProps): props is BarChartCardGenres {
@@ -28,14 +32,20 @@ function isBarChartCardLanguages(props: BarChartCardProps): props is BarChartCar
   return 'booksByLang' in props;
 }
 
+function isBarChartCardAuthors(props: BarChartCardProps): props is BarChartCardAuthors {
+  return Array.isArray((props as BarChartCardAuthors).booksByAuthor);
+}
+
 export default function BarChartCard(props: BarChartCardProps) {
+  const commonClasses = "bg-white dark:bg-eight-ball box-border col-span-full mdTablet:col-span-4 rounded-xl shadow-xl  dark:border dark:border-gray-700/60 overflow-y-hidden";
 
   if (isBarChartCardGenres(props)) {
     return (
-      <div className="genre_card dark:bg-eight-ball bg-white col-span-full mdTablet:col-span-4 shadow-xl rounded-xl max-h-[465px] dark:border dark:border-gray-700/60">
+      <div className={`genre_card ${commonClasses}`}>
         <ChartCardHeader topic="Genre" />
         <BarChartCardBody
-          bookData={props.booksByGenre} barColor="bg-vivid-blue/[0.6]"
+          bookData={props.booksByGenre}
+          barColor="bg-vivid-blue/[0.6]"
           totalBooks={props.totalBooks}
         />
       </div>
@@ -44,7 +54,7 @@ export default function BarChartCard(props: BarChartCardProps) {
 
   if (isBarChartCardLanguages(props)) {
     return (
-      <div className="language_card bg-white dark:bg-eight-ball col-span-full lgMobile:col-span-6 mdTablet:col-span-4 shadow-xl rounded-xl dark:border dark:border-gray-700/60">
+      <div className={`language_card ${commonClasses}`}>
         <ChartCardHeader topic="Language" />
         <BarChartCardBody
           barColor="bg-lime-green/[0.6]"
@@ -54,6 +64,20 @@ export default function BarChartCard(props: BarChartCardProps) {
         />
       </div>
     )
+  }
+
+  if (isBarChartCardAuthors(props)) {
+    return (
+      <div className={`author_card ${commonClasses}`}>
+        <ChartCardHeader topic="Author" />
+        <BarChartCardBody
+          barColor="bg-strong-violet/[0.6]"
+          bookData={props.booksByAuthor}
+          totalBooks={props.totalBooks}
+
+        />
+      </div>
+    );
   }
 
   return null;
