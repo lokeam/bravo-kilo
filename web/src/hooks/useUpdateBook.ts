@@ -1,34 +1,13 @@
-import { useNavigate } from 'react-router-dom';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { updateBook } from './../service/apiClient.service';
-import useStore from '../store/useStore';
+import useBookOperation from './useBookOperation';
 import { Book } from '../types/api';
 
 const useUpdateBook = (bookID: string) => {
+  const { performOperation, isLoading } = useBookOperation('update', bookID);
 
-  console.log('useUpdateBook fired, bookID ', bookID);
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
-
-  const { showSnackbar } = useStore();
-
-  return useMutation({
-    mutationFn: (book: Book) => updateBook(book, bookID),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['book', bookID] });
-      queryClient.invalidateQueries({ queryKey: ['userBooks'] });
-      queryClient.invalidateQueries({ queryKey: ['booksFormat'] });
-      queryClient.invalidateQueries({ queryKey: ['userBookAuthors'] });
-      queryClient.invalidateQueries({ queryKey: ['userBookGenres'] });
-      showSnackbar('Book updated successfully', 'updated');
-      navigate(`/library`);
-    },
-    onError: (error: any) => {
-      console.log('useUpdateBook - Error updating book: ', error);
-      showSnackbar(`Error updating book ${error.message}`, error);
-    }
-  })
-}
-
+  return {
+    updateBook: (book: Book) => performOperation(book),
+    isLoading,
+  };
+};
 
 export default useUpdateBook;

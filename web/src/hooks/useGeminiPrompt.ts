@@ -7,7 +7,7 @@ const useGeminiPrompt = (prompt: string) => {
     queryKey: ['prompt', prompt],
     queryFn: async () => {
       const promptResponse = await geminiQueryAPI(prompt);
-      console.log('useGeminiPrompt.ts: response:', promptResponse); // Log the books data
+      console.log('useGeminiPrompt.ts: response:', promptResponse);
       return promptResponse;
     },
     staleTime: 1000 * 60 * 5,

@@ -8,6 +8,24 @@ const apiClient = axios.create({
   withCredentials: true,
 });
 
+export const refreshCSRFToken = async () => {
+  try {
+    console.log('####');
+    console.log('Attempting to refresh CSRF token');
+    const response = await apiClient.get('/api/v1/csrf-token');
+    console.log('CSRF token response: ', response);
+
+    const newCSRFToken = response.headers['x-csrf-token'];
+    if (newCSRFToken) {
+      csrfToken = newCSRFToken;
+      console.log('New CSRF token set: ', csrfToken);
+    } else {
+      console.warn('No CSRF token in refresh response');
+    }
+  } catch (error) {
+    console.error('Failed to refresh CSRF token:', error);
+  }
+};
 
 apiClient.interceptors.response.use(
   response => {
@@ -15,7 +33,10 @@ apiClient.interceptors.response.use(
     const csrfTokenFromHeader = response.headers['x-csrf-token'];
     if (csrfTokenFromHeader) {
       csrfToken = csrfTokenFromHeader;
+      console.log('********** interceptors.response - CRF Token capture ***********');
       console.log('CSRF token captured:', csrfToken);
+      console.log('Full response headers:', response.headers);
+      console.log('*********************');
     }
     return response;
   },
@@ -56,13 +77,25 @@ apiClient.interceptors.request.use(
   config => {
     if (csrfToken && ['post', 'put', 'delete'].includes(config.method?.toLowerCase() || '')) {
       config.headers['X-CSRF-Token'] = csrfToken;
-      console.log('CSRF token added to request:', csrfToken);
+      console.log('********** interceptors.request - CRF Token capture ***********');
+      if (csrfToken) {
+        config.headers['X-CSRF-Token'] = csrfToken;
+        console.log(`CSRF token added to ${config.method?.toUpperCase()} request:`, csrfToken);
+      } else {
+        console.warn(`No CSRF token available for ${config.method?.toUpperCase()} request`);
+      }
+      console.log('Full request config:', config);
+      console.log('*********************');
     }
     return config;
   },
   error => {
+    if (error.response && error.response.status === 403 && error.response.data.includes('CSRF')) {
+      console.error('CSRF Error:', error.response.data);
+      console.error('Current CSRF Token:', csrfToken);
+    }
     console.error('Request error:', error);
-    return Promise.reject(error)
+    return Promise.reject(error);
   }
 );
 
