@@ -10,7 +10,7 @@ function EmptyHomeCard() {
 
           <Link
             className="bg-margorelle-d3 hover:text-white hover:bg-majorelle text-white flex flex-row cursor-pointer items-center content-center rounded-lg gap-4 px-8 py-4 mt-4 mb-4"
-            to={'/add'}
+            to={'/library/books/add/gateway'}
           > Add some books to get started
           </Link>
           <p>For more info, visit the <Link className="" to={"/support"}>Getting Started Guide</Link>.</p>
