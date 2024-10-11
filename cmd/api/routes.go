@@ -63,6 +63,8 @@ func (app *application) routes(
 		r.Use(csrfMiddleware)
 		r.Use(middleware.CSRFTokens)
 
+		r.Get("/api/v1/csrf-token", authHandlers.HandleRefreshCSRFToken)
+
 		r.Route("/api/v1/user", func(r chi.Router) {
 			r.Use(middleware.VerifyJWT)
 			r.Get("/books", bookHandlers.HandleGetAllUserBooks)

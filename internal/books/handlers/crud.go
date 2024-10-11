@@ -85,7 +85,7 @@ func (h *BookHandlers) HandleGetAllUserBooks(response http.ResponseWriter, reque
 		http.Error(response, "Error encoding response", http.StatusInternalServerError)
 		return
 	}
-	h.logger.Info("HandleGetAllUserBooks completed successfully")
+	//h.logger.Info("HandleGetAllUserBooks completed successfully")
 }
 
 // Retrieve books by a specific author
@@ -110,14 +110,14 @@ func (h *BookHandlers) HandleGetBooksByAuthors(response http.ResponseWriter, req
 			http.Error(response, "Error fetching books by authors", http.StatusInternalServerError)
 			return
 	}
-	h.logger.Info("Books by authors fetched successfully", "authorCount", len(booksByAuthors))
+	//h.logger.Info("Books by authors fetched successfully", "authorCount", len(booksByAuthors))
 
 	response.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(response).Encode(booksByAuthors); err != nil {
 			h.logger.Error("Error encoding response", "error", err)
 			http.Error(response, "Error encoding response", http.StatusInternalServerError)
 	}
-	h.logger.Info("HandleGetBooksByAuthors completed successfully")
+	//h.logger.Info("HandleGetBooksByAuthors completed successfully")
 }
 
 // Get Single Book by ID
@@ -372,7 +372,7 @@ func (h *BookHandlers) HandleGetBooksByFormat(response http.ResponseWriter, requ
 		h.logger.Error("Error encoding response", "error", err)
 		http.Error(response, "Error encoding response", http.StatusInternalServerError)
 	}
-	h.logger.Info("HandleGetBooksByFormat completed successfully")
+	//h.logger.Info("HandleGetBooksByFormat completed successfully")
 }
 
 // Sorting - Get Books by Genre
@@ -398,14 +398,14 @@ func (h *BookHandlers) HandleGetBooksByGenres(response http.ResponseWriter, requ
 		http.Error(response, "Error fetching books by genres", http.StatusInternalServerError)
 		return
 	}
-	h.logger.Info("Books by genres fetched successfully", "genreCount", len(booksByGenres))
+	//h.logger.Info("Books by genres fetched successfully", "genreCount", len(booksByGenres))
 
 	response.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(response).Encode(booksByGenres); err != nil {
 		h.logger.Error("Error encoding response", "error", err)
 		http.Error(response, "Error encoding response", http.StatusInternalServerError)
 	}
-	h.logger.Info("HandleGetBooksByGenres completed successfully")
+	//h.logger.Info("HandleGetBooksByGenres completed successfully")
 }
 
 // Sorting - Get Books by Tag
@@ -431,7 +431,7 @@ func (h *BookHandlers) HandleGetBooksByTags(response http.ResponseWriter, reques
 		http.Error(response, "Error fetching books by tags", http.StatusInternalServerError)
 		return
 	}
-	h.logger.Info("Books by tags fetched successfully", "tagCount", len(booksByTags))
+	//h.logger.Info("Books by tags fetched successfully", "tagCount", len(booksByTags))
 
 	// Set content type and respond with JSON
 	response.Header().Set("Content-Type", "application/json")
@@ -439,7 +439,7 @@ func (h *BookHandlers) HandleGetBooksByTags(response http.ResponseWriter, reques
 		h.logger.Error("Error encoding books by tags response", "error", err)
 		http.Error(response, "Error encoding response", http.StatusInternalServerError)
 	}
-	h.logger.Info("HandleGetBooksByTags completed successfully")
+	//h.logger.Info("HandleGetBooksByTags completed successfully")
 }
 
 

@@ -313,8 +313,18 @@ func (h *AuthHandlers) HandleGoogleCallback(response http.ResponseWriter, reques
 	h.logger.Info("JWT successfully sent to FE with status code: ", "info", http.StatusSeeOther)
 }
 
+// Refresh CSRF Token
+func (h *AuthHandlers) HandleRefreshCSRFToken(response http.ResponseWriter, request *http.Request) {
+	h.logger.Info("HandleRefreshCSRFToken called")
 
-// Retrieve Token
+	// CSRF Gorilla automatically sets new token in response header
+	response.WriteHeader(http.StatusOK)
+	response.Write([]byte("CSRF token refreshed"))
+
+	h.logger.Info("CSRF token refreshed successfully")
+}
+
+// Retrieve JWT Token
 func (h *AuthHandlers) GetUserAccessToken(request *http.Request) (*oauth2.Token, error) {
 	// Get userID from JWT
 	cookie, err := request.Cookie("token")
@@ -430,8 +440,10 @@ func (h *AuthHandlers) HandleVerifyToken(response http.ResponseWriter, request *
 	h.logger.Info("HandleVerifyToken completed successfully - text updated")
 }
 
-// Refresh Token
+// Refresh JWT Token
 func (h *AuthHandlers) HandleRefreshToken(response http.ResponseWriter, request *http.Request) {
+	h.logger.Info("HandleRefreshToken called")
+
 	// Grab refresh token from request
 	cookie, err := request.Cookie("token")
 	if err != nil {
@@ -474,6 +486,7 @@ func (h *AuthHandlers) HandleRefreshToken(response http.ResponseWriter, request 
 			ExpiresAt: jwt.NewNumericDate(expirationTime),
 		},
 	}
+	h.logger.Info("New token generated", "newClaims", newClaims)
 
 	newTokenStr, err := crypto.SignToken(newClaims, config.AppConfig.JWTPrivateKey)
 	if err != nil {
@@ -507,7 +520,7 @@ func (h *AuthHandlers) HandleRefreshToken(response http.ResponseWriter, request 
 		SameSite: http.SameSiteLaxMode,
 		Path:     "/",
 	})
-
+	h.logger.Info("New token set as cookie", "newToken", newTokenStr[:10]+"...")
 	response.WriteHeader(http.StatusOK)
 	response.Write([]byte("Token refreshed successfully"))
 }
