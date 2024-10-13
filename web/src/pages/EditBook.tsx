@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { SubmitHandler } from 'react-hook-form';
 import Markdown from 'react-markdown';
 import DOMPurify from 'dompurify';
@@ -14,6 +14,7 @@ import { BookFormData } from '../types/api';
 import useUpdateBook from '../hooks/useUpdateBook';
 import useDeleteBook from '../hooks/useDeleteBook';
 import useFetchBookById from '../hooks/useFetchBookById';
+import useStore from '../store/useStore';
 
 import { IoIosWarning } from "react-icons/io";
 import { MdDeleteForever } from "react-icons/md";
@@ -28,21 +29,23 @@ const EditBook = () => {
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
   const [isManualTrigger, setIsManualTrigger] = useState(false);
 
+  const navigate = useNavigate();
   const { bookID } = useParams();
+  const { showSnackbar } = useStore();
 
-  const { data: book, isLoading, isError } = useFetchBookById(bookID as string, !!bookID);
-  const { mutate: updateBook } = useUpdateBook(bookID as string);
-  const { mutate: deleteBook } = useDeleteBook();
+  const { data: book, isLoading: isFetchLoading, isError } = useFetchBookById(bookID as string, !!bookID);
+  const { updateBook, isLoading: isUpdateLoading, LoadingComponent: UpdateLoadingComponent } = useUpdateBook(bookID as string);
+  const { deleteBook, isLoading: isDeleteLoading, LoadingComponent: DeleteLoadingComponent } = useDeleteBook();
 
-  if (isLoading) return <Loading />;
+  if (isFetchLoading) return <Loading />;
   if (isError || !book) return <div>Error loading book data</div>;
 
   // Form Submittal
-  const handleUpdateBook: SubmitHandler<BookFormData> = (data) => {
+  const handleUpdateBook: SubmitHandler<BookFormData> = async (data) => {
     console.log(`Form submitted with data ${data}`);
     const defaultDate = new Date().toISOString();
 
-    const book = {
+    const updatedBook = {
       ...data,
       id: Number(bookID),
       createdAt: defaultDate,
@@ -54,7 +57,14 @@ const EditBook = () => {
       tags: data.tags.map((tagObj) => tagObj.tag.trim()).filter((tag) => tag !== ''),
     };
 
-    updateBook(book);
+    try {
+      await updateBook(updatedBook);
+      showSnackbar('Book updated successfully', 'updated');
+      navigate('/library');
+    } catch (error) {
+      console.error('Error updating book:', error);
+      showSnackbar('Failed to update book. Please try again.', 'error');
+    }
   };
 
   const copyTextContent = () => {
@@ -77,9 +87,18 @@ const EditBook = () => {
   // Delete Modal
   const openModal = () => setOpened(true);
   const closeModal = () => setOpened(false);
-  const handleDelete = (event: React.MouseEvent<HTMLButtonElement>) => {
-    event?.preventDefault;
-    deleteBook(bookID as string)
+  const handleDelete = async (event: React.MouseEvent<HTMLButtonElement>) => {
+    event?.preventDefault();
+    try {
+      await deleteBook(bookID as string);
+      showSnackbar('Book deleted successfully', 'removed');
+      navigate('/library');
+    } catch (error) {
+      console.error('Error deleting book:', error);
+      showSnackbar('Failed to delete book. Please try again.', 'error');
+    } finally {
+      closeModal();
+    }
   };
 
   // Preview Modal
@@ -124,6 +143,7 @@ const EditBook = () => {
             isEditMode={true}
             onDelete={openModal}
             renderAISummaryBtn={renderAISummaryBtn}
+            isLoading={isUpdateLoading}
           />
 
           {/* Delete Modal */}

@@ -17,6 +17,7 @@ interface BookFormProps {
   isEditMode?: boolean;
   onDelete?: () => void;
   renderAISummaryBtn?: React.ReactNode;
+  isLoading?: boolean;
 }
 
 function transformBookData(bookData: Partial<Book> = {}, formattedDate: string): BookFormData {
@@ -50,6 +51,7 @@ function BookForm({
   isEditMode = false,
   onDelete,
   renderAISummaryBtn,
+  isLoading = false,
 }: BookFormProps) {
   const { formattedDate, dateWarning } = useFormatPublishDate(initialData?.publishDate || '');
   const bookDataEmpty = _.isEmpty(initialData);
@@ -450,8 +452,9 @@ function BookForm({
         <button
           className="bg-vivid-blue hover:bg-vivid-blue-d hover:border-vivid-blue-d dark:bg-vivid-blue dark:hover:bg-vivid-blue-d dark:hover:border-vivid-blue-d dark:hover:text-white transition duration-500 ease-in-out"
           type="submit"
+          disabled={isLoading}
         >
-          {isEditMode ? 'Update Book' : 'Add Book' }
+          {isLoading ? 'Loading...' : isEditMode ? 'Update Book' : 'Add Book' }
         </button>
 
         {/* Delete Button */}
@@ -460,6 +463,7 @@ function BookForm({
             type="button"
             onClick={onDelete}
             className="border-red-500 text-red-500 hover:text-white dark:hover:text-white hover:bg-red-600 focus:ring-red-900 hover:border-red-900 dark:hover:bg-red-900 dark:hover:border-red-900  transition duration-500 ease-in-out"
+            disabled={isLoading}
           >
             Delete Book
           </button>
