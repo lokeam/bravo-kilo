@@ -462,7 +462,7 @@ function BookForm({
           <button
             type="button"
             onClick={onDelete}
-            className="border-red-500 text-red-500 hover:text-white dark:hover:text-white hover:bg-red-600 focus:ring-red-900 hover:border-red-900 dark:hover:bg-red-900 dark:hover:border-red-900  transition duration-500 ease-in-out"
+            className="bg-transparent border-red-500 text-red-500 hover:text-white dark:hover:text-white hover:bg-red-800 focus:ring-red-800 hover:border-red-800 dark:hover:bg-red-800 dark:hover:border-red-800 transition duration-500 ease-in-out"
             disabled={isLoading}
           >
             Delete Book

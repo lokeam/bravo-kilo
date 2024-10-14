@@ -149,14 +149,14 @@ const EditBook = () => {
           {/* Delete Modal */}
           <Modal opened={opened} onClose={closeModal}>
             <div className="flex items-center justify-center">
-              <IoIosWarning size={30} />
+              <IoIosWarning className="text-orange-600 dark:text-yellow-500" size={30} />
             </div>
             <h3 className="flex items-center justify-center text-lg">Are you sure that you want to delete this book?</h3>
-            <p className="flex items-center justify-center mb-5">This action cannot be undone.</p>
-            <button type="button" onClick={closeModal} className="flex flex-row justify-between items-center bg-transparent mr-1 w-full mb-3 lg:mb-0">
+            <p className="font-bold flex items-center justify-center mb-5">This action cannot be undone.</p>
+            <button type="button" onClick={closeModal} className="flex flex-row justify-between items-center bg-transparent mr-1 w-full mb-3 lg:mb-0 transition duration-500 ease-in-out hover:border-vivid-blue dark:hover:border-vivid-blue">
               <span>Cancel</span>
             </button>
-            <button type="button" onClick={handleDelete} className="flex flex-row justify-between items-center bg-transparent mr-1 w-full text-white bg-red-600 hover:bg-red-800 focus:ring-red-800 mb-3 lg:mb-0">
+            <button type="button" onClick={handleDelete} className="bg-transparent flex flex-row justify-between items-center mr-1 w-full border-red-500 text-red-500 hover:text-white dark:hover:text-white hover:bg-red-800 focus:ring-red-800 hover:border-red-800 dark:hover:bg-red-800 dark:hover:border-red-800 transition duration-500 ease-in-out">
               <span>Yes, I want to delete this book</span>
               <MdDeleteForever size={30}/>
             </button>
