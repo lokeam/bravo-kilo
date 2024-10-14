@@ -109,6 +109,21 @@ func generateState() string {
 	return base64.URLEncoding.EncodeToString(byteSlice)
 }
 
+// Handle error redirects within GooglCallback
+func (h *AuthHandlers) redirectWithError(w http.ResponseWriter, r *http.Request, errorType string) {
+	frontendURL := os.Getenv("VITE_FRONTEND_URL")
+	if frontendURL == "" {
+			frontendURL = "http://localhost:5173" // Default to Vite's default port
+	}
+	redirectURL := fmt.Sprintf("%s/login?error=%s", frontendURL, errorType)
+	http.Redirect(w, r, redirectURL, http.StatusSeeOther)
+	h.logger.Info("Redirecting to frontend with error",
+			"url", redirectURL,
+			"error", errorType,
+			"statusCode", http.StatusSeeOther,
+	)
+}
+
 // Init OAuth with Google
 func (h *AuthHandlers) HandleGoogleSignIn(response http.ResponseWriter, request *http.Request) {
 	h.logger.Info("Handling Google OAuth callback")
@@ -140,17 +155,16 @@ func (h *AuthHandlers) HandleGoogleCallback(response http.ResponseWriter, reques
 
 	// Verify state parameter
 	state := request.URL.Query().Get("state")
-
 	cookie, err := request.Cookie("oauthstate")
 	if err != nil {
 			h.logger.Error("Error: State cookie not found", "error", err)
-			http.Error(response, "Error: State cookie not found", http.StatusBadRequest)
+			h.redirectWithError(response, request, "no_state_cookie")
 			return
 	}
 
 	if state != cookie.Value {
 			h.logger.Error("Error: URL State and Cookie state don't match")
-			http.Error(response, "Error: States don't match", http.StatusBadRequest)
+			h.redirectWithError(response, request, "state_mismatch")
 			return
 	}
 
@@ -160,7 +174,7 @@ func (h *AuthHandlers) HandleGoogleCallback(response http.ResponseWriter, reques
 	token, err := oauth2Config.Exchange(ctx, code)
 	if err != nil {
 			h.logger.Error("Error exchanging code for token", "error", err)
-			http.Error(response, "Error exchanging code for token", http.StatusInternalServerError)
+			h.redirectWithError(response, request, "token_exchange")
 			return
 	}
 
@@ -168,7 +182,7 @@ func (h *AuthHandlers) HandleGoogleCallback(response http.ResponseWriter, reques
 	rawIDToken, ok := token.Extra("id_token").(string)
 	if !ok {
 			h.logger.Error("Error: No id_token field in oauth2 token")
-			http.Error(response, "Error: No id_token field in oauth2 token", http.StatusInternalServerError)
+			h.redirectWithError(response, request, "missing_id_token")
 			return
 	}
 
@@ -176,7 +190,7 @@ func (h *AuthHandlers) HandleGoogleCallback(response http.ResponseWriter, reques
 	idToken, err := oidcVerifier.Verify(ctx, rawIDToken)
 	if err != nil {
 			h.logger.Error("Error verifying ID Token", "error", err)
-			http.Error(response, "Error verifying ID Token", http.StatusInternalServerError)
+			h.redirectWithError(response, request, "invalid_id_token")
 			return
 	}
 
@@ -191,7 +205,7 @@ func (h *AuthHandlers) HandleGoogleCallback(response http.ResponseWriter, reques
 
 	if err := idToken.Claims(&userInfo); err != nil {
 			h.logger.Error("Error decoding ID Token claims", "error", err)
-			http.Error(response, "Error decoding ID Token claims", http.StatusInternalServerError)
+			h.redirectWithError(response, request, "error_id_token_claims")
 			return
 	}
 
@@ -202,10 +216,11 @@ func (h *AuthHandlers) HandleGoogleCallback(response http.ResponseWriter, reques
 	// Check if the user already exists in the database
 	existingUser, err := h.models.User.GetByEmail(userInfo.Email)
 	if err != nil && err != sql.ErrNoRows {
-			h.logger.Error("Error checking for existing user", "error", err)
-			http.Error(response, "Error checking for existing user", http.StatusInternalServerError)
-			return
-	}
+    // This is an actual database error, not just a "user not found" scenario
+    h.logger.Error("Error checking for existing user", "error", err)
+    h.redirectWithError(response, request, "database_error")
+    return
+}
 
 	var userId int
 	if existingUser != nil {
@@ -222,7 +237,7 @@ func (h *AuthHandlers) HandleGoogleCallback(response http.ResponseWriter, reques
 			userId, err = h.models.User.Insert(user)
 			if err != nil {
 					h.logger.Error("Error adding user to db", "error", err)
-					http.Error(response, "Error adding user to db", http.StatusInternalServerError)
+					h.redirectWithError(response, request, "error_adding_user")
 					return
 			}
 	}
@@ -238,6 +253,7 @@ func (h *AuthHandlers) HandleGoogleCallback(response http.ResponseWriter, reques
 			if err := h.models.Token.Insert(tokenRecord); err != nil {
 					h.logger.Error("Error adding token to db", "error", err)
 					http.Error(response, "Error adding token to db", http.StatusInternalServerError)
+					h.redirectWithError(response, request, "error_adding_token")
 					return
 			}
 	} else {
@@ -256,6 +272,7 @@ func (h *AuthHandlers) HandleGoogleCallback(response http.ResponseWriter, reques
 	if config.AppConfig.JWTPrivateKey == nil {
 		h.logger.Error("JWT private key not found")
 		http.Error(response, "JWT private key not found", http.StatusInternalServerError)
+		h.redirectWithError(response, request, "missing_jwt_private_key")
 		return
 	}
 
@@ -263,9 +280,9 @@ func (h *AuthHandlers) HandleGoogleCallback(response http.ResponseWriter, reques
 	if err != nil {
 			h.logger.Error("Error generating JWT", "error", err)
 			http.Error(response, "Error generating JWT", http.StatusInternalServerError)
+			h.redirectWithError(response, request, "error_generating_jwt")
 			return
 	}
-
 	h.logger.Info("Generated JWT")
 
 	// Send the JWT as a cookie
@@ -280,31 +297,19 @@ func (h *AuthHandlers) HandleGoogleCallback(response http.ResponseWriter, reques
 			Path:     "/",
 			Domain: "",
 	})
-	h.logger.Info("JWT cookie set",
-		"name", "token",
-		"value", jwtString[:10]+"...", // Log only the first 10 characters for security
-		"expires", expirationTime,
-		"secure", isProduction,
-		"sameSite", http.SameSiteLaxMode,
-		"path", "/",
-	)
-	// Set a non-HttpOnly cookie for testing
-	http.SetCookie(response, &http.Cookie{
-		Name:     "test_cookie",
-		Value:    "test_value",
-		Expires:  time.Now().Add(24 * time.Hour),
-		HttpOnly: false,
-		Secure:   false,
-		SameSite: http.SameSiteLaxMode,
-		Path:     "/",
-	})
-	h.logger.Info("Test cookie set",
-		"name", "test_cookie",
-		"value", "test_value",
-	)
+
+	// On successful login, redirect to the frontend dashboard
+	frontendURL := os.Getenv("VITE_FRONTEND_LOGIN_URL")
+	if frontendURL == "" {
+			frontendURL = "http://localhost:5173" // Default to Vite's default port
+	}
+
 
 	// Redirect to the frontend dashboard
-	dashboardURL := "http://localhost:5173/library"
+	dashboardURL := os.Getenv("VITE_FRONTEND_DASHBOARD_URL")
+	if dashboardURL == "" {
+			dashboardURL = "http://localhost:5173/library" // Default to Vite's default port
+	}
 	http.Redirect(response, request, dashboardURL, http.StatusSeeOther)
 	h.logger.Info("Redirecting to frontend",
 		"url", dashboardURL,

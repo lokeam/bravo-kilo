@@ -13,7 +13,7 @@ import ManualAddBook from './pages/ManualAddBook';
 import AddUpload from './pages/AddUpload';
 import Search from './pages/Search';
 import Settings from './pages/Settings';
-import Login from './pages/Login';
+import Login from './pages/Login'
 import Library from './pages/Library';
 import AuthorGenre from './pages/AuthorGenre';
 import BookDetail from './pages/BookDetail';
