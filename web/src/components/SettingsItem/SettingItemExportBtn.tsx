@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useUser } from '../../hooks/useUser';
 import useDebounce from '../../hooks/useDebounceLD';
-import { exportUserBooks } from '../../service/apiClient.service';
+import { fetchUserBooks, exportUserBooks, fetchBookByID } from '../../service/apiClient.service';
 
 function SettingsItemExportBtn() {
   const { data: user} = useUser();
@@ -15,10 +15,13 @@ function SettingsItemExportBtn() {
   const { data: cachedBooks } = useQuery({
     queryKey: booksQueryKey,
     queryFn: async () => {
-      // Fetch user books here
+      if (userID) {
+        const books = await fetchUserBooks(userID);
+        return books;
+      }
       return [];
     },
-    enabled: false,
+    enabled: !!userID,
   });
 
   // Check if the user has books cached
@@ -26,7 +29,7 @@ function SettingsItemExportBtn() {
 
   console.log('************');
   console.log('userID: ', userID);
-  console.log('checking hasBooks: ', cachedBooks);
+  console.log('checking cachedBooks: ', cachedBooks);
   console.log('checking hasBooks: ', hasBooks);
 
   // Handle the button click

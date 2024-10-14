@@ -14,11 +14,6 @@ function Settings() {
       variant: "export",
     },
     {
-      label: "Animation",
-      copy: "Disable animations and transitions",
-      variant: "animation",
-    },
-    {
       label: "Delete Account",
       copy: "Permanently delete this account and all library data",
       variant: "delete",
