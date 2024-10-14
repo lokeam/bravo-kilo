@@ -5,6 +5,7 @@ import { Outlet } from 'react-router-dom';
 import TopNavigation from '../components/TopNav/TopNav';
 import SideNavigation from '../components/SideNav/SideNavigation';
 import OfflineBanner from '../components/ErrorMessages/OfflineBanner';
+import PageTransition from '../components/PageTransition';
 import Snackbar from '../components/Snackbar/Snackbar';
 import useStore from '../store/useStore';
 
@@ -37,7 +38,9 @@ const AuthenticatedLayout = () => {
       <div className="content pt-[67px] bg-white dark:bg-black">
         <OfflineBanner />
         {memoizedSnackbar}
-        <Outlet />
+        <PageTransition>
+          <Outlet />
+        </PageTransition>
       </div>
     </div>
   );
