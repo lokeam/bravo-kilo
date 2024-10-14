@@ -84,20 +84,20 @@ func (app *application) routes(
 			r.Get("/search", searchHandlers.HandleSearchBooks)
 			r.With(middleware.RateLimiter).Get("/summary", bookHandlers.HandleGetGeminiBookSummary)
 			r.Get("/by-title", bookHandlers.HandleGetBookIDByTitle)
-			r.Put("/{bookID}", bookHandlers.HandleUpdateBook)
-			r.Post("/add", bookHandlers.HandleInsertBook)
-			r.Delete("/{bookID}", bookHandlers.HandleDeleteBook)
+			r.With(middleware.RateLimiter).Put("/{bookID}", bookHandlers.HandleUpdateBook)
+			r.With(middleware.RateLimiter).Post("/add", bookHandlers.HandleInsertBook)
+			r.With(middleware.RateLimiter).Delete("/{bookID}", bookHandlers.HandleDeleteBook)
 		})
 	})
 
 	// OAuth2 routes without CSRF protection
 	mux.Group(func(r chi.Router) {
-		mux.Get("/auth/google/signin", authHandlers.HandleGoogleSignIn)
-		mux.Get("/auth/google/callback", authHandlers.HandleGoogleCallback)
-		mux.Get("/auth/token/verify", authHandlers.HandleVerifyToken)
-		mux.Post("/auth/token/refresh", authHandlers.HandleRefreshToken)
-		mux.Post("/auth/signout", authHandlers.HandleSignOut)
-		mux.Delete("/auth/delete-account", authHandlers.HandleDeleteAccount)
+		r.With(middleware.RateLimiter).Get("/auth/google/signin", authHandlers.HandleGoogleSignIn)
+		r.With(middleware.RateLimiter).Get("/auth/google/callback", authHandlers.HandleGoogleCallback)
+		r.With(middleware.RateLimiter).Get("/auth/token/verify", authHandlers.HandleVerifyToken)
+		r.With(middleware.RateLimiter).Post("/auth/token/refresh", authHandlers.HandleRefreshToken)
+		r.With(middleware.RateLimiter).Post("/auth/signout", authHandlers.HandleSignOut)
+		r.With(middleware.RateLimiter).Delete("/auth/delete-account", authHandlers.HandleDeleteAccount)
 	})
 
 	return mux
