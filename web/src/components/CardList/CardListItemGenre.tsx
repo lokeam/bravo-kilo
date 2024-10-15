@@ -51,7 +51,7 @@ export default function CardListItemGenre({ genreName, genreImgs, books }: CardL
             {renderThumbnail()}
           </div>
           <div className="card_list__item_copy flex flex-row items-center justify-center text-left pt-1">
-            <span className="block text-base text-black dark:text-white font-bold">{genreName}</span>
+            <span className="block text-base text-black dark:text-white font-semibold">{genreName}</span>
           </div>
         </div>
       </motion.li>

@@ -51,7 +51,7 @@ export default function CardListItemTag({ tagName, tagImgs, books }: CardListIte
             {renderThumbnail()}
           </div>
           <div className="card_list__item_copy flex flex-row items-center justify-center text-left pt-1">
-            <span className="block text-base text-black dark:text-white font-bold">{tagName}</span>
+            <span className="block text-base text-black dark:text-white font-semibold">{tagName}</span>
           </div>
         </div>
       </motion.li>

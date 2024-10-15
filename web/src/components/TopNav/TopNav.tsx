@@ -7,6 +7,7 @@ import Avatar from '../Avatar/Avatar';
 import Modal from '../Modal/Modal';
 import AutoComplete from '../AutoComplete/AutoComplete';
 
+import BrandLogo from '../CustomSVGs/BrandLogo';
 import { IoSearchOutline } from 'react-icons/io5';
 import { IoMdSettings } from "react-icons/io";
 import { MdLogout } from "react-icons/md";
@@ -39,7 +40,7 @@ function TopNavigation() {
 
   return (
     <header className="antialiased relative w-full h-auto z-50">
-      <nav className="bg-white dark:bg-black fixed border-none flex items-center content-between left-0 right-0 top-0 pr-8 lg:pr-12 h-[67px] text-white w-full">
+      <nav className="bg-white dark:bg-black fixed border-none flex items-center content-between left-0 right-0 top-0 px-8 lg:pr-12 h-[67px] text-white w-full">
         <Link
           className={`${isBookDetailOrSettingsPage ? 'block' : 'hidden'} h-13 w-13 pl-7 pr-3 mr-6 inline-block content-center cursor-pointer bg-transparent border-none`}
           to={"/library"}
@@ -52,41 +53,13 @@ function TopNavigation() {
         <div className={`relative flex flex-row  justify-items-center items-center w-full`}>
 
           {/* ----- Avatar / Nav Start ----- */}
-          <div className={`${isBookDetailOrSettingsPage ? 'hidden' : 'block'} navLeft`}>
-              <button
-                className="flex border-none bg-transparent antialiased translate-x-0 mid:translate-x-0"
-                onClick={openModal}
-              >
-                <Avatar />
-              </button>
-          </div>
-
-          <Modal
-            opened={opened}
-            onClose={closeModal}
-            title=""
+          <Link
+            to={"/home"}
+            className={`${isBookDetailOrSettingsPage || isSearchPage ? 'hidden' : 'visible'} w-14 h-14`}
           >
-            <button
-              className="flex flex-row justify-items-start items-center mr-1 transition duration-500 ease-in-out hover:border-vivid-blue dark:hover:border-vivid-blue bg-transparent"
-              onClick={handleSettingsClick}
-            >
-              <IoMdSettings
-                className="mr-8"
-                size={22}
-              />
-              <span>Settings</span>
-            </button>
-            <button
-              className="flex flex-row justify-items-start items-center mr-1 transition duration-500 ease-in-out hover:border-vivid-blue dark:hover:border-vivid-blue bg-transparent"
-              onClick={logout}
-            >
-              <MdLogout
-                className="mr-8"
-                size={25}
-              />
-              <span>Log out</span>
-            </button>
-          </Modal>
+            <BrandLogo className={`${isBookDetailOrSettingsPage || isSearchPage ? 'hidden' : 'visible'} TEST h-10 w-10 me-2`} />
+          </Link>
+
 
           {/* ----- Search / Nav Center ----- */}
           <div className={`${isSearchPage ? 'visible' : 'invisible'} w-full`}>
@@ -103,6 +76,38 @@ function TopNavigation() {
               >
                 <IoSearchOutline size={20} className="text-black dark:text-az-white"/>
               </Link>
+              <button
+                className="flex border-none bg-transparent antialiased translate-x-0 mid:translate-x-0"
+                onClick={openModal}
+              >
+                <Avatar />
+              </button>
+              <Modal
+                opened={opened}
+                onClose={closeModal}
+                title=""
+              >
+                <button
+                  className="flex flex-row justify-items-start items-center mr-1 transition duration-500 ease-in-out hover:border-vivid-blue dark:hover:border-vivid-blue bg-transparent"
+                  onClick={handleSettingsClick}
+                >
+                  <IoMdSettings
+                    className="mr-8"
+                    size={22}
+                  />
+                  <span>Settings</span>
+                </button>
+                <button
+                  className="flex flex-row justify-items-start items-center mr-1 transition duration-500 ease-in-out hover:border-vivid-blue dark:hover:border-vivid-blue bg-transparent"
+                  onClick={logout}
+                >
+                  <MdLogout
+                    className="mr-8"
+                    size={25}
+                  />
+                <span>Log out</span>
+                </button>
+              </Modal>
             </div>
           </div>
         </div>

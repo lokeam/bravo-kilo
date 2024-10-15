@@ -27,10 +27,6 @@ export default function Avatar() {
           <span className="font-bold text-gray-600 dark:text-gray-300">{userInitials}</span>
         </div>
       </div>
-      <div className="flex flex-col text-left">
-          <div className="text-base font-bold">{user?.firstName}'s Login</div>
-          <div className="text-dark-gunmetal dark:text-nevada-gray text-sm">{user?.email}</div>
-        </div>
     </div>
   )
 }
