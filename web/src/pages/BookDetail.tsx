@@ -5,6 +5,7 @@ import { fetchBookIDByTitle } from '../service/apiClient.service';
 import useScrollShrink from "../hooks/useScrollShrink";
 import PageWithErrorBoundary from '../components/ErrorMessages/PageWithErrorBoundary';
 import { useThemeStore } from '../store/useThemeStore';
+import { displayPublishDate } from '../utils/displayPublishDate';
 import Loading from '../components/Loading/Loading';
 import { IoIosAdd } from "react-icons/io";
 import { IoIosWarning } from "react-icons/io";
@@ -13,6 +14,7 @@ import { TbEdit } from "react-icons/tb";
 interface MissingInfoWarningProps {
   emptyFields: string[]
 }
+
 
 const MissingInfoWarning = ({emptyFields}: MissingInfoWarningProps) => {
   return (
@@ -154,7 +156,7 @@ const BookDetail = () => {
               <p className="my-1 text-charcoal dark:text-cadet-gray">
                 <span className="font-bold mr-1">Publish Date:</span>
                 {book.publishDate !== ''
-                  ? book.publishDate
+                  ? displayPublishDate(book.publishDate)
                   : 'No publish date available'}
               </p>
               <p className="my-1 text-charcoal dark:text-cadet-gray">

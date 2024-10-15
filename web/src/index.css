@@ -328,3 +328,13 @@ button:focus-visible {
       row-gap: var(--grid-row-gap-large);
     }
   }
+
+@layer components {
+  .custom_date_input::-webkit-calendar-picker-indicator {
+    ;filter: invert(1);
+  }
+
+  .dark .custom_date_input::-webkit-calendar-picker-indicator {
+    filter: invert(0);
+  }
+}

@@ -291,7 +291,7 @@ function BookForm({
             type="date"
             id="publishDate"
             min="1000-01-01" {...register('publishDate')}
-            className={`${TAILWIND_FORM_CLASSES['INPUT']} ${errors.publishDate ? TAILWIND_FORM_CLASSES['ERROR_BORDER'] : ''} `}
+            className={`custom_date_input ${TAILWIND_FORM_CLASSES['INPUT']} ${errors.publishDate ? TAILWIND_FORM_CLASSES['ERROR_BORDER'] : ''} `}
           />
           {errors.publishDate && <p className={TAILWIND_FORM_CLASSES['ERROR']}>{errors.publishDate.message}</p>}
           {!bookDataEmpty && dateWarning && <p className="text-orange-500 dark:text-yellow-500">{dateWarning}</p>}
