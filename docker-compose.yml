@@ -1,5 +1,13 @@
 version: '3'
 
+networks:
+  backend:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+
 services:
   postgres:
     image: 'postgres:14.0'
@@ -11,7 +19,9 @@ services:
       POSTGRES_PASSWORD: password
       POSTGRES_DB: bkapi
     volumes:
-      - ./db-data/postgres/:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - backend
 
   mailhog:
     image: 'jcalonso/mailhog:latest'
@@ -19,3 +29,20 @@ services:
       - '1026:1026'
       - '8029:8026'
     restart: always
+    networks:
+      - backend
+
+  redis:
+    image: 'redis:7.0-alpine'
+    ports:
+      - '6379:6379'
+    restart: always
+    command: >
+      redis-server
+      --requirepass ${REDIS_PASSWORD}
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    networks:
+      - backend
