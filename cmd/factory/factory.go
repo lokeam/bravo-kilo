@@ -4,14 +4,17 @@ import (
 	"database/sql"
 	"log/slog"
 	"os"
+	"time"
 
 	"github.com/lokeam/bravo-kilo/internal/books"
 	"github.com/lokeam/bravo-kilo/internal/books/handlers"
 	"github.com/lokeam/bravo-kilo/internal/books/repository"
 	"github.com/lokeam/bravo-kilo/internal/books/services"
-	auth "github.com/lokeam/bravo-kilo/internal/shared/handlers/auth"
+	"github.com/lokeam/bravo-kilo/internal/shared/handlers/auth"
 	"github.com/lokeam/bravo-kilo/internal/shared/models"
 	"github.com/lokeam/bravo-kilo/internal/shared/transaction"
+	"github.com/lokeam/bravo-kilo/internal/shared/workers"
+	"github.com/redis/go-redis/v9"
 )
 
 // Factory initializes all components and returns them
@@ -19,10 +22,11 @@ type Factory struct {
 	BookHandlers    *handlers.BookHandlers
 	SearchHandlers  *handlers.SearchHandlers
 	AuthHandlers    *auth.AuthHandlers
+	DeletionWorker  *workers.DeletionWorker
 }
 
 // NewFactory initializes repositories, services, and handlers
-func NewFactory(db *sql.DB, log *slog.Logger) (*Factory, error) {
+func NewFactory(db *sql.DB, redisClient *redis.Client,log *slog.Logger) (*Factory, error) {
 	// Initialize repositories
 	authorRepo, err := repository.NewAuthorRepository(db, log)
 	if err != nil {
@@ -60,9 +64,20 @@ func NewFactory(db *sql.DB, log *slog.Logger) (*Factory, error) {
 		return nil, err
 	}
 
+	bookRedisCache, err := repository.NewBookRedisCache(redisClient, log)
+	if err != nil {
+		log.Error("Error initializing book redis cache", "error", err)
+	}
+
 	bookDeleter, err := repository.NewBookDeleter(db, log)
 	if err != nil {
 		log.Error("Error initializing book deleter", "error", err)
+		return nil, err
+	}
+
+	userBooksRepo, err := repository.NewUserBooksRepository(db, log)
+	if err != nil {
+		log.Error("Error initializing user books repository", "error", err)
 		return nil, err
 	}
 
@@ -120,8 +135,14 @@ func NewFactory(db *sql.DB, log *slog.Logger) (*Factory, error) {
 	}
 
 	// Initialize models for auth
+	userRepo, err := models.NewUserRepository(db, log)
+	if err != nil {
+		log.Error("Error initializing user repository", "error", err)
+		return nil, err
+	}
+
 	authModels := models.Models{
-		User:  &models.UserModel{DB: db, Logger: log},
+		User:  userRepo,
 		Token: &models.TokenModel{DB: db, Logger: log},
 	}
 
@@ -135,7 +156,9 @@ func NewFactory(db *sql.DB, log *slog.Logger) (*Factory, error) {
 		formatRepo,
 		genreRepo,
 		tagRepo,
+		userBooksRepo,
 		bookCache,
+		bookRedisCache,
 		bookDeleter,
 		bookUpdaterService,
 		bookService,
@@ -145,7 +168,7 @@ func NewFactory(db *sql.DB, log *slog.Logger) (*Factory, error) {
 		return nil, err
 	}
 
-	authHandlers, err := auth.NewAuthHandlers(log, authModels, transactionManager)
+	authHandlers, err := auth.NewAuthHandlers(log, authModels, transactionManager, bookRedisCache, db)
 	if err != nil {
 		return nil, err
 	}
@@ -155,10 +178,13 @@ func NewFactory(db *sql.DB, log *slog.Logger) (*Factory, error) {
 		return nil, err
 	}
 
+	deletionWorker := workers.NewDeletionWorker(24*time.Hour, authHandlers)
+
 	// Return all handlers and services inside the Factory
 	return &Factory{
 		BookHandlers: bookHandlers,
 		AuthHandlers: authHandlers,
 		SearchHandlers: searchHandlers,
+		DeletionWorker: deletionWorker,
 	}, nil
 }
