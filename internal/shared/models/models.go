@@ -1,6 +1,6 @@
 package models
 
 type Models struct {
-	User  *UserModel
+	User  UserRepository
 	Token *TokenModel
 }

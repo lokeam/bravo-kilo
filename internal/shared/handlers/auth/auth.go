@@ -11,17 +11,19 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
+	"errors"
+
 	"github.com/lokeam/bravo-kilo/config"
+	"github.com/lokeam/bravo-kilo/internal/books/repository"
 	"github.com/lokeam/bravo-kilo/internal/shared/crypto"
 	"github.com/lokeam/bravo-kilo/internal/shared/models"
 	"github.com/lokeam/bravo-kilo/internal/shared/transaction"
 	"github.com/lokeam/bravo-kilo/internal/shared/types"
 	"github.com/lokeam/bravo-kilo/internal/shared/utils"
-
-	"errors"
 
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/golang-jwt/jwt/v5"
@@ -29,9 +31,11 @@ import (
 )
 
 type AuthHandlers struct {
-	logger     *slog.Logger
-	models     models.Models
-	dbManager  transaction.DBManager
+	logger          *slog.Logger
+	models          models.Models
+	dbManager       transaction.DBManager
+	bookRedisCache  repository.BookRedisCache
+	db              *sql.DB
 }
 
 var (
@@ -49,7 +53,13 @@ func init() {
 	isProduction = env == "production"
 }
 
-func NewAuthHandlers(logger *slog.Logger, models models.Models, dbManager transaction.DBManager) (*AuthHandlers, error) {
+func NewAuthHandlers(
+	logger *slog.Logger,
+	models models.Models,
+	dbManager transaction.DBManager,
+	bookRedisCache repository.BookRedisCache,
+	db *sql.DB,
+) (*AuthHandlers, error) {
 	if logger == nil {
 			return nil, fmt.Errorf("logger cannot be nil")
 	}
@@ -60,6 +70,14 @@ func NewAuthHandlers(logger *slog.Logger, models models.Models, dbManager transa
 
 	if dbManager == nil {
 			return nil, fmt.Errorf("DB Manager cannot be nil")
+	}
+
+	if bookRedisCache == nil {
+		return nil, fmt.Errorf("bookRedisCache cannot be nil")
+	}
+
+	if db == nil {
+		return nil, fmt.Errorf("db cannot be nil")
 	}
 
 	// Initialize OIDC Provider + Verifier
@@ -94,7 +112,14 @@ func NewAuthHandlers(logger *slog.Logger, models models.Models, dbManager transa
 			logger:    logger,
 			models:    models,
 			dbManager: dbManager,
+			bookRedisCache: bookRedisCache,
+			db: db,
 	}, nil
+}
+
+// Pass Actual database connection
+func (h *AuthHandlers) GetDB() *sql.DB {
+	return h.db
 }
 
 
@@ -604,7 +629,7 @@ func (h *AuthHandlers) HandleDeleteAccount(response http.ResponseWriter, request
 
 	// Soft delete (mark for deletion)
 	deletionTime := time.Now()
-	err = h.models.User.MarkForDeletion(userID, deletionTime)
+	err = h.models.User.MarkForDeletion(ctx, tx, userID, deletionTime)
 	if err != nil {
 		h.logger.Error("Error marking user for deletion", "error", err)
 		h.dbManager.RollbackTransaction(tx)
@@ -642,4 +667,81 @@ func (h *AuthHandlers) HandleDeleteAccount(response http.ResponseWriter, request
 
 	h.logger.Info("User account marked for deletion and logged out", "userID", userID)
 	response.WriteHeader(http.StatusOK)
+}
+
+func (h *AuthHandlers) ProcessDeletionQueue() {
+	ctx := context.Background()
+	userIDs, err := h.bookRedisCache.GetDeletionQueue(ctx)
+	if err != nil {
+			h.logger.Error("Error getting deletion queue", "error", err)
+			return
+	}
+
+	for _, userIDStr := range userIDs {
+			userID, err := strconv.Atoi(userIDStr)
+			if err != nil {
+					h.logger.Error("Error converting user ID to int", "userID", userIDStr, "error", err)
+					continue
+			}
+
+			err = h.deleteUser(ctx, userID)
+			if err != nil {
+					h.logger.Error("Error deleting user", "userID", userID, "error", err)
+					continue
+			}
+
+			err = h.bookRedisCache.RemoveFromDeletionQueue(ctx, userIDStr)
+			if err != nil {
+					h.logger.Error("Error removing user from deletion queue", "userID", userID, "error", err)
+			}
+	}
+}
+
+func (h *AuthHandlers) deleteUser(ctx context.Context, userID int) error {
+	// Start a transaction
+	tx, err := h.dbManager.BeginTransaction(ctx)
+	if err != nil {
+			return fmt.Errorf("error starting transaction: %w", err)
+	}
+	defer h.dbManager.RollbackTransaction(tx)
+
+	// A. Get the user ID (we already have it as a parameter)
+
+	// B. Get a list of all bookIDs belonging to the user
+	bookIDs, err := h.models.User.GetUserBookIDs(userID)
+	if err != nil {
+			return fmt.Errorf("error getting user's book IDs: %w", err)
+	}
+
+	// C. Loop through list of bookIDs and use the book_deleter to delete each book and its association
+	bookDeleter, err := repository.NewBookDeleter(h.db, h.logger)
+	if err != nil {
+			return fmt.Errorf("error creating book deleter: %w", err)
+	}
+	for _, bookID := range bookIDs {
+			err = bookDeleter.Delete(bookID)
+			if err != nil {
+					return fmt.Errorf("error deleting book %d: %w", bookID, err)
+			}
+	}
+
+	// D. Delete all tokens associated with the user
+	err = h.models.Token.DeleteByUserID(userID)
+	if err != nil {
+			return fmt.Errorf("error deleting user tokens: %w", err)
+	}
+
+	// E. Delete the user from the users table
+	err = h.models.User.Delete(userID)
+	if err != nil {
+			return fmt.Errorf("error deleting user: %w", err)
+	}
+
+	// Commit the transaction
+	err = h.dbManager.CommitTransaction(tx)
+	if err != nil {
+			return fmt.Errorf("error committing transaction: %w", err)
+	}
+
+	return nil
 }

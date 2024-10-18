@@ -10,7 +10,7 @@ import (
 	"github.com/lokeam/bravo-kilo/internal/books/handlers"
 	"github.com/lokeam/bravo-kilo/internal/books/repository"
 	"github.com/lokeam/bravo-kilo/internal/books/services"
-	"github.com/lokeam/bravo-kilo/internal/shared/handlers/auth"
+	auth "github.com/lokeam/bravo-kilo/internal/shared/handlers/auth"
 	"github.com/lokeam/bravo-kilo/internal/shared/models"
 	"github.com/lokeam/bravo-kilo/internal/shared/transaction"
 	"github.com/lokeam/bravo-kilo/internal/shared/workers"
@@ -170,7 +170,7 @@ func NewFactory(db *sql.DB, redisClient *redis.Client,log *slog.Logger) (*Factor
 
 	authHandlers, err := auth.NewAuthHandlers(log, authModels, transactionManager, bookRedisCache, db)
 	if err != nil {
-		return nil, err
+			return nil, err
 	}
 
 	searchHandlers, err := handlers.NewSearchHandlers(log, bookRepo, bookCache, authHandlers)

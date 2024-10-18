@@ -3,6 +3,7 @@ package config
 import (
 	"log/slog"
 	"os"
+	"time"
 
 	"crypto/rsa"
 
@@ -15,6 +16,9 @@ type Config struct {
 	GoogleLoginConfig oauth2.Config
 	JWTPrivateKey     *rsa.PrivateKey
 	JWTPublicKey      *rsa.PublicKey
+	DefaultBookCacheExpiration   time.Duration
+	UserDeletionMarkerExpiration time.Duration
+	AuthTokenExpiration          time.Duration
 }
 
 var AppConfig Config
@@ -35,6 +39,17 @@ func InitConfig(logger *slog.Logger) {
 	// Load RSA keys
 	privateKeyPath := os.Getenv("JWT_PRIVATE_KEY_PATH")
 	logger.Info("Loading RSA private key", "path", privateKeyPath)
+
+
+	// Set default cache expiration to 24 hours
+	AppConfig.DefaultBookCacheExpiration = 24 * time.Hour
+
+	// Set user deletion marker expiration to 7 days
+	AppConfig.UserDeletionMarkerExpiration = 7 * 24 * time.Hour
+
+	// Set auth token expiration to 1 hour (adjust as needed)
+	AppConfig.AuthTokenExpiration = 1 * time.Hour
+
 
 	privateKey, err := crypto.LoadRSAPrivateKey(privateKeyPath)
 	if err != nil {
@@ -58,6 +73,7 @@ func InitConfig(logger *slog.Logger) {
 			logger.Error("RSA public key is nil after loading")
 			os.Exit(1)
 	}
+
 	logger.Info("RSA Public Key loaded successfully", "keySize", publicKey.Size())
 	AppConfig.JWTPublicKey = publicKey
 

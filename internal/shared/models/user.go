@@ -10,7 +10,7 @@ import (
 	"github.com/lokeam/bravo-kilo/internal/dbconfig"
 )
 
-type UserRespository interface {
+type UserRepository interface {
 	Insert(user User) (int, error)
 	GetByID(id int) (*User, error)
 	GetUserBookIDs(userID int) ([]int, error)
@@ -37,7 +37,7 @@ type User struct {
 	DeletionRequestedAt time.Time `json:"deletionRequestedAt"`
 }
 
-func NewUserRepository(db *sql.DB, logger *slog.Logger) (UserRespository, error) {
+func NewUserRepository(db *sql.DB, logger *slog.Logger) (UserRepository, error) {
 	if db == nil || logger == nil {
 		return nil, fmt.Errorf("database or logger is nil")
 	}

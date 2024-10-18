@@ -27,6 +27,7 @@ type BookHandlers struct {
 	genreRepo         repository.GenreRepository
 	tagRepo           repository.TagRepository
 	bookCache         repository.BookCache
+	bookRedisCache    repository.BookRedisCache
 	bookDeleter       repository.BookDeleter
 	bookUpdater       services.BookUpdaterService
 	bookService       services.BookService
@@ -56,7 +57,9 @@ func NewBookHandlers(
 	formatRepo repository.FormatRepository,
 	genreRepo repository.GenreRepository,
 	tagRepo repository.TagRepository,
+	userBooksRepo repository.UserBooksRepository,
 	bookCache repository.BookCache,
+	bookRedisCache repository.BookRedisCache,
 	bookDeleter repository.BookDeleter,
 	bookUpdater services.BookUpdaterService,
 	bookService services.BookService,
@@ -114,6 +117,7 @@ func NewBookHandlers(
 		genreRepo:         genreRepo,
 		tagRepo:           tagRepo,
 		bookCache:         bookCache,
+		bookRedisCache:    bookRedisCache,
 		bookDeleter:       bookDeleter,
 		bookService:       bookService,
 		bookUpdater:       bookUpdater,
