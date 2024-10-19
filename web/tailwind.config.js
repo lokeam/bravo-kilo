@@ -9,6 +9,9 @@ export default {
   darkMode: 'class',
   theme: {
     extend: {
+      fontFamily: {
+        'domus': ['Domus Titling Bold', 'Inter', 'Helvetica', 'Arial', 'sans-serif'],
+      },
       animation: {
         'fade-in': 'fadeIn 0.8 ease-out forwards',
         'fade-out': 'fadeOut 0.8s ease-out forwards',

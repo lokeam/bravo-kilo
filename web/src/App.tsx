@@ -15,6 +15,7 @@ import AddUpload from './pages/AddUpload';
 import Search from './pages/Search';
 import Settings from './pages/Settings';
 import Login from './pages/Login';
+import AccountRecovery from './pages/AccountRecovery';
 import Library from './pages/Library';
 import AuthorGenre from './pages/AuthorGenre';
 import BookDetail from './pages/BookDetail';
@@ -35,8 +36,8 @@ function App() {
             <Suspense fallback={<Loading />}>
               <AnimatePresence mode="wait">
                 <Routes location={location} key={location.pathname}>
-                    <Route path="/bravo-kilo" element={<Login />} />
                     <Route path="/login" element={<Login />}/>
+                    <Route path="/account-recovery" element={<AccountRecovery />}/>
                     <Route element={
                     <ProtectedRoute>
                         <AuthenticatedLayout />

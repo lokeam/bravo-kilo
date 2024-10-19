@@ -1,6 +1,15 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+@font-face {
+  font-family: "Domus Titling Bold";
+  src: url("/fonts/Domus_Titling_Bold.otf") format("opentype");
+  src: url("/fonts/Domus_Titling_Bold.ttf") format("truetype");
+  src: url("/fonts/Domus_Titling_Bold.woff") format("woff");
+  font-weight: bold;
+  font-style: normal;
+}
+
 
 :root {
   font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
