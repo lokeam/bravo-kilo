@@ -238,9 +238,11 @@ export const deleteBook = async(bookID: string) => {
 
 export const deleteUser = async() => {
   try {
+    console.log('--------------------------------');
     console.log('apiClient.service, about to delete user');
     const { data } = await apiClient.delete(`/auth/delete-account`);
     console.log('apiClient.service, user deleted:', data);
+    console.log('--------------------------------');
     return data;
   } catch {
     console.log('Error attempting to delete user');

@@ -1,24 +1,47 @@
-import { useState, useEffect } from "react";
-import { IoIosWarning } from "react-icons/io";
+import { useCallback, useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { deleteUser } from "../../service/apiClient.service";
+import useDebounce from "../../hooks/useDebounceLD";
+
 import Modal from "../Modal/Modal";
+
 import { MdDeleteForever } from "react-icons/md";
+import { IoIosWarning } from "react-icons/io";
+
 
 function SettingsItemDeleteAcctBtn() {
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [confirmText, setConfirmText] = useState<string>('');
   const [isDeleteEnabled, setDeleteEnabled] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+  const navigate = useNavigate();
+
 
   const openModal = () => setIsModalOpen(true);
   const closeModal = () => {
     setIsModalOpen(false);
     setConfirmText('');
     setDeleteEnabled(false);
+    setError(null);
   };
 
-  const handleDelete = () => {
-    console.log('Account deletion activated');
-    closeModal();
-  };
+  const handleDelete = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      await deleteUser();
+      console.log('Account delete action sent');
+      closeModal();
+      navigate('/login');
+    } catch (error) {
+      setError('An error occurred while deleting your account. Please try again later.');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [navigate]);
+
+  const debouncedHandleDelete = useDebounce(handleDelete, 2000);
 
   useEffect(() => {
     setDeleteEnabled(confirmText.toLowerCase() === 'delete my account');
@@ -51,6 +74,14 @@ function SettingsItemDeleteAcctBtn() {
           className="border-gray-700/60 bg-transparent border-2 rounded-md p-2 mb-2"
           placeholder="Type 'delete my account'"
         />
+        {
+          error &&
+            <p
+              className="text-red-500 text-center mb-2"
+            >
+              We're sorry, an error occurred while deleting your account. Please try again later.
+            </p>
+        }
         <button
           type="button"
           onClick={closeModal}
@@ -60,11 +91,11 @@ function SettingsItemDeleteAcctBtn() {
         </button>
         <button
           type="button"
-          onClick={handleDelete}
+          onClick={debouncedHandleDelete}
           disabled={!isDeleteEnabled}
           className={`bg-transparent flex flex-row justify-between items-center mr-1 w-full border-red-500 text-red-500 hover:text-white dark:hover:text-white hover:bg-red-800 focus:ring-red-800 hover:border-red-800 dark:hover:bg-red-800 dark:hover:border-red-800 transition duration-500 ease-in-out disabled:pointer-events-none disabled:border-gray-700/60 disabled:text-gray-600 dark:disabled:text-gray-400`}
         >
-          <span>Yes, I want to delete my account</span>
+          <span>{isLoading ? 'Deleting...' : 'Yes, I want to delete my account'}</span>
           <MdDeleteForever size={30}/>
         </button>
       </Modal>
