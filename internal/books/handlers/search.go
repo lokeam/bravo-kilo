@@ -9,8 +9,8 @@ import (
 	"net/url"
 
 	"github.com/lokeam/bravo-kilo/cmd/middleware"
+	authhandlers "github.com/lokeam/bravo-kilo/internal/auth/handlers"
 	"github.com/lokeam/bravo-kilo/internal/books/repository"
-	auth "github.com/lokeam/bravo-kilo/internal/shared/handlers/auth"
 	"github.com/lokeam/bravo-kilo/internal/shared/utils"
 	"golang.org/x/oauth2"
 )
@@ -19,14 +19,14 @@ type SearchHandlers struct {
 	logger        *slog.Logger
 	bookRepo      repository.BookRepository
 	bookCache     repository.BookCache
-	authHandlers  *auth.AuthHandlers
+	authHandlers  *authhandlers.AuthHandlers
 }
 
 func NewSearchHandlers(
 	logger *slog.Logger,
 	bookRepo repository.BookRepository,
 	bookCache repository.BookCache,
-	authHandlers *auth.AuthHandlers,
+	authHandlers *authhandlers.AuthHandlers,
 	) (*SearchHandlers, error) {
 	if logger == nil {
 		return nil, fmt.Errorf("logger cannot be nil")
@@ -190,7 +190,7 @@ func (h *SearchHandlers) HandleSearchBooks(response http.ResponseWriter, request
 	accessToken, err := h.authHandlers.GetUserAccessToken(request)
 	if err != nil {
 		h.logger.Error("Error retrieving user access token", "error", err)
-		if err == auth.ErrNoRefreshToken {
+		if err == authhandlers.ErrNoRefreshToken {
 				http.Error(response, "No valid refresh token found", http.StatusUnauthorized)
 		} else {
 				http.Error(response, "Error retrieving access token", http.StatusInternalServerError)

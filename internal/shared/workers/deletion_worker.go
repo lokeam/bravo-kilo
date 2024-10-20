@@ -3,16 +3,16 @@ package workers
 import (
 	"time"
 
-	auth "github.com/lokeam/bravo-kilo/internal/shared/handlers/auth"
+	authhandlers "github.com/lokeam/bravo-kilo/internal/auth/handlers"
 )
 
 type DeletionWorker struct {
     interval    time.Duration
-    authHandler *auth.AuthHandlers
+    authHandler *authhandlers.AuthHandlers
     stopChan    chan struct{}
 }
 
-func NewDeletionWorker(interval time.Duration, authHandler *auth.AuthHandlers) *DeletionWorker {
+func NewDeletionWorker(interval time.Duration, authHandler *authhandlers.AuthHandlers) *DeletionWorker {
     return &DeletionWorker{
         interval:    interval,
         authHandler: authHandler,

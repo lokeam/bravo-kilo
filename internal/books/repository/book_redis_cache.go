@@ -22,6 +22,7 @@ type BookRedisCache interface {
 	GetAuthToken(ctx context.Context, userID string) (string, error)
 	SetUserDeletionMarker(ctx context.Context, userID string, expiration time.Duration) error
 	GetUserDeletionMarker(ctx context.Context, userID string) (bool, error)
+	AddToDeletionQueue(ctx context.Context, userID string) error
 	RemoveFromDeletionQueue(ctx context.Context, userID string) error
 }
 

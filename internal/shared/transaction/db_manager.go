@@ -12,6 +12,7 @@ type DBManager interface {
     BeginTransaction(ctx context.Context) (*sql.Tx, error)
     CommitTransaction(tx *sql.Tx) error
     RollbackTransaction(tx *sql.Tx) error
+    GetDB() *sql.DB
 }
 
 // DBManagerImpl is the concrete implementation.
@@ -31,6 +32,10 @@ func NewDBManager(db *sql.DB, logger *slog.Logger) (DBManager, error) {
     }, nil
 }
 
+// Pass Actual database connection
+func (d *DBManagerImpl) GetDB() *sql.DB {
+	return d.DB
+}
 
 // BeginTransaction starts a new database transaction.
 func (d *DBManagerImpl) BeginTransaction(ctx context.Context) (*sql.Tx, error) {

@@ -1,4 +1,4 @@
-package handlers
+package authhandlers
 
 import (
 	"context"
@@ -18,6 +18,7 @@ import (
 	"errors"
 
 	"github.com/lokeam/bravo-kilo/config"
+	authservice "github.com/lokeam/bravo-kilo/internal/auth/services"
 	"github.com/lokeam/bravo-kilo/internal/books/repository"
 	"github.com/lokeam/bravo-kilo/internal/shared/crypto"
 	"github.com/lokeam/bravo-kilo/internal/shared/models"
@@ -35,7 +36,13 @@ type AuthHandlers struct {
 	models          models.Models
 	dbManager       transaction.DBManager
 	bookRedisCache  repository.BookRedisCache
+	authService     authservice.AuthService
 	db              *sql.DB
+}
+
+type DeleteAccountResponse struct {
+	Message string `json:"message"`
+	RedirectURL string `json:"redirectURL"`
 }
 
 var (
@@ -116,12 +123,6 @@ func NewAuthHandlers(
 			db: db,
 	}, nil
 }
-
-// Pass Actual database connection
-func (h *AuthHandlers) GetDB() *sql.DB {
-	return h.db
-}
-
 
 // Generate random state for CSRF protection
 func generateState() string {
@@ -411,7 +412,6 @@ func (h *AuthHandlers) GetUserAccessToken(request *http.Request) (*oauth2.Token,
 
 // Verify JWT Token
 func (h *AuthHandlers) HandleVerifyToken(response http.ResponseWriter, request *http.Request) {
-	h.logger.Info("********************************")
 	h.logger.Info("HandleVerifyToken called")
 
   // Log all cookies
@@ -599,12 +599,26 @@ func (h *AuthHandlers) HandleSignOut(response http.ResponseWriter, request *http
 }
 
 func (h *AuthHandlers) HandleDeleteAccount(response http.ResponseWriter, request *http.Request) {
+	h.logger.Info("********************************")
+	h.logger.Info("HandleDeleteAccount called")
+
+	// Log request details
+	h.logger.Info("Request details",
+		"method", request.Method,
+		"url", request.URL.String(),
+		"headers", request.Header,
+	)
+
+	// Get the user ID from JWT token
 	cookie, err := request.Cookie("token")
 	if err != nil {
 		h.logger.Error("Error: No token cookie", "error", err)
 		http.Error(response, "Error: No token cookie", http.StatusUnauthorized)
 		return
 	}
+
+	// Log the token value
+	h.logger.Info("Token value", "token", cookie.Value[:10]+"...")
 
 	tokenStr := cookie.Value
 	claims := &types.Claims{}
@@ -615,42 +629,24 @@ func (h *AuthHandlers) HandleDeleteAccount(response http.ResponseWriter, request
 		http.Error(response, "Error: Invalid token", http.StatusUnauthorized)
 		return
 	}
+	h.logger.Info("Token verified successfully")
 
+	claims, ok := token.Claims.(*types.Claims)
+	if !ok {
+		h.logger.Error("Error: Claims are not of type *types.Claims")
+		http.Error(response, "Error: Invalid token claims", http.StatusUnauthorized)
+
+		return
+	}
+
+	// Get the user ID from JWT token
 	userID := claims.UserID
+	h.logger.Info("User ID extracted from token", "userID", userID)
 
-	// Begin transaction
-	ctx := request.Context()
-	tx, err := h.dbManager.BeginTransaction(ctx)
+	err = h.authService.ProcessAccountDeletion(request.Context(), userID)
 	if err != nil {
-		h.logger.Error("Error beginning transaction", "error", err)
-		http.Error(response, "Error processing request", http.StatusInternalServerError)
-		return
-	}
-
-	// Soft delete (mark for deletion)
-	deletionTime := time.Now()
-	err = h.models.User.MarkForDeletion(ctx, tx, userID, deletionTime)
-	if err != nil {
-		h.logger.Error("Error marking user for deletion", "error", err)
-		h.dbManager.RollbackTransaction(tx)
-		http.Error(response, "Error marking user for deletion", http.StatusInternalServerError)
-		return
-	}
-
-	// Delete refresh tokens
-	err = h.models.Token.DeleteByUserID(userID)
-	if err != nil {
-		h.logger.Error("Error deleting refresh tokens", "error", err)
-		h.dbManager.RollbackTransaction(tx)
-		http.Error(response, "Error deleting refresh tokens", http.StatusInternalServerError)
-		return
-	}
-
-	// Commit transaction
-	err = h.dbManager.CommitTransaction(tx)
-	if err != nil {
-		h.logger.Error("Error committing transaction", "error", err)
-		http.Error(response, "Error processing request", http.StatusInternalServerError)
+		h.logger.Error("Error processing account deletion", "error", err)
+		http.Error(response, "Error processing account deletion", http.StatusInternalServerError)
 		return
 	}
 
@@ -665,8 +661,19 @@ func (h *AuthHandlers) HandleDeleteAccount(response http.ResponseWriter, request
 		Path:     "/",
 	})
 
+	redirectURL := os.Getenv("VITE_FRONTEND_LOGIN_URL")
+	if redirectURL == "" {
+		redirectURL = "http://localhost:5173"
+	}
+
+	responseData := DeleteAccountResponse{
+		Message: "User account marked for deletion and logged out",
+		RedirectURL: redirectURL,
+	}
+	response.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(response).Encode(responseData)
+
 	h.logger.Info("User account marked for deletion and logged out", "userID", userID)
-	response.WriteHeader(http.StatusOK)
 }
 
 func (h *AuthHandlers) ProcessDeletionQueue() {

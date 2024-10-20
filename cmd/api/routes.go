@@ -5,8 +5,8 @@ import (
 	"os"
 
 	"github.com/lokeam/bravo-kilo/cmd/middleware"
+	authhandlers "github.com/lokeam/bravo-kilo/internal/auth/handlers"
 	"github.com/lokeam/bravo-kilo/internal/books/handlers"
-	auth "github.com/lokeam/bravo-kilo/internal/shared/handlers/auth"
 
 	chimiddleware "github.com/go-chi/chi/middleware"
 	"github.com/go-chi/chi/v5"
@@ -27,7 +27,7 @@ func init() {
 func (app *application) routes(
 	bookHandlers *handlers.BookHandlers,
 	searchHandlers *handlers.SearchHandlers,
-	authHandlers *auth.AuthHandlers,
+	authHandlers *authhandlers.AuthHandlers,
 ) http.Handler {
 	mux := chi.NewRouter()
 

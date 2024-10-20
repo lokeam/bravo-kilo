@@ -178,7 +178,7 @@ func (h *BookHandlers) ParseAndProcessCSV(filePath string, response http.Respons
 			truncatedField := utils.TruncateField(sanitizedField, maxLength)
 
 			if err := utils.ValidateFieldLength(truncatedField, maxLength); err != nil {
-				h.logger.Error("Error in record %d: %v", i, err)
+				h.logger.Error("Error in record %d: %v", "record", err)
 				http.Error(response, fmt.Sprintf("Error in record %d: %v", i, err), http.StatusBadRequest)
 				return
 			}

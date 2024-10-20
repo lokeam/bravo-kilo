@@ -4,20 +4,15 @@ import (
 	"database/sql"
 	"fmt"
 	"log/slog"
-	"os"
 
 	"github.com/lokeam/bravo-kilo/internal/books"
 	"github.com/lokeam/bravo-kilo/internal/books/repository"
 	"github.com/lokeam/bravo-kilo/internal/books/services"
 
 	"github.com/go-playground/validator/v10"
-	"github.com/lokeam/bravo-kilo/internal/shared/types"
 	"github.com/microcosm-cc/bluemonday"
 	"golang.org/x/time/rate"
 )
-
-var claims types.Claims
-var jwtKey = []byte(os.Getenv("JWT_SECRET_KEY"))
 
 // Handlers struct to hold the logger, models, and new components
 type BookHandlers struct {
@@ -36,15 +31,8 @@ type BookHandlers struct {
 	logger            *slog.Logger
 	bookModels        books.Models
 	sanitizer         *bluemonday.Policy
-	searchHandlers    *SearchHandlers
 	validate          *validator.Validate
 	DB                *sql.DB
-}
-
-type jsonResponse struct {
-	Error   bool        `json:"error"`
-	Message string      `json:"message"`
-	Data    interface{} `json:"data,omitempty"`
 }
 
 // Create a new Handlers instance

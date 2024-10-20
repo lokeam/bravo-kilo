@@ -6,11 +6,11 @@ import (
 	"os"
 	"time"
 
+	authhandlers "github.com/lokeam/bravo-kilo/internal/auth/handlers"
 	"github.com/lokeam/bravo-kilo/internal/books"
 	"github.com/lokeam/bravo-kilo/internal/books/handlers"
 	"github.com/lokeam/bravo-kilo/internal/books/repository"
 	"github.com/lokeam/bravo-kilo/internal/books/services"
-	auth "github.com/lokeam/bravo-kilo/internal/shared/handlers/auth"
 	"github.com/lokeam/bravo-kilo/internal/shared/models"
 	"github.com/lokeam/bravo-kilo/internal/shared/transaction"
 	"github.com/lokeam/bravo-kilo/internal/shared/workers"
@@ -21,7 +21,7 @@ import (
 type Factory struct {
 	BookHandlers    *handlers.BookHandlers
 	SearchHandlers  *handlers.SearchHandlers
-	AuthHandlers    *auth.AuthHandlers
+	AuthHandlers    *authhandlers.AuthHandlers
 	DeletionWorker  *workers.DeletionWorker
 }
 
@@ -128,6 +128,7 @@ func NewFactory(db *sql.DB, redisClient *redis.Client,log *slog.Logger) (*Factor
 		os.Exit(1)
 	}
 
+
 	// Initialize models
 	bookModels, err := books.New(db, log)
 	if err != nil {
@@ -168,7 +169,7 @@ func NewFactory(db *sql.DB, redisClient *redis.Client,log *slog.Logger) (*Factor
 		return nil, err
 	}
 
-	authHandlers, err := auth.NewAuthHandlers(log, authModels, transactionManager, bookRedisCache, db)
+	authHandlers, err := authhandlers.NewAuthHandlers(log, authModels, transactionManager, bookRedisCache, db)
 	if err != nil {
 			return nil, err
 	}
