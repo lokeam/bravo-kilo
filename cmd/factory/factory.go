@@ -111,6 +111,7 @@ func NewFactory(db *sql.DB, redisClient *redis.Client,log *slog.Logger) (*Factor
 		bookCache,
 		formatRepo,
 		genreRepo,
+		tagRepo,
 		bookService,
 		transactionManager,
 	)

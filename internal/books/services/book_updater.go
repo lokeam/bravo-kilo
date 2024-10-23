@@ -22,6 +22,7 @@ type BookUpdaterServiceImpl struct {
 	bookCache    repository.BookCache
 	formatRepo   repository.FormatRepository
 	genreRepo    repository.GenreRepository
+	tagRepo      repository.TagRepository
 	bookService  BookService
 	dbManager    transaction.DBManager
 }
@@ -34,6 +35,7 @@ func NewBookUpdaterService(
 	bookCache repository.BookCache,
 	formatRepo repository.FormatRepository,
 	genreRepo repository.GenreRepository,
+	tagRepo repository.TagRepository,
 	bookService BookService,
 	dbManager transaction.DBManager,
 	) (BookUpdaterService, error) {
@@ -49,6 +51,10 @@ func NewBookUpdaterService(
 		return nil, fmt.Errorf("book updater, error initializing genre repo")
 	}
 
+	if tagRepo == nil {
+		return nil, fmt.Errorf("book updater, error initializing tag repo")
+	}
+
 	return &BookUpdaterServiceImpl{
 		DB:          db,
 		logger:      logger,
@@ -56,6 +62,7 @@ func NewBookUpdaterService(
 		genreRepo:   genreRepo,
 		bookRepo:    bookRepo,
 		authorRepo:  authorRepo,
+		tagRepo:     tagRepo,
 		bookCache:   bookCache,
 		bookService: bookService,
 		dbManager:   dbManager,
@@ -111,6 +118,21 @@ func (b *BookUpdaterServiceImpl) UpdateBookEntry(ctx context.Context, book repos
 	)
 	if err != nil {
 		b.logger.Error("Error updating genres", "error", err)
+		return err
+	}
+
+	// Update tags
+	err = b.bookService.CreateEntries(
+		ctx,
+		tx,
+		book.ID,
+		book.Tags,
+		b.tagRepo.GetTagIDByName,
+		b.tagRepo.InsertTag,
+		b.tagRepo.AssociateBookWithTag,
+	)
+	if err != nil {
+		b.logger.Error("Error updating tags", "error", err)
 		return err
 	}
 
