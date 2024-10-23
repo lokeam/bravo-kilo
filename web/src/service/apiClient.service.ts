@@ -1,4 +1,4 @@
-import axios from 'axios';
+import axios, { AxiosError } from 'axios';
 import { Book } from '../types/api';
 
 let csrfToken: string | null = null;
@@ -226,6 +226,16 @@ export const addBook = async (book: Book) => {
   return data;
 };
 
+export const checkUserAccountStatus = async () => {
+  try {
+    const { data } = await apiClient.get('/auth/check-account-status');
+    return data;
+  } catch (error) {
+    console.error('Error checking account status', error);
+    throw error;
+  }
+};
+
 export const deleteBook = async(bookID: string) => {
   try {
     const { data } = await apiClient.delete(`/api/v1/books/${bookID}`);
@@ -246,6 +256,24 @@ export const deleteUser = async() => {
     return data;
   } catch {
     console.log('Error attempting to delete user');
+  }
+};
+
+export const initiateAccountRecovery = async () => {
+  try {
+    console.log('apiClient.service, about to initiate account recovery');
+    const { data } = await apiClient.post('/auth/account-recovery');
+    console.log('apiClient.service, account recovery initiated: ', data);
+    return { success: true, message: data.message };
+  } catch (error) {
+    console.error('Error during account recovery');
+    if (
+      error instanceof AxiosError &&
+      error.response?.data?.message
+    ) {
+      return { success: false, message: error.response?.data?.message };
+    }
+    return { success: false, message: 'An unknown error occurred' };
   }
 };
 
