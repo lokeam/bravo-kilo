@@ -12,6 +12,7 @@ import { useFormatPublishDate } from '../../utils/formatPublishDate';
 import _ from 'lodash';
 import DOMPurify from 'dompurify';
 import ReactQuill from 'react-quill';
+import Delta from 'quill-delta';
 import 'react-quill/dist/quill.snow.css';
 
 
@@ -27,16 +28,19 @@ interface BookFormProps {
 type StringifiedBookFormData = Omit<BookFormData, 'description' | 'notes'> & {
   description: string;
   notes: string | null;
-}
+};
 
 function transformBookData(bookData: Partial<Book> = {}, formattedDate: string): BookFormData {
-  const parseJsonField = (field: string | undefined, defaultValue: any) => {
-    if (!field) return defaultValue;
+  const parseField = (field: string | undefined | null): Delta => {
+    if (!field) return new Delta();
     try {
-      return JSON.parse(field);
-    } catch(error) {
-      console.error('Error parsing JSON field', error);
-      return defaultValue;
+      // First, try to parse as JSON
+      const parsed = JSON.parse(field);
+      return new Delta(Array.isArray(parsed.ops) ? parsed : { ops: [{ insert: field }] });
+    } catch (error) {
+      // If parsing fails, assume it's plain text and create a Delta object
+      console.log('Creating Delta object from plain text:', field);
+      return new Delta().insert(field);
     }
   };
 
@@ -59,8 +63,8 @@ function transformBookData(bookData: Partial<Book> = {}, formattedDate: string):
     language: bookData.language || 'en',
     pageCount: bookData.pageCount || 0,
     imageLink: bookData.imageLink || '',
-    description: parseJsonField(bookData.description, { ops: [{ insert: '\n' }] }),
-    notes: parseJsonField(bookData.notes, null),
+    description: parseField(bookData.description),
+    notes: parseField(bookData.notes),
   };
 }
 
@@ -465,11 +469,14 @@ function BookForm({
               control={control}
               render={({ field }) => (
                 <ReactQuill
-                  theme="snow"
-                  value={field.value}
-                  onChange={field.onChange}
-                  className={`${TAILWIND_FORM_CLASSES['INPUT']} ${errors.description ? TAILWIND_FORM_CLASSES['ERROR_BORDER'] : ''} `}
-                />
+                theme="snow"
+                value={field.value && field.value.ops ? JSON.stringify(field.value) : ''}
+                // @ts-ignore
+                onChange={(content, delta, source, editor) => {
+                  field.onChange(editor.getContents());
+                }}
+                className={`${TAILWIND_FORM_CLASSES['INPUT']} ${errors.description ? TAILWIND_FORM_CLASSES['ERROR_BORDER'] : ''} `}
+              />
               )}
             />
             {/* Render AI Summary Btn if EditBook page */}
@@ -491,16 +498,14 @@ function BookForm({
             control={control}
             render={({ field }) => (
               <ReactQuill
-                theme="snow"
-                value={field.value || ''} // Provide an empty string if field.value is null
-                // Note: content, delta, source are expected in the signature of the onChange callback even though they are not used
-                // @ts-ignore
-                onChange={(content, delta, source, editor) => {
-                  const value = editor.getContents();
-                  field.onChange(value.ops && value.ops.length > 1 ? value : null);
-                }}
-                className={`${TAILWIND_FORM_CLASSES['INPUT']} ${errors.notes ? TAILWIND_FORM_CLASSES['ERROR_BORDER'] : ''} `}
-              />
+              theme="snow"
+              value={field.value && field.value.ops ? JSON.stringify(field.value) : ''}
+              // @ts-ignore
+              onChange={(content, delta, source, editor) => {
+                field.onChange(editor.getContents());
+              }}
+              className={`${TAILWIND_FORM_CLASSES['INPUT']} ${errors.notes ? TAILWIND_FORM_CLASSES['ERROR_BORDER'] : ''} `}
+            />
             )}
           />
           {errors.notes && <p className={TAILWIND_FORM_CLASSES['ERROR']}>{errors.notes.message}</p>}
