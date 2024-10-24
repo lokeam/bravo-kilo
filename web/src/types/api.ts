@@ -1,3 +1,5 @@
+import { Delta as QuillDelta } from 'quill';
+
 export type Book = {
   id?: number;
   title: string;
@@ -142,6 +144,6 @@ export type BookFormData = {
   language: string;
   pageCount: number;
   imageLink: string;
-  description: string;
-  notes: string;
+  description: QuillDelta;
+  notes: QuillDelta | null;
 };

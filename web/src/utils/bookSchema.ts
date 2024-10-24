@@ -33,8 +33,19 @@ export const bookSchema = z.object({
   language: z.string().min(1, 'Please enter a language'),
   pageCount: z.number().min(1, 'Please enter a total page count'),
   imageLink: z.string().min(1, 'Please enter an image link'),
-  description: z.string().min(1, 'Please enter a description'),
-  notes: z.string().optional(),
+  description: z.object({}).passthrough().refine(
+    (data) => {
+      // Check if Delta obj has any content
+      const deltaData = data as { ops?: Array<{ insert: string }> };
+      return deltaData.ops !== undefined &&
+             deltaData.ops.length > 0 &&
+             deltaData.ops.some((op) => op.insert.trim() !== '');
+    },
+    {
+      message: 'Please enter some description text'
+    }
+  ),
+  notes: z.object({}).passthrough().nullable().optional(),
 }).refine((data) => data.isbn10 || data.isbn13, {
   message: 'Either ISBN-10 or ISBN-13 is required',
   path: ['isbn10', 'isbn13'],

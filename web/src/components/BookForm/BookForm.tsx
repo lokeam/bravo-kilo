@@ -10,17 +10,36 @@ import { bookSchema } from '../../utils/bookSchema';
 import { IoClose, IoAddOutline } from 'react-icons/io5';
 import { useFormatPublishDate } from '../../utils/formatPublishDate';
 import _ from 'lodash';
+import DOMPurify from 'dompurify';
+import ReactQuill from 'react-quill';
+import 'react-quill/dist/quill.snow.css';
+
 
 interface BookFormProps {
   initialData?: Book;
-  onSubmit: SubmitHandler<BookFormData>;
+  onSubmit: (data: StringifiedBookFormData) => void;
   isEditMode?: boolean;
   onDelete?: () => void;
   renderAISummaryBtn?: React.ReactNode;
   isLoading?: boolean;
 }
 
+type StringifiedBookFormData = Omit<BookFormData, 'description' | 'notes'> & {
+  description: string;
+  notes: string | null;
+}
+
 function transformBookData(bookData: Partial<Book> = {}, formattedDate: string): BookFormData {
+  const parseJsonField = (field: string | undefined, defaultValue: any) => {
+    if (!field) return defaultValue;
+    try {
+      return JSON.parse(field);
+    } catch(error) {
+      console.error('Error parsing JSON field', error);
+      return defaultValue;
+    }
+  };
+
   return {
     title: bookData.title || '',
     subtitle: bookData.subtitle || '',
@@ -40,8 +59,8 @@ function transformBookData(bookData: Partial<Book> = {}, formattedDate: string):
     language: bookData.language || 'en',
     pageCount: bookData.pageCount || 0,
     imageLink: bookData.imageLink || '',
-    description: bookData.description || '',
-    notes: bookData.notes || '',
+    description: parseJsonField(bookData.description, { ops: [{ insert: '\n' }] }),
+    notes: parseJsonField(bookData.notes, null),
   };
 }
 
@@ -61,6 +80,7 @@ function BookForm({
     handleSubmit,
     register,
     reset,
+    watch, // Watch the form data for debugging
     formState: { errors },
   } = useForm<BookFormData>({
     resolver: zodResolver(bookSchema),
@@ -96,6 +116,12 @@ function BookForm({
     name: 'tags' as const,
   });
 
+  // Watch the form data for debugging
+  const watchedFields = watch();
+  useEffect(() => {
+    console.log('Current form values:', watchedFields);
+  }, [watchedFields]);
+
 
   // Handle form reset when initialData changes
   useEffect(() => {
@@ -104,9 +130,24 @@ function BookForm({
     }
   }, [initialData, reset, formattedDate]);
 
+
+  const onSubmitWithJSONB: SubmitHandler<BookFormData> = (data) => {
+    const jsonbData: StringifiedBookFormData = {
+      ...data,
+      description: JSON.stringify(data.description),
+      notes: data.notes ? JSON.stringify(data.notes) : null,
+    };
+
+    // Console log the form data
+    console.log('Form Data:', data);
+    console.log('Stringified JSONB Data:', jsonbData);
+
+    onSubmit(jsonbData);
+  };
+
   return(
     <PageWithErrorBoundary fallbackMessage="Error loading add manual page">
-      <form className="grid gap-4 grid-cols-2 sm:gap-6" onSubmit={handleSubmit(onSubmit)}>
+      <form className="grid gap-4 grid-cols-2 sm:gap-6" onSubmit={handleSubmit(onSubmitWithJSONB)}>
 
         {/* Title */}
         <div className={TAILWIND_FORM_CLASSES['TWO_COL_WRAPPER']}>
@@ -419,11 +460,17 @@ function BookForm({
             Description<span className={TAILWIND_FORM_CLASSES['LABEL_ASTERISK']}>*</span>
           </label>
           <div className={TAILWIND_FORM_CLASSES['FIELD_ARR_WRAPPER']}>
-            <textarea
-              className={`${TAILWIND_FORM_CLASSES['INPUT']} ${errors.description ? TAILWIND_FORM_CLASSES['ERROR_BORDER'] : ''} `}
-              id="description"
-              rows={4}
-              {...register('description')}
+            <Controller
+              name="description"
+              control={control}
+              render={({ field }) => (
+                <ReactQuill
+                  theme="snow"
+                  value={field.value}
+                  onChange={field.onChange}
+                  className={`${TAILWIND_FORM_CLASSES['INPUT']} ${errors.description ? TAILWIND_FORM_CLASSES['ERROR_BORDER'] : ''} `}
+                />
+              )}
             />
             {/* Render AI Summary Btn if EditBook page */}
             {renderAISummaryBtn}
@@ -439,11 +486,22 @@ function BookForm({
           >
             Notes (optional)
           </label>
-          <textarea
-            className={TAILWIND_FORM_CLASSES['INPUT']}
-            id="notes"
-            rows={4}
-            {...register('notes')}
+          <Controller
+            name="notes"
+            control={control}
+            render={({ field }) => (
+              <ReactQuill
+                theme="snow"
+                value={field.value || ''} // Provide an empty string if field.value is null
+                // Note: content, delta, source are expected in the signature of the onChange callback even though they are not used
+                // @ts-ignore
+                onChange={(content, delta, source, editor) => {
+                  const value = editor.getContents();
+                  field.onChange(value.ops && value.ops.length > 1 ? value : null);
+                }}
+                className={`${TAILWIND_FORM_CLASSES['INPUT']} ${errors.notes ? TAILWIND_FORM_CLASSES['ERROR_BORDER'] : ''} `}
+              />
+            )}
           />
           {errors.notes && <p className={TAILWIND_FORM_CLASSES['ERROR']}>{errors.notes.message}</p>}
         </div>
