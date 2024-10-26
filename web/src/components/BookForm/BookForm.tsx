@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Controller, SubmitHandler, useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 
@@ -11,9 +11,11 @@ import { IoClose, IoAddOutline } from 'react-icons/io5';
 import { useFormatPublishDate } from '../../utils/formatPublishDate';
 import _ from 'lodash';
 import DOMPurify from 'dompurify';
-import ReactQuill from 'react-quill';
+import Quill from 'quill';
 import Delta from 'quill-delta';
-import 'react-quill/dist/quill.snow.css';
+import QuillEditor from '../Quill/QuillEditor';
+
+import 'quill/dist/quill.snow.css';
 
 
 interface BookFormProps {
@@ -79,6 +81,91 @@ function BookForm({
   const { formattedDate, dateWarning } = useFormatPublishDate(initialData?.publishDate || '');
   const bookDataEmpty = _.isEmpty(initialData);
 
+  // Quill Refs
+  const descriptionQuillRef = useRef<HTMLDivElement>(null);
+  const notesQuillRef = useRef<HTMLDivElement>(null);
+  const [descriptionQuill, setDescriptionQuill] = useState<Quill | null>(null);
+  const [notesQuill, setNotesQuill] = useState<Quill | null>(null);
+
+  const [description, setDescription] = useState<Delta>(() => {
+    if (initialData?.description) {
+      return typeof initialData.description === 'string'
+        ? new Delta(JSON.parse(initialData.description))
+        : new Delta(initialData.description);
+    }
+    return new Delta();
+  });
+
+  const [notes, setNotes] = useState<Delta>(() => {
+    if (initialData?.notes) {
+      return typeof initialData.notes === 'string'
+        ? new Delta(JSON.parse(initialData.notes))
+        : new Delta(initialData.notes);
+    }
+    return new Delta();
+  });
+
+
+// Function to convert Delta to HTML string
+const deltaToHtmlString = (delta: Delta | undefined): string => {
+  if (!delta || !Array.isArray(delta.ops)) {
+    return ''; // Return an empty string if delta is undefined or ops is not an array
+  }
+  return delta.ops.map(op => op.insert).join('');
+};
+
+useEffect(() => {
+  if (descriptionQuillRef.current && !descriptionQuill) {
+    const quill = new Quill(descriptionQuillRef.current, {
+      theme: 'snow',
+      modules: {
+        toolbar: [
+          ['bold', 'italic', 'underline'],
+          [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+          ['link']
+        ]
+      }
+    });
+    setDescriptionQuill(quill);
+  }
+
+  if (notesQuillRef.current && !notesQuill) {
+    const quill = new Quill(notesQuillRef.current, {
+      theme: 'snow',
+      modules: {
+        toolbar: [
+          ['bold', 'italic', 'underline'],
+          [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+          ['link']
+        ]
+      }
+    });
+    setNotesQuill(quill);
+  }
+}, []);
+
+useEffect(() => {
+  if (initialData?.description && descriptionQuill) {
+    try {
+      const parsedDescription = typeof initialData.description === 'string' ? JSON.parse(initialData.description) : initialData.description;
+      descriptionQuill.setContents(parsedDescription);
+    } catch (error) {
+      console.error('Error parsing description:', error);
+      descriptionQuill.setText('');
+    }
+  }
+
+  if (initialData?.notes && notesQuill) {
+    try {
+      const parsedNotes = typeof initialData.notes === 'string' ? JSON.parse(initialData.notes) : initialData.notes;
+      notesQuill.setContents(parsedNotes);
+    } catch (error) {
+      console.error('Error parsing notes:', error);
+      notesQuill.setText('');
+    }
+  }
+}, [initialData, descriptionQuill, notesQuill]);
+
   const {
     control,
     handleSubmit,
@@ -123,8 +210,12 @@ function BookForm({
   // Watch the form data for debugging
   const watchedFields = watch();
   useEffect(() => {
-    console.log('Current form values:', watchedFields);
-  }, [watchedFields]);
+    console.log('Current form values:', {
+      ...watchedFields,
+      description,
+      notes
+    });
+  }, [watchedFields, description, notes]);
 
 
   // Handle form reset when initialData changes
@@ -136,18 +227,19 @@ function BookForm({
 
 
   const onSubmitWithJSONB: SubmitHandler<BookFormData> = (data) => {
-    const jsonbData: StringifiedBookFormData = {
+
+    // Prepare the data to be sent to the backend
+    const formData: StringifiedBookFormData = {
       ...data,
-      description: JSON.stringify(data.description),
-      notes: data.notes ? JSON.stringify(data.notes) : null,
+      description: JSON.stringify(description),
+      notes: notes.ops.length > 0 ? JSON.stringify(notes) : null,
     };
 
-    // Console log the form data
-    console.log('Form Data:', data);
-    console.log('Stringified JSONB Data:', jsonbData);
+    console.log('Formatted form data:', formData);
 
-    onSubmit(jsonbData);
+    onSubmit(formData);
   };
+
 
   return(
     <PageWithErrorBoundary fallbackMessage="Error loading add manual page">
@@ -464,20 +556,10 @@ function BookForm({
             Description<span className={TAILWIND_FORM_CLASSES['LABEL_ASTERISK']}>*</span>
           </label>
           <div className={TAILWIND_FORM_CLASSES['FIELD_ARR_WRAPPER']}>
-            <Controller
-              name="description"
-              control={control}
-              render={({ field }) => (
-                <ReactQuill
-                theme="snow"
-                value={field.value && field.value.ops ? JSON.stringify(field.value) : ''}
-                // @ts-ignore
-                onChange={(content, delta, source, editor) => {
-                  field.onChange(editor.getContents());
-                }}
-                className={`${TAILWIND_FORM_CLASSES['INPUT']} ${errors.description ? TAILWIND_FORM_CLASSES['ERROR_BORDER'] : ''} `}
-              />
-              )}
+            <QuillEditor
+              value={description}
+              onChange={(newContent) => setDescription(newContent)}
+              placeholder="Enter book description..."
             />
             {/* Render AI Summary Btn if EditBook page */}
             {renderAISummaryBtn}
@@ -493,20 +575,10 @@ function BookForm({
           >
             Notes (optional)
           </label>
-          <Controller
-            name="notes"
-            control={control}
-            render={({ field }) => (
-              <ReactQuill
-              theme="snow"
-              value={field.value && field.value.ops ? JSON.stringify(field.value) : ''}
-              // @ts-ignore
-              onChange={(content, delta, source, editor) => {
-                field.onChange(editor.getContents());
-              }}
-              className={`${TAILWIND_FORM_CLASSES['INPUT']} ${errors.notes ? TAILWIND_FORM_CLASSES['ERROR_BORDER'] : ''} `}
-            />
-            )}
+          <QuillEditor
+            value={notes}
+            onChange={(newContent) => setNotes(newContent)}
+            placeholder="Enter notes..."
           />
           {errors.notes && <p className={TAILWIND_FORM_CLASSES['ERROR']}>{errors.notes.message}</p>}
         </div>

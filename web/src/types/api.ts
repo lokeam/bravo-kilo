@@ -144,6 +144,14 @@ export type BookFormData = {
   language: string;
   pageCount: number;
   imageLink: string;
-  description: Delta;
-  notes: Delta | null;
+  description: Delta | string;
+  notes: Delta | string |null;
+};
+
+export type StringifiedBookFormData = Omit<BookFormData, 'description' | 'notes'> & {
+  authors: { author: string }[];
+  description: string;
+  notes: string | null;
+  tags: { tag: string }[];
+  genres: { genre: string }[];
 };

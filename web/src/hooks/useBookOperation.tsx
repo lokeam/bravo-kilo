@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { addBook, updateBook, deleteBook, fetchUserBooks, fetchBooksAuthors, fetchBooksGenres, fetchBooksFormat, fetchBooksTags } from '../service/apiClient.service';
 import { useUser } from './useUser';
-import { Book } from '../types/api';
+import { Book, StringifiedBookFormData } from '../types/api';
 import { invalidateLibraryQueries } from '../utils/invalidateQueries';
 
 type BookOperation = 'add' | 'update' | 'delete';
@@ -58,10 +58,43 @@ const useBookOperation = (operation: BookOperation, bookID?: string) => {
     }
   }, [queryClient, user?.id]);
 
-  const mutationFn = (book: Book | string) => {
+  // Add this function above or below mutationFn
+  const transformBookToFormData = (book: Book): StringifiedBookFormData => ({
+    ...book,
+    description: typeof book.description === 'string' ?
+     book.description :
+     JSON.stringify(book.description),
+    notes: book.notes ? (
+      typeof book.notes === 'string' ?
+        book.notes : JSON.stringify(book.notes)
+    ) : null,
+    authors: book.authors.map(
+      author => typeof author === 'string' ?
+       { author } : author
+      ),
+    genres: book.genres.map(
+      genre => typeof genre === 'string' ?
+       { genre } : genre
+      ),
+    tags: book.tags?.map(
+      tag => typeof tag === 'object' &&
+      tag !== null &&
+      'tag' in tag ?
+        tag :
+        { tag: tag as string }) ||
+      [],
+    formats: book.formats,
+    pageCount: Number(book.pageCount),
+    publishDate: book.publishDate || '',
+    isbn10: book.isbn10 || '',
+    isbn13: book.isbn13 || '',
+    imageLink: book.imageLink || '', // Ensure imageLink is always a string
+  });
+
+  const mutationFn = (book: Book | StringifiedBookFormData | string) => {
     switch (operation) {
       case 'add':
-        return addBook(book as Book);
+        return addBook(book as StringifiedBookFormData);
       case 'update':
         return updateBook(book as Book, bookID!);
       case 'delete':
@@ -69,7 +102,7 @@ const useBookOperation = (operation: BookOperation, bookID?: string) => {
     }
   };
 
-  const mutation = useMutation<Book, Error, Book | string, BookOperationContext>({
+  const mutation = useMutation<Book, Error, StringifiedBookFormData | string, BookOperationContext>({
     mutationFn,
     retry: (failureCount, error) => {
       if (failureCount < MAX_RETRIES) {
@@ -85,7 +118,9 @@ const useBookOperation = (operation: BookOperation, bookID?: string) => {
       if (operation === 'update' && bookID) {
         await queryClient.cancelQueries({ queryKey: ['book', bookID] });
         const previousBook = queryClient.getQueryData<Book>(['book', bookID]);
-        queryClient.setQueryData<Book>(['book', bookID], newBook as Book);
+        if (typeof newBook !== 'string') {
+          queryClient.setQueryData<Book>(['book', bookID], newBook as unknown as Book);
+        }
         return { previousBook };
       }
       return {};
@@ -117,7 +152,12 @@ const useBookOperation = (operation: BookOperation, bookID?: string) => {
   const performOperationWithLoading = async (book: Book | string) => {
     setIsLoading(true);
     try {
-      await mutation.mutateAsync(book);
+      if (operation === 'delete') {
+        await mutation.mutateAsync(book as string);
+      } else {
+        const formData = transformBookToFormData(book as Book);
+        await mutation.mutateAsync(formData as any); // Use 'any' to bypass TypeScript check
+      }
     } finally {
       setIsLoading(false);
     }

@@ -10,11 +10,13 @@ import Loading from '../components/Loading/Loading';
 import { IoIosAdd } from "react-icons/io";
 import { IoIosWarning } from "react-icons/io";
 import { TbEdit } from "react-icons/tb";
+import QuillContent from '../components/Quill/QuillContent';
+
+import Delta from 'quill-delta';
 
 interface MissingInfoWarningProps {
   emptyFields: string[]
 }
-
 
 const MissingInfoWarning = ({emptyFields}: MissingInfoWarningProps) => {
   return (
@@ -90,6 +92,28 @@ const BookDetail = () => {
 
   const bookCover = book?.imageLink;
   console.log('testing bookCover: ', bookCover);
+
+  // const description = book.description?.Valid ? JSON.parse(book.description.String) : 'No book description available';
+  // const notes = book.notes?.Valid ? JSON.parse(book.notes.String) : 'No personal notes available';
+
+
+  const parseContent = (content: string | null | undefined): Delta => {
+    if (!content) return new Delta();
+    try {
+      return new Delta(JSON.parse(content));
+    } catch (error) {
+      console.error('Error parsing content:', error);
+      return new Delta().insert(content || '');
+    }
+  };
+
+  const description = book.description || { ops: [] };
+  const notes = book.notes || { ops: [] };
+
+  console.log('book.description: ', description);
+  console.log('notes: ', notes);
+
+  const hasNotes = notes.ops && notes.ops.length > 0;
 
   return (
     <PageWithErrorBoundary fallbackMessage="Error loading book detail page">
@@ -198,19 +222,17 @@ const BookDetail = () => {
                 ))}
               </div>
             </div>
-            {book.notes !== '' ? (
+            {hasNotes && (
               <div className="bk_description text-left mb-4">
                 <h3 className="text-2xl font-bold mb-2 text-black dark:text-white">Personal Notes</h3>
                 <p className="text-charcoal dark:text-cadet-gray">{book.notes}</p>
               </div>
-            ) : null}
+            )}
             <div className="bk_description text-left mb-4">
               <h3 className="text-2xl font-bold pb-2 text-black dark:text-white">Book Description</h3>
-              <p className="text-charcoal dark:text-cadet-gray">
-                {book.description !== ''
-                  ? book.description
-                  : 'No book description available'}
-              </p>
+              {book.description && book.description.ops && (
+                <QuillContent content={book.description} />
+)}
             </div>
           </div>
         </div>

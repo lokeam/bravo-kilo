@@ -1,4 +1,17 @@
 import { z } from 'zod';
+import Delta from 'quill-delta';
+
+const deltaSchema = z.custom<Delta>(
+  (data) => data instanceof Delta && isValidDelta(data),
+  { message: 'Content cannot be empty' }
+);
+
+const isValidDelta = (data: any) => {
+  return data.ops && data.ops.length > 0 && data.ops.some((op: any) =>
+    (typeof op.insert === 'string' && op.insert.trim() !== '') ||
+    (typeof op.insert === 'object' && Object.keys(op.insert).length > 0)
+  );
+};
 
 export const bookSchema = z.object({
   title: z.string().min(1, 'Please enter a title'),
@@ -33,19 +46,8 @@ export const bookSchema = z.object({
   language: z.string().min(1, 'Please enter a language'),
   pageCount: z.number().min(1, 'Please enter a total page count'),
   imageLink: z.string().min(1, 'Please enter an image link'),
-  description: z.object({}).passthrough().refine(
-    (data) => {
-      // Check if Delta obj has any content
-      const deltaData = data as { ops?: Array<{ insert: string }> };
-      return deltaData.ops !== undefined &&
-             deltaData.ops.length > 0 &&
-             deltaData.ops.some((op) => op.insert.trim() !== '');
-    },
-    {
-      message: 'Please enter some description text'
-    }
-  ),
-  notes: z.object({}).passthrough().nullable().optional(),
+  description: deltaSchema,
+  notes: deltaSchema.nullable(),
 }).refine((data) => data.isbn10 || data.isbn13, {
   message: 'Either ISBN-10 or ISBN-13 is required',
   path: ['isbn10', 'isbn13'],

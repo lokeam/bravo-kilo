@@ -1,5 +1,5 @@
 import axios, { AxiosError } from 'axios';
-import { Book } from '../types/api';
+import { Book, StringifiedBookFormData } from '../types/api';
 
 let csrfToken: string | null = null;
 
@@ -219,8 +219,23 @@ export const updateBook = async (book: Book, bookID: string) => {
   }
 };
 
-export const addBook = async (book: Book) => {
-  console.log('apiClient.service, about to post book from addBook:', book);
+export const addBook = async (book: StringifiedBookFormData) => {
+  console.log('apiClient.service, received book data:', book);
+
+  console.log('Description:', book.description);
+  console.log('Notes:', book.notes);
+
+  if (!book.description) {
+    console.warn('Warning: Description is empty or null');
+  }
+  if (!book.notes) {
+    console.warn('Warning: Notes is empty or null');
+  }
+
+  // No need to modify book object here, it should already be in the correct format
+
+  console.log('Stringified book object:', JSON.stringify(book));
+
   const { data } = await apiClient.post('/api/v1/books/add', book);
   console.log('apiClient.service, received response from addBook:', data);
   return data;

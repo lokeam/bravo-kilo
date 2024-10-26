@@ -347,3 +347,7 @@ button:focus-visible {
     filter: invert(0);
   }
 }
+
+.ql-container {
+  height: unset !important;
+}
