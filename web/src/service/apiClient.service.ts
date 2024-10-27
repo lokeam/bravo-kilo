@@ -236,11 +236,21 @@ export const addBook = async (book: StringifiedBookFormData) => {
 
   console.log('Stringified book object:', JSON.stringify(book));
 
-  const { data } = await apiClient.post('/api/v1/books/add', book);
-  console.log('apiClient.service, received response from addBook:', data);
-  return data;
+  try {
+    const csrfToken = document.cookie.replace(/(?:(?:^|.*;\s*)_gorilla_csrf\s*\=\s*([^;]*).*$)|^.*$/, "$1");
+    const { data } = await apiClient.post('/api/v1/books/add', book, {
+      headers: {
+        'X-CSRF-Token': csrfToken
+      }
+    });
+    console.log('apiClient.service, received response from addBook:', data);
+    return data;
+  } catch (error) {
+    console.error('Error adding book:', error);
+    throw error;
+  }
 };
-
+//
 export const checkUserAccountStatus = async () => {
   try {
     const { data } = await apiClient.get('/auth/check-account-status');

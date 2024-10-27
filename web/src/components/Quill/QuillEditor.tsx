@@ -4,12 +4,12 @@ import Delta from 'quill-delta';
 import 'quill/dist/quill.snow.css';
 
 interface QuillEditorProps {
-  value: Delta;
+  value: Delta | { ops: any[]};
   onChange: (content: Delta) => void;
   placeholder?: string;
 }
 
-const isEqualDelta = (a: Delta, b: Delta):boolean => {
+const isEqualDelta = (a: Delta | { ops: any[] }, b: Delta | { ops: any[] }): boolean => {
   return JSON.stringify(a) === JSON.stringify(b);
 };
 
@@ -52,12 +52,18 @@ const QuillEditor: React.FC<QuillEditorProps> = ({ value, onChange, placeholder 
   useEffect(() => {
     if (quillRef.current) {
       const quill = quillRef.current;
+      quill.off('text-change');
       quill.on('text-change', () => {
         const contents = quill.getContents();
         onChange(contents);
       });
+
+      const newValue = value instanceof Delta ? value : new Delta(value.ops);
+      if (!isEqualDelta(quill.getContents(), newValue)) {
+        quill.setContents(newValue);
+      }
     }
-  }, [onChange]);
+  }, [onChange, value]);
 
   return <div ref={editorRef} />;
 };

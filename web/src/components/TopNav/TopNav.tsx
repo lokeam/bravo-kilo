@@ -21,10 +21,14 @@ function TopNavigation() {
   const location = useLocation();
   const navigate = useNavigate();
   const isBookDetailOrSettingsPage = location.pathname.includes('library/books') || location.pathname.includes('settings');
-  const isSearchPage = location.pathname.includes('/search');
+  const isSearchPage = location.pathname.includes('/search') &&
+    !location.pathname.includes('/add') &&
+    !location.pathname.includes('/edit');
   const isBooksRoute = location.pathname.includes('/books');
   const isAddPage = location.pathname.includes('/add');
-  const isDetailPage = isBooksRoute && !isAddPage && !isSearchPage;
+  const isEditPage = location.pathname.includes('/edit');
+  const isAddOrEditPage = isSearchPage && (isAddPage || isEditPage);
+  const isDetailPage = isBooksRoute && !isAddOrEditPage && !isSearchPage;
   const isLightTheme = theme === 'light'
 
   const openModal = () => setOpened(true);

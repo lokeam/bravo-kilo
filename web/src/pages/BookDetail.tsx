@@ -151,7 +151,15 @@ const BookDetail = () => {
             {!book.isInLibrary ? (
               <button
                 onClick={() =>
-                  navigate(`/library/books/add/search`, { state: { book } })
+                  navigate(`/library/books/add/search`, {
+                    state: {
+                      book: {
+                        ...book,
+                        description: JSON.stringify(book?.description),
+                        notes: JSON.stringify(book?.notes),
+                      }
+                    }
+                  })
                 }
                 className="flex items-center justify-center rounded border font-bold bg-vivid-blue hover:bg-vivid-blue-d dark:border-vivid-blue dark:bg-vivid-blue dark:hover:bg-vivid-blue-d dark:hover:border-vivid-blue-d transition duration-500 ease-in-out"
               >
@@ -161,7 +169,15 @@ const BookDetail = () => {
             ) : (
               <button
                 onClick={() =>
-                  navigate(`/library/books/${bookID}/edit`, { state: { book } })
+                  navigate(`/library/books/${bookID}/edit`, {
+                    state: {
+                      book: {
+                        ...book,
+                        description: JSON.stringify(book?.description),
+                        notes: JSON.stringify(book?.notes),
+                      }
+                    }
+                  })
                 }
                 className="flex items-center justify-center rounded font-bold bg-vivid-blue hover:bg-vivid-blue-d dark:via-vivid-blue dark:hover:via-vivid-blue-d dark:hover:border-vivid-blue-d transition duration-500 ease-in-out"
               >

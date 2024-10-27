@@ -14,6 +14,7 @@ import DOMPurify from 'dompurify';
 import Quill from 'quill';
 import Delta from 'quill-delta';
 import QuillEditor from '../Quill/QuillEditor';
+import { z } from 'zod';
 
 import 'quill/dist/quill.snow.css';
 
@@ -226,24 +227,65 @@ useEffect(() => {
   }, [initialData, reset, formattedDate]);
 
 
-  const onSubmitWithJSONB: SubmitHandler<BookFormData> = (data) => {
+  // const onSubmitWithJSONB: SubmitHandler<BookFormData> = (data) => {
 
-    // Prepare the data to be sent to the backend
-    const formData: StringifiedBookFormData = {
+  //   // Prepare the data to be sent to the backend
+  //   const formData: StringifiedBookFormData = {
+  //     ...data,
+  //     description: JSON.stringify(description),
+  //     notes: notes.ops.length > 0 ? JSON.stringify(notes) : null,
+  //   };
+
+  //   console.log('Formatted form data:', formData);
+
+  //   onSubmit(formData);
+  // };
+  const onSubmitWithJSONB = async (data: BookFormData) => {
+    console.log("onSubmitWithJSONB called with data:", JSON.stringify(data, null, 2));
+    const formattedData = {
       ...data,
-      description: JSON.stringify(description),
-      notes: notes.ops.length > 0 ? JSON.stringify(notes) : null,
+      description: description,
+      notes: notes,
     };
+    console.log("Formatted data before validation:", JSON.stringify(formattedData, null, 2));
 
-    console.log('Formatted form data:', formData);
+    try {
+      console.log("Data before Zod validation:", formattedData);
+      const validatedData = bookSchema.parse(formattedData);
+      console.log("Validated data:", JSON.stringify(validatedData, null, 2));
 
-    onSubmit(formData);
+      // Ensure the validated data matches StringifiedBookFormData
+      const submissionData: StringifiedBookFormData = {
+        ...validatedData,
+        description: JSON.stringify(validatedData.description),
+        notes: validatedData.notes ? JSON.stringify(validatedData.notes) : null,
+      };
+
+      onSubmit(submissionData);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        console.error("Validation error:", error.errors);
+        // Handle validation errors
+      }
+    }
   };
 
-
+  useEffect(() => {
+    if (Object.keys(errors).length > 0) {
+      console.log("Form errors:", errors);
+    }
+  }, [errors]);
   return(
     <PageWithErrorBoundary fallbackMessage="Error loading add manual page">
-      <form className="grid gap-4 grid-cols-2 sm:gap-6" onSubmit={handleSubmit(onSubmitWithJSONB)}>
+      <form
+        className="grid gap-4 grid-cols-2 sm:gap-6"
+        onSubmit={handleSubmit(
+          onSubmitWithJSONB,
+          (errors) => {
+            console.log("Form validation errors: ", errors);
+          }
+        )}
+      >
 
         {/* Title */}
         <div className={TAILWIND_FORM_CLASSES['TWO_COL_WRAPPER']}>
@@ -556,10 +598,19 @@ useEffect(() => {
             Description<span className={TAILWIND_FORM_CLASSES['LABEL_ASTERISK']}>*</span>
           </label>
           <div className={TAILWIND_FORM_CLASSES['FIELD_ARR_WRAPPER']}>
-            <QuillEditor
-              value={description}
-              onChange={(newContent) => setDescription(newContent)}
-              placeholder="Enter book description..."
+            <Controller
+              name="description"
+              control={control}
+              render={({ field }) => (
+                <QuillEditor
+                value={field.value instanceof Delta ? field.value : new Delta(field.value)}
+                  onChange={(newContent) => {
+                    field.onChange(newContent);
+                    setDescription(newContent);
+                  }}
+                  placeholder="Enter book description..."
+                />
+              )}
             />
             {/* Render AI Summary Btn if EditBook page */}
             {renderAISummaryBtn}
@@ -575,10 +626,25 @@ useEffect(() => {
           >
             Notes (optional)
           </label>
-          <QuillEditor
-            value={notes}
-            onChange={(newContent) => setNotes(newContent)}
-            placeholder="Enter notes..."
+          <Controller
+            name="notes"
+            control={control}
+            render={({ field }) => (
+              <QuillEditor
+              value={
+                field.value instanceof Delta
+                  ? field.value
+                  : field.value
+                  ? new Delta(field.value)
+                  : new Delta()
+              }
+                onChange={(newContent) => {
+                  field.onChange(newContent);
+                  setNotes(newContent);
+                }}
+                placeholder="Enter notes..."
+              />
+            )}
           />
           {errors.notes && <p className={TAILWIND_FORM_CLASSES['ERROR']}>{errors.notes.message}</p>}
         </div>

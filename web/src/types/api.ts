@@ -138,14 +138,16 @@ export type BookFormData = {
   genres: { genre: string }[];
   tags: { tag: string }[];
   publishDate: string;
-  isbn10: string;
-  isbn13: string;
+  isbn10?: string;
+  isbn13?: string;
   formats: ("physical" | "eBook" | "audioBook")[] | undefined;
   language: string;
   pageCount: number;
   imageLink: string;
-  description: Delta | string;
-  notes: Delta | string |null;
+  // description: Delta | string;
+  // notes: Delta | string |null;
+  description: Delta | { ops: any[] };
+  notes: Delta | { ops: any[] } | null;
 };
 
 export type StringifiedBookFormData = Omit<BookFormData, 'description' | 'notes'> & {
