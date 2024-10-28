@@ -187,19 +187,19 @@ func (r *FormatRepositoryImpl) GetAllBooksByFormat(userID int) (map[string][]Boo
 
 	for rows.Next() {
 		var book Book
-		var authorsJSON, genresJSON, tagsJSON []byte
+		var authorsJSON, genresJSON, tagsJSON, descriptionJSON, notesJSON []byte
 		var formatType string
 
 		if err := rows.Scan(
 			&book.ID,
 			&book.Title,
 			&book.Subtitle,
-			&book.Description,
+			&descriptionJSON,
 			&book.Language,
 			&book.PageCount,
 			&book.PublishDate,
 			&book.ImageLink,
-			&book.Notes,
+			&notesJSON,
 			&book.CreatedAt,
 			&book.LastUpdated,
 			&book.ISBN10,
@@ -214,6 +214,14 @@ func (r *FormatRepositoryImpl) GetAllBooksByFormat(userID int) (map[string][]Boo
 		}
 
 		// Unmarshal JSON fields
+		if err := json.Unmarshal(descriptionJSON, &book.Description); err != nil {
+			r.Logger.Error("Error unmarshalling description", "error", err)
+			return nil, err
+		}
+		if err := json.Unmarshal(notesJSON, &book.Notes); err != nil {
+			r.Logger.Error("Error unmarshalling notes", "error", err)
+			return nil, err
+		}
 		if err := json.Unmarshal(authorsJSON, &book.Authors); err != nil {
 			r.Logger.Error("Error unmarshalling authors JSON", "error", err)
 			return nil, err

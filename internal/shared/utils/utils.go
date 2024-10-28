@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/lokeam/bravo-kilo/internal/books/repository"
 	"github.com/lokeam/bravo-kilo/internal/shared/collections"
 )
 
@@ -206,3 +207,20 @@ func RemoveDuplicates(input []string) []string {
 	return set.Elements()
 }
 
+// Covert Details and Notes data
+func StringToRichText(text string) repository.RichText {
+	return repository.RichText{
+			Ops: []repository.DeltaOp{
+					{
+							Insert: &text,
+					},
+			},
+	}
+}
+
+func RichTextToString(rt repository.RichText) string {
+	if len(rt.Ops) == 0 || rt.Ops[0].Insert == nil {
+			return ""
+	}
+	return *rt.Ops[0].Insert
+}

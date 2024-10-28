@@ -135,12 +135,12 @@ func (b *TagRepositoryImpl) GetAllBooksByTags(ctx context.Context, userID int) (
 	// Iterate through the rows and process the results
 	for rows.Next() {
 			var book Book
-			var tagsJSON, authorsJSON, formatsJSON, genresJSON []byte
+			var tagsJSON, authorsJSON, formatsJSON, genresJSON, descriptionJSON, notesJSON []byte
 
 			// Ensure the scan order matches the SQL query's column order
 			if err := rows.Scan(
-					&book.ID, &book.Title, &book.Subtitle, &book.Description, &book.Language, &book.PageCount,
-					&book.PublishDate, &book.ImageLink, &book.Notes, &book.CreatedAt, &book.LastUpdated,
+					&book.ID, &book.Title, &book.Subtitle, &descriptionJSON, &book.Language, &book.PageCount,
+					&book.PublishDate, &book.ImageLink, &notesJSON, &book.CreatedAt, &book.LastUpdated,
 					&book.ISBN10, &book.ISBN13, &tagsJSON, &authorsJSON, &formatsJSON, &genresJSON,
 			); err != nil {
 					b.Logger.Error("Error scanning book by genre", "error", err)
@@ -148,6 +148,14 @@ func (b *TagRepositoryImpl) GetAllBooksByTags(ctx context.Context, userID int) (
 			}
 
 			// Unmarshal JSON fields into the respective slices
+			if err := json.Unmarshal(descriptionJSON, &book.Description); err != nil {
+				b.Logger.Error("Error unmarshalling description JSON", "error", err)
+				return nil, err
+			}
+			if err := json.Unmarshal(notesJSON, &book.Notes); err != nil {
+				b.Logger.Error("Error unmarshalling notes JSON", "error", err)
+				return nil, err
+			}
 			if err := json.Unmarshal(tagsJSON, &book.Tags); err != nil {
 				b.Logger.Error("Error unmarshalling tags JSON", "error", err)
 				return nil, err

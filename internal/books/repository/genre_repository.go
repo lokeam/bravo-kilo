@@ -164,11 +164,11 @@ func (r *GenreRepositoryImpl) GetAllBooksByGenres(ctx context.Context, userID in
 	// Iterate through the rows and process the results
 	for rows.Next() {
 			var book Book
-			var genresJSON, authorsJSON, formatsJSON, tagsJSON []byte
+			var genresJSON, authorsJSON, formatsJSON, tagsJSON, descriptionJSON, notesJSON []byte
 			// Ensure the scan order matches the SQL query's column order
 			if err := rows.Scan(
-					&book.ID, &book.Title, &book.Subtitle, &book.Description, &book.Language, &book.PageCount,
-					&book.PublishDate, &book.ImageLink, &book.Notes, &book.CreatedAt, &book.LastUpdated,
+					&book.ID, &book.Title, &book.Subtitle, &descriptionJSON, &book.Language, &book.PageCount,
+					&book.PublishDate, &book.ImageLink, &notesJSON, &book.CreatedAt, &book.LastUpdated,
 					&book.ISBN10, &book.ISBN13, &genresJSON, &authorsJSON, &formatsJSON, &tagsJSON,
 			); err != nil {
 					r.Logger.Error("Error scanning book by genre", "error", err)
@@ -176,6 +176,14 @@ func (r *GenreRepositoryImpl) GetAllBooksByGenres(ctx context.Context, userID in
 			}
 
 			// Unmarshal JSON fields into the respective slices
+			if err := json.Unmarshal(descriptionJSON, &book.Description); err != nil {
+					r.Logger.Error("Error unmarshalling description JSON", "error", err)
+					return nil, err
+			}
+			if err := json.Unmarshal(notesJSON, &book.Notes); err != nil {
+				r.Logger.Error("Error unmarshalling notes JSON", "error", err)
+				return nil, err
+			}
 			if err := json.Unmarshal(genresJSON, &book.Genres); err != nil {
 					r.Logger.Error("Error unmarshalling genres JSON", "error", err)
 					return nil, err

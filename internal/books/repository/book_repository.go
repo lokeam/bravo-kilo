@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"time"
@@ -110,15 +111,31 @@ func (r *BookRepositoryImpl) InitPreparedStatements() error {
 
 	// Prepared select statement for GetAllBooksByUserID
 	r.getAllBooksByUserIDStmt, err = r.DB.Prepare(`
-	SELECT DISTINCT b.id, b.title, b.subtitle, b.description, b.language, b.page_count,
-			b.publish_date, b.image_link, b.notes, b.created_at, b.last_updated,
-			b.isbn_10, b.isbn_13
-	FROM books b
-	INNER JOIN user_books ub ON b.id = ub.book_id
-	WHERE ub.user_id = $1`)
+    SELECT DISTINCT
+        b.id,
+        b.title,
+        b.subtitle,
+        COALESCE(b.description, '{}') AS description,
+        b.language,
+        b.page_count,
+        b.publish_date,
+        b.image_link,
+        COALESCE(b.notes, '{}') AS notes,
+        b.created_at,
+        b.last_updated,
+        b.isbn_10,
+        b.isbn_13
+    FROM
+        books b
+    INNER JOIN
+        user_books ub ON b.id = ub.book_id
+    WHERE
+        ub.user_id = $1
+    ORDER BY
+        b.title ASC`)
 	if err != nil {
-		r.Logger.Error("Error preparing getAllBooksByUserIDStmt", "error", err)
-		return fmt.Errorf("failed to prepare getAllBooksByUserIDStmt: %w", err)
+			r.Logger.Error("Error preparing getAllBooksByUserIDStmt", "error", err)
+			return fmt.Errorf("failed to prepare getAllBooksByUserIDStmt: %w", err)
 	}
 
 	// Prepared statement for updating a book
@@ -136,18 +153,29 @@ func (r *BookRepositoryImpl) InitPreparedStatements() error {
 
 func (r *BookRepositoryImpl) InsertBook(ctx context.Context, tx *sql.Tx, book Book, userID int) (int, error) {
 	var newId int
+	descriptionJSON, err := json.Marshal(book.Description)
+	if err != nil {
+			return 0, fmt.Errorf("failed to marshal description: %w", err)
+	}
+	notesJSON, err := json.Marshal(book.Notes)
+	if err != nil {
+			return 0, fmt.Errorf("failed to marshal notes: %w", err)
+	}
 	formattedPublishDate := formatPublishDate(book.PublishDate)
 
+    // Log the JSON data before insertion
+    r.Logger.Info("Inserting book", "description", string(descriptionJSON), "notes", string(notesJSON))
+
 	// Insert book into books table
-	err := tx.StmtContext(ctx, r.insertBookStmt).QueryRowContext(ctx,
+	err = tx.StmtContext(ctx, r.insertBookStmt).QueryRowContext(ctx,
 		book.Title,
 		book.Subtitle,
-		book.Description,
+		descriptionJSON,
 		book.Language,
 		book.PageCount,
 		formattedPublishDate,
 		book.ImageLink,
-		book.Notes,
+		notesJSON,
 		time.Now(),
 		time.Now(),
 		book.ISBN10,
@@ -197,27 +225,42 @@ func (r *BookRepositoryImpl) GetBookByID(id int) (*Book, error) {
 
 	// Check if rows were returned
 	if rows.Next() {
+		var descriptionJSON, notesJSON []byte
+
 			// Scan the data into the book struct
 			err = rows.Scan(
 					&book.ID,
 					&book.Title,
 					&book.Subtitle,
-					&book.Description,
+					&descriptionJSON,
 					&book.Language,
 					&book.PageCount,
 					&book.PublishDate,
 					&book.ImageLink,
-					&book.Notes,
+					&notesJSON,
 					&book.CreatedAt,
 					&book.LastUpdated,
 					&book.ISBN10,
 					&book.ISBN13,
 			)
 
+			r.Logger.Info("Retrieved book data", "bookID", id, "description", string(descriptionJSON), "notes", string(notesJSON))
+
 			if err != nil {
 					r.Logger.Error("Error scanning book data", "bookID", id, "error", err)
 					return nil, fmt.Errorf("failed to scan book data for ID %d: %w", id, err)
 			}
+
+			if len(descriptionJSON) > 0 {
+        if err := json.Unmarshal(descriptionJSON, &book.Description); err != nil {
+            return nil, fmt.Errorf("failed to unmarshal description: %w", err)
+        }
+    }
+    if len(notesJSON) > 0 {
+        if err := json.Unmarshal(notesJSON, &book.Notes); err != nil {
+            return nil, fmt.Errorf("failed to unmarshal notes: %w", err)
+        }
+    }
 
 	} else {
 			// No rows returned, book not found
@@ -311,17 +354,18 @@ func (r *BookRepositoryImpl) GetAllBooksByUserID(userID int) ([]Book, error) {
 	var bookIDs []int
 	for rows.Next() {
 		var book Book
+		var descriptionJSON, notesJSON []byte
 
 		if err := rows.Scan(
 			&book.ID,
 			&book.Title,
 			&book.Subtitle,
-			&book.Description,
+			&descriptionJSON,
 			&book.Language,
 			&book.PageCount,
 			&book.PublishDate,
 			&book.ImageLink,
-			&book.Notes,
+			&notesJSON,
 			&book.CreatedAt,
 			&book.LastUpdated,
 			&book.ISBN10,
@@ -329,6 +373,18 @@ func (r *BookRepositoryImpl) GetAllBooksByUserID(userID int) ([]Book, error) {
 		); err != nil {
 			r.Logger.Error("Error scanning book", "error", err)
 			return nil, fmt.Errorf("failed to scan book row: %w", err)
+		}
+
+		// Convert description and notes from JSON to RichText
+		if len(descriptionJSON) > 0 {
+			if err := json.Unmarshal(descriptionJSON, &book.Description); err != nil {
+					return nil, fmt.Errorf("failed to unmarshal description: %w", err)
+			}
+		}
+		if len(notesJSON) > 0 {
+				if err := json.Unmarshal(notesJSON, &book.Notes); err != nil {
+						return nil, fmt.Errorf("failed to unmarshal notes: %w", err)
+				}
 		}
 
 		book.IsInLibrary = true
@@ -380,15 +436,27 @@ func (r *BookRepositoryImpl) UpdateBook(ctx context.Context, tx *sql.Tx, book Bo
 				  publish_date=$6, image_link=$7, notes=$8 last_updated=$9,
 				  isbn_10=$10, isbn_13=$11 WHERE id=$12`
 
-		_, err := tx.ExecContext(ctx, query,
+		// Convert RichText to JSON before updating
+		descriptionJSON, err := json.Marshal(book.Description)
+		if err != nil {
+			r.Logger.Error("Error marshalling description to JSON", "error", err)
+			return err
+		}
+		notesJSON, err := json.Marshal(book.Notes)
+		if err != nil {
+			r.Logger.Error("Error marshalling notes to JSON", "error", err)
+			return err
+		}
+
+		_, err = tx.ExecContext(ctx, query,
 			book.Title,
 			book.Subtitle,
-			book.Description,
+			descriptionJSON,
 			book.Language,
 			book.PageCount,
 			book.PublishDate,
 			book.ImageLink,
-			book.Notes,
+			notesJSON,
 			time.Now(),
 			book.ISBN10,
 			book.ISBN13,
@@ -554,7 +622,6 @@ func (r *BookRepositoryImpl) findEmptyFields(book *Book) ([]string, bool) {
 		name  string
 	}{
 		{book.Title, "title"},
-		{book.Description, "description"},
 		{book.Language, "language"},
 		{book.PageCount == 0, "pageCount"},
 		{book.PublishDate == "", "publishDate"},

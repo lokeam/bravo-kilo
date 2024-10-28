@@ -18,6 +18,7 @@ import (
 	"github.com/lokeam/bravo-kilo/internal/books/repository"
 	"github.com/lokeam/bravo-kilo/internal/shared/collections"
 	"github.com/lokeam/bravo-kilo/internal/shared/transaction"
+	"github.com/lokeam/bravo-kilo/internal/shared/utils"
 )
 
 type BookService interface {
@@ -332,8 +333,13 @@ func (s *BookServiceImpl) SanitizeBookData(book *repository.Book) {
 	book.Title = s.SanitizeAndUnescape(book.Title)
 	book.Subtitle = s.SanitizeAndUnescape(book.Subtitle)
 	book.Language = s.SanitizeAndUnescape(book.Language)
-	book.Description = s.SanitizeAndUnescape(book.Description)
-	book.Notes = s.SanitizeAndUnescape(book.Notes)
+
+	// Handle RichText fields
+	descriptionStr := utils.RichTextToString(book.Description)
+	notesStr := utils.RichTextToString(book.Notes)
+
+	book.Description = utils.StringToRichText(s.SanitizeAndUnescape(descriptionStr))
+	book.Notes = utils.StringToRichText(s.SanitizeAndUnescape(notesStr))
 
 	// Sanitize genres, formats, and tags
 	for i := range book.Genres {

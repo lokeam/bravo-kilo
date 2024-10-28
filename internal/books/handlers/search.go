@@ -100,7 +100,7 @@ func (h *SearchHandlers) formatGoogleBooksResponse(response http.ResponseWriter,
 		formattedBook := repository.Book{
 			Title:       utils.GetStringValOrDefault(volumeInfo, "title", ""),
 			Subtitle:    utils.GetStringValOrDefault(volumeInfo, "subtitle", ""),
-			Description: utils.GetStringValOrDefault(volumeInfo, "description", ""),
+			Description: utils.StringToRichText(utils.GetStringValOrDefault(volumeInfo, "description", "")),
 			Language:    utils.GetStringValOrDefault(volumeInfo, "language", ""),
 			PageCount:   utils.GetIntValOrDefault(volumeInfo, "pageCount", 0),
 			PublishDate: utils.GetStringValOrDefault(volumeInfo, "publishedDate", ""),

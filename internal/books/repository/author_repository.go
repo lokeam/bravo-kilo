@@ -183,19 +183,19 @@ func (r *AuthorRepositoryImpl) GetAllBooksByAuthors(userID int) (map[string]inte
 	for rows.Next() {
 		var book Book
 		var authorName string
-		var genresJSON, formatsJSON, tagsJSON []byte
+		var genresJSON, formatsJSON, tagsJSON, descriptionJSON, notesJSON []byte
 
 		// Scan the result
 		if err := rows.Scan(
 			&book.ID,
 			&book.Title,
 			&book.Subtitle,
-			&book.Description,
+			&descriptionJSON,
 			&book.Language,
 			&book.PageCount,
 			&book.PublishDate,
 			&book.ImageLink,
-			&book.Notes,
+			&notesJSON,
 			&book.CreatedAt,
 			&book.LastUpdated,
 			&book.ISBN10,
@@ -210,6 +210,14 @@ func (r *AuthorRepositoryImpl) GetAllBooksByAuthors(userID int) (map[string]inte
 		}
 
 		// Unmarshal JSON fields
+		if err := json.Unmarshal(descriptionJSON, &book.Description); err != nil {
+			r.Logger.Error("Error unmarshalling description JSON", "error", err)
+			return nil, err
+		}
+		if err := json.Unmarshal(notesJSON, &book.Notes); err != nil {
+			r.Logger.Error("Error unmarshalling notes JSON", "error", err)
+			return nil, err
+		}
 		if err := json.Unmarshal(genresJSON, &book.Genres); err != nil {
 			r.Logger.Error("Error unmarshalling genres JSON", "error", err)
 			return nil, err
@@ -365,23 +373,34 @@ func (r *AuthorRepositoryImpl) GetBooksByAuthor(authorName string) ([]Book, erro
 
 	for rows.Next() {
 		var book Book
+		var descriptionJSON, notesJSON []byte
 
 		if err := rows.Scan(
 			&book.ID,
 			&book.Title,
 			&book.Subtitle,
-			&book.Description,
+			&descriptionJSON,
 			&book.Language,
 			&book.PageCount,
 			&book.PublishDate,
 			&book.ImageLink,
-			&book.Notes,
+			&notesJSON,
 			&book.CreatedAt,
 			&book.LastUpdated,
 			&book.ISBN10,
 			&book.ISBN13,
 		); err != nil {
 			r.Logger.Error("Error scanning book", "error", err)
+			return nil, err
+		}
+
+		// Unmarshal JSON fields
+		if err := json.Unmarshal(descriptionJSON, &book.Description); err != nil {
+			r.Logger.Error("Error unmarshalling description JSON", "error", err)
+			return nil, err
+		}
+		if err := json.Unmarshal(notesJSON, &book.Notes); err != nil {
+			r.Logger.Error("Error unmarshalling notes JSON", "error", err)
 			return nil, err
 		}
 
