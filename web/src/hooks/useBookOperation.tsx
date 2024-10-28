@@ -2,8 +2,10 @@ import { useCallback, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { addBook, updateBook, deleteBook, fetchUserBooks, fetchBooksAuthors, fetchBooksGenres, fetchBooksFormat, fetchBooksTags } from '../service/apiClient.service';
 import { useUser } from './useUser';
-import { Book, StringifiedBookFormData } from '../types/api';
+import { Book, BookFormData, StringifiedBookFormData, isStringifiedBookFormData } from '../types/api';
 import { invalidateLibraryQueries } from '../utils/invalidateQueries';
+import Delta from 'quill-delta';
+import { QuillContent } from '../types/api';
 
 type BookOperation = 'add' | 'update' | 'delete';
 
@@ -19,6 +21,7 @@ const useBookOperation = (operation: BookOperation, bookID?: string) => {
   const { data: user } = useUser();
   const [isLoading, setIsLoading] = useState(false);
 
+  // Refetch library data as soon as mutation is successful
   const refetchLibraryData = useCallback(async () => {
     if (user?.id) {
       await Promise.all([
@@ -58,45 +61,32 @@ const useBookOperation = (operation: BookOperation, bookID?: string) => {
     }
   }, [queryClient, user?.id]);
 
-  // Add this function above or below mutationFn
-  const transformBookToFormData = (book: Book): StringifiedBookFormData => ({
-    ...book,
-    description: typeof book.description === 'string' ?
-     book.description :
-     JSON.stringify(book.description),
-    notes: book.notes ? (
-      typeof book.notes === 'string' ?
-        book.notes : JSON.stringify(book.notes)
-    ) : null,
-    authors: book.authors.map(
-      author => typeof author === 'string' ?
-       { author } : author
-      ),
-    genres: book.genres.map(
-      genre => typeof genre === 'string' ?
-       { genre } : genre
-      ),
-    tags: book.tags?.map(
-      tag => typeof tag === 'object' &&
-      tag !== null &&
-      'tag' in tag ?
-        tag :
-        { tag: tag as string }) ||
-      [],
-    formats: book.formats,
-    pageCount: Number(book.pageCount),
-    publishDate: book.publishDate || '',
-    isbn10: book.isbn10 || '',
-    isbn13: book.isbn13 || '',
-    imageLink: book.imageLink || '', // Ensure imageLink is always a string
-  });
+  /****** Utility Functions */
+  const quillContentToString = (content: string | QuillContent | null |undefined): string => {
+    if (typeof content === 'string') return content;
+    if (!content) return '';
+    if (content instanceof Delta) return JSON.stringify(content);
+    if ('ops' in content) return JSON.stringify(content);
+    return JSON.stringify(content);
+  };
 
-  const mutationFn = (book: Book | StringifiedBookFormData | string) => {
+  const mutationFn = (book: StringifiedBookFormData | string) => {
     switch (operation) {
       case 'add':
         return addBook(book as StringifiedBookFormData);
       case 'update':
-        return updateBook(book as Book, bookID!);
+        if (typeof book === 'string') {
+          throw new Error('Invalid book data for update operation');
+        }
+        // Convert Book to StringifiedBookFormData
+        const bookForUpdate: StringifiedBookFormData = {
+          ...book,
+          publishDate: book.publishDate || '', // Ensure publishDate is always a string
+          notes: book.notes ?? null, // Convert undefined to null
+          formats: book.formats || [], // Ensure formats is always an array
+          tags: book.tags || [], // Ensure tags is always an array
+        };
+        return updateBook(bookForUpdate, bookID!);
       case 'delete':
         return deleteBook(book as string);
     }
@@ -149,14 +139,22 @@ const useBookOperation = (operation: BookOperation, bookID?: string) => {
     }
   });
 
-  const performOperationWithLoading = async (book: Book | string) => {
+  const performOperationWithLoading = async (book: Book | StringifiedBookFormData) => {
     setIsLoading(true);
     try {
       if (operation === 'delete') {
-        await mutation.mutateAsync(book as string);
+        if (!('id' in book) || book.id === undefined) {
+          console.error('Cannot delete a book without an id');
+          // Todo: send to third party logging service
+          return;
+        }
+        await mutation.mutateAsync(book.id.toString());
       } else {
-        const formData = transformBookToFormData(book as Book);
-        await mutation.mutateAsync(formData as any); // Use 'any' to bypass TypeScript check
+      // For add/update operations, ensure we're using StringifiedBookFormData
+      if (!isStringifiedBookFormData(book)) {
+        throw new Error('Invalid book data format');
+      }
+        await mutation.mutateAsync(book);
       }
     } finally {
       setIsLoading(false);

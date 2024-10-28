@@ -1,74 +1,26 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { Controller, SubmitHandler, useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-
 import PageWithErrorBoundary from '../ErrorMessages/PageWithErrorBoundary';
 import { TAILWIND_FORM_CLASSES } from '../../consts/styleConsts';
 import { languages } from '../../consts/languages';
-import { BookFormData, Book } from '../../types/api';
+import { BookFormData, Book, StringifiedBookFormData } from '../../types/api';
 import { bookSchema } from '../../utils/bookSchema';
 import { IoClose, IoAddOutline } from 'react-icons/io5';
 import { useFormatPublishDate } from '../../utils/formatPublishDate';
 import _ from 'lodash';
-import DOMPurify from 'dompurify';
-import Quill from 'quill';
 import Delta from 'quill-delta';
 import QuillEditor from '../Quill/QuillEditor';
-import { z } from 'zod';
-
+import { transformBookData, transformFormData } from '../../utils/bookFormHelpers';
 import 'quill/dist/quill.snow.css';
-
 
 interface BookFormProps {
   initialData?: Book;
-  onSubmit: (data: StringifiedBookFormData) => void;
+  onSubmit: SubmitHandler<BookFormData>
   isEditMode?: boolean;
   onDelete?: () => void;
   renderAISummaryBtn?: React.ReactNode;
   isLoading?: boolean;
-}
-
-type StringifiedBookFormData = Omit<BookFormData, 'description' | 'notes'> & {
-  description: string;
-  notes: string | null;
-};
-
-function transformBookData(bookData: Partial<Book> = {}, formattedDate: string): BookFormData {
-  const parseField = (field: string | undefined | null): Delta => {
-    if (!field) return new Delta();
-    try {
-      // First, try to parse as JSON
-      const parsed = JSON.parse(field);
-      return new Delta(Array.isArray(parsed.ops) ? parsed : { ops: [{ insert: field }] });
-    } catch (error) {
-      // If parsing fails, assume it's plain text and create a Delta object
-      console.log('Creating Delta object from plain text:', field);
-      return new Delta().insert(field);
-    }
-  };
-
-  return {
-    title: bookData.title || '',
-    subtitle: bookData.subtitle || '',
-    authors: bookData.authors
-      ? bookData.authors.map((author: string) => ({ author }))
-      : [{ author: '' }],
-    genres: bookData.genres
-      ? bookData.genres.map((genre: string) => ({ genre }))
-      : [{ genre: '' }],
-    tags: bookData.tags
-      ? bookData.tags.map((tag: string) => ({ tag }))
-      : [{ tag: '' }],
-    publishDate: formattedDate,
-    isbn10: bookData.isbn10 || '',
-    isbn13: bookData.isbn13 || '',
-    formats: bookData.formats || [],
-    language: bookData.language || 'en',
-    pageCount: bookData.pageCount || 0,
-    imageLink: bookData.imageLink || '',
-    description: parseField(bookData.description),
-    notes: parseField(bookData.notes),
-  };
 }
 
 function BookForm({
@@ -80,144 +32,58 @@ function BookForm({
   isLoading = false,
 }: BookFormProps) {
   const { formattedDate, dateWarning } = useFormatPublishDate(initialData?.publishDate || '');
-  const bookDataEmpty = _.isEmpty(initialData);
+  const bookDataEmpty = useMemo(() => _.isEmpty(initialData), [initialData]);
 
-  // Quill Refs
-  const descriptionQuillRef = useRef<HTMLDivElement>(null);
-  const notesQuillRef = useRef<HTMLDivElement>(null);
-  const [descriptionQuill, setDescriptionQuill] = useState<Quill | null>(null);
-  const [notesQuill, setNotesQuill] = useState<Quill | null>(null);
-
-  const [description, setDescription] = useState<Delta>(() => {
+  const initialDescription = useMemo(() => {
     if (initialData?.description) {
       return typeof initialData.description === 'string'
         ? new Delta(JSON.parse(initialData.description))
         : new Delta(initialData.description);
     }
     return new Delta();
-  });
+  }, [initialData?.description]);
 
-  const [notes, setNotes] = useState<Delta>(() => {
+  const initialNotes = useMemo(() => {
     if (initialData?.notes) {
       return typeof initialData.notes === 'string'
         ? new Delta(JSON.parse(initialData.notes))
         : new Delta(initialData.notes);
     }
     return new Delta();
-  });
+  }, [initialData?.notes]);
 
+  const [description, setDescription] = useState<Delta>(initialDescription);
+  const [notes, setNotes] = useState<Delta>(initialNotes);
 
-// Function to convert Delta to HTML string
-const deltaToHtmlString = (delta: Delta | undefined): string => {
-  if (!delta || !Array.isArray(delta.ops)) {
-    return ''; // Return an empty string if delta is undefined or ops is not an array
-  }
-  return delta.ops.map(op => op.insert).join('');
-};
-
-useEffect(() => {
-  if (descriptionQuillRef.current && !descriptionQuill) {
-    const quill = new Quill(descriptionQuillRef.current, {
-      theme: 'snow',
-      modules: {
-        toolbar: [
-          ['bold', 'italic', 'underline'],
-          [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-          ['link']
-        ]
-      }
-    });
-    setDescriptionQuill(quill);
-  }
-
-  if (notesQuillRef.current && !notesQuill) {
-    const quill = new Quill(notesQuillRef.current, {
-      theme: 'snow',
-      modules: {
-        toolbar: [
-          ['bold', 'italic', 'underline'],
-          [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-          ['link']
-        ]
-      }
-    });
-    setNotesQuill(quill);
-  }
-}, []);
-
-useEffect(() => {
-  if (initialData?.description && descriptionQuill) {
-    try {
-      const parsedDescription = typeof initialData.description === 'string' ? JSON.parse(initialData.description) : initialData.description;
-      descriptionQuill.setContents(parsedDescription);
-    } catch (error) {
-      console.error('Error parsing description:', error);
-      descriptionQuill.setText('');
-    }
-  }
-
-  if (initialData?.notes && notesQuill) {
-    try {
-      const parsedNotes = typeof initialData.notes === 'string' ? JSON.parse(initialData.notes) : initialData.notes;
-      notesQuill.setContents(parsedNotes);
-    } catch (error) {
-      console.error('Error parsing notes:', error);
-      notesQuill.setText('');
-    }
-  }
-}, [initialData, descriptionQuill, notesQuill]);
+  const defaultValues = useMemo(() => transformBookData(initialData || {}, formattedDate), [initialData, formattedDate]);
 
   const {
     control,
     handleSubmit,
     register,
     reset,
-    watch, // Watch the form data for debugging
+    watch,
     formState: { errors },
   } = useForm<BookFormData>({
     resolver: zodResolver(bookSchema),
-    defaultValues: transformBookData(initialData || {}, formattedDate),
+    defaultValues,
     shouldUseNativeValidation: true,
   });
 
-  // Init field arrays
-  const {
-    fields: authorFields,
-    append: appendAuthor,
-    remove: removeAuthor,
-  } = useFieldArray({
+  const { fields: authorFields, append: appendAuthor, remove: removeAuthor } = useFieldArray({
     control,
-    name: 'authors' as const,
+    name: "authors",
   });
 
-  const {
-    fields: genreFields,
-    append: appendGenre,
-    remove: removeGenre,
-  } = useFieldArray({
+  const { fields: genreFields, append: appendGenre, remove: removeGenre } = useFieldArray({
     control,
-    name: 'genres' as const,
+    name: "genres",
   });
 
-  const {
-    fields: tagFields,
-    append: appendTag,
-    remove: removeTag,
-  } = useFieldArray({
+  const { fields: tagFields, append: appendTag, remove: removeTag } = useFieldArray({
     control,
-    name: 'tags' as const,
+    name: "tags",
   });
-
-  // Watch the form data for debugging
-  const watchedFields = watch();
-  useEffect(() => {
-    console.log('Current form values:', {
-      ...watchedFields,
-      description,
-      notes
-    });
-  }, [watchedFields, description, notes]);
-
 
   // Handle form reset when initialData changes
   useEffect(() => {
@@ -226,49 +92,26 @@ useEffect(() => {
     }
   }, [initialData, reset, formattedDate]);
 
+  const onSubmitHandler = useCallback((data: BookFormData) => {
+    onSubmit(data);
+  }, [onSubmit]);
 
-  // const onSubmitWithJSONB: SubmitHandler<BookFormData> = (data) => {
-
-  //   // Prepare the data to be sent to the backend
-  //   const formData: StringifiedBookFormData = {
-  //     ...data,
-  //     description: JSON.stringify(description),
-  //     notes: notes.ops.length > 0 ? JSON.stringify(notes) : null,
-  //   };
-
-  //   console.log('Formatted form data:', formData);
-
-  //   onSubmit(formData);
-  // };
-  const onSubmitWithJSONB = async (data: BookFormData) => {
-    console.log("onSubmitWithJSONB called with data:", JSON.stringify(data, null, 2));
-    const formattedData = {
-      ...data,
-      description: description,
-      notes: notes,
-    };
-    console.log("Formatted data before validation:", JSON.stringify(formattedData, null, 2));
-
-    try {
-      console.log("Data before Zod validation:", formattedData);
-      const validatedData = bookSchema.parse(formattedData);
-      console.log("Validated data:", JSON.stringify(validatedData, null, 2));
-
-      // Ensure the validated data matches StringifiedBookFormData
-      const submissionData: StringifiedBookFormData = {
-        ...validatedData,
-        description: JSON.stringify(validatedData.description),
-        notes: validatedData.notes ? JSON.stringify(validatedData.notes) : null,
-      };
-
-      onSubmit(submissionData);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        console.error("Validation error:", error.errors);
-        // Handle validation errors
-      }
+  const handleDelete = useCallback(() => {
+    if (onDelete) {
+      onDelete();
     }
-  };
+  }, [onDelete]);
+
+
+  // Debugging: console log form values and errors
+  const watchedFields = watch();
+  useEffect(() => {
+    console.log('Current form values:', {
+      ...watchedFields,
+      description,
+      notes
+    });
+  }, [watchedFields, description, notes]);
 
   useEffect(() => {
     if (Object.keys(errors).length > 0) {
@@ -280,7 +123,7 @@ useEffect(() => {
       <form
         className="grid gap-4 grid-cols-2 sm:gap-6"
         onSubmit={handleSubmit(
-          onSubmitWithJSONB,
+          onSubmitHandler,
           (errors) => {
             console.log("Form validation errors: ", errors);
           }
@@ -662,7 +505,7 @@ useEffect(() => {
         {isEditMode && onDelete && (
           <button
             type="button"
-            onClick={onDelete}
+            onClick={handleDelete}
             className="bg-transparent border-red-500 text-red-500 hover:text-white dark:hover:text-white hover:bg-red-800 focus:ring-red-800 hover:border-red-800 dark:hover:bg-red-800 dark:hover:border-red-800 transition duration-500 ease-in-out"
             disabled={isLoading}
           >

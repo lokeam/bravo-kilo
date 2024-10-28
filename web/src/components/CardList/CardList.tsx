@@ -13,7 +13,7 @@ type CardListItemDefault = {
 type CardListItemAuthor = {
   allAuthors: string[];
   authorBooks: {
-    [index: string]: Book[]
+    [key: string]: Book[] | string[];
   };
 }
 
@@ -45,7 +45,7 @@ function isCardListItemDefault(props: CardListItemProps): props is CardListItemD
 }
 
 function isCardListItemAuthor(props: CardListItemProps): props is CardListItemAuthor {
-  return 'allAuthors' in props && 'authorBooks' in props;
+  return 'allAuthors' in props && 'authorBooks' in props && Array.isArray((props as CardListItemAuthor).allAuthors);
 }
 
 function isCardListItemGenre(props: CardListItemProps): props is CardListItemGenre {
@@ -68,15 +68,22 @@ export default function CardList(props: CardListItemProps) {
         exit={{ opacity: 0 }}
         layout
       >
-        <ul className="flex flex-col justify-center rounded text-white">
-          {props.allAuthors.map((authorName: string, index: number) => (
+      <ul className="flex flex-col justify-center rounded text-white">
+        {props.allAuthors.map((authorName: string, index: number) => {
+          const books = props.authorBooks[String(index)];
+          // Type guard to ensure we're passing Book[] to CardListItemAuthor
+          if (!Array.isArray(books) || !books.length || typeof books[0] === 'string') {
+            return null;
+          }
+          return (
             <CardListItemAuthor
               key={`${authorName}-${index}`}
               authorName={authorName}
-              books={props.authorBooks[String(index)] || []}
+              books={books as Book[]}
             />
-          ))}
-        </ul>
+          );
+        })}
+      </ul>
       </motion.div>
     );
   }

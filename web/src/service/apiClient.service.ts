@@ -207,7 +207,7 @@ export const signOutUser = async () => {
   await apiClient.post('/auth/signout');
 };
 
-export const updateBook = async (book: Book, bookID: string) => {
+export const updateBook = async (book: StringifiedBookFormData, bookID: string) => {
   console.log('apiClient service, update book before trycatch');
   try {
     console.log('apiClient.service, updateBook, data - ', bookID);

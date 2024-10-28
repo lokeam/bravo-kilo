@@ -1,20 +1,4 @@
 import { z } from 'zod';
-import Delta from 'quill-delta';
-
-const isValidDelta = (data: any) => {
-  console.log("Validating delta (full object):", JSON.stringify(data, null, 2));
-  if (!data || !data.ops) return false;
-  const result = data.ops.length > 0 && data.ops.some((op: any) =>
-    (typeof op.insert === 'string' && op.insert.trim() !== '') ||
-    (typeof op.insert === 'object' && Object.keys(op.insert).length > 0)
-  );
-  console.log("Delta validation result:", result);
-  return result;
-};
-
-const deltaSchema = z.object({
-  ops: z.array(z.any())
-}).refine(isValidDelta, { message: 'Content cannot be empty' });
 
 export const bookSchema = z.object({
   title: z.string().min(1, 'Please enter a title'),

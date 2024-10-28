@@ -4,8 +4,9 @@ import BookForm from '../components/BookForm/BookForm';
 import PageWithErrorBoundary from '../components/ErrorMessages/PageWithErrorBoundary';
 import useAddBook from '../hooks/useAddBook';
 import useStore from '../store/useStore';
-import { BookFormData, Book } from '../types/api';
+import { BookFormData, StringifiedBookFormData, Book, isQuillDelta } from '../types/api';
 import Loading from '../components/Loading/Loading';
+import { transformFormData } from '../utils/bookFormHelpers';
 
 function ManualAddBook() {
   const { addBook, isLoading, refetchLibraryData } = useAddBook();
@@ -14,35 +15,69 @@ function ManualAddBook() {
   const { showSnackbar } = useStore();
   const bookData = location.state?.book || {};
 
-  const handleAddBook: SubmitHandler<BookFormData> = async (data) => {
-    const defaultDate = new Date().toISOString();
-
-    const book: Book = {
-      ...data,
-      subtitle: data.subtitle || '',
-      createdAt: defaultDate,
-      lastUpdated: defaultDate,
-      isbn10: data.isbn10 || '',
-      isbn13: data.isbn13 || '',
-      authors: data.authors
-        .map((authorObj) => authorObj.author.trim())
-        .filter((author) => author !== ''),
-      genres: data.genres
-        .map((genreObj) => genreObj.genre.trim())
-        .filter((genre) => genre !== ''),
-      tags: data.tags
-        .map((tagObj) => tagObj.tag.trim())
-        .filter((tag) => tag !== ''),
-    };
-
+  // Update the type to match BookForm's output
+  const handleAddBook: SubmitHandler<BookFormData> = async (formData) => {
     try {
-      await addBook(book);
+      // Step 1: Validate form data
+      if (!formData.title || !formData.description || !formData.language) {
+        throw new Error('Required fields are missing');
+      }
+
+      // Step 2: Validate Quill content
+      if (!isQuillDelta(formData.description)) {
+        console.error('Invalid description format:', formData.description);
+        throw new Error('Invalid description format');
+      }
+
+      if (formData.notes && !isQuillDelta(formData.notes)) {
+        console.error('Invalid notes format:', formData.notes);
+        throw new Error('Invalid notes format');
+      }
+
+      // Step 3: Transform form data to stringified format
+      const stringifiedData = transformFormData(formData);
+
+      // Step 4: Validate transformed data
+      if (!Array.isArray(stringifiedData.authors) ||
+          !Array.isArray(stringifiedData.genres) ||
+          !Array.isArray(stringifiedData.tags)) {
+        console.error('Invalid array fields:', {
+          authors: stringifiedData.authors,
+          genres: stringifiedData.genres,
+          tags: stringifiedData.tags
+        });
+        throw new Error('Invalid data structure after transformation');
+      }
+
+      if (typeof stringifiedData.description !== 'string') {
+        console.error('Invalid description after transformation:', stringifiedData.description);
+        throw new Error('Invalid description after transformation');
+      }
+
+      // Step 5: Add metadata
+      const enrichedData: StringifiedBookFormData = {
+        ...stringifiedData,
+      };
+
+      console.log('Submitting book data:', enrichedData);
+
+      // Step 6: Submit data
+      await addBook(enrichedData);
+
+      // Step 7: Handle success
       await refetchLibraryData();
       showSnackbar('Book added successfully', 'added');
       navigate('/library');
+
     } catch (error) {
-      console.error('Error adding book:', error);
-      showSnackbar('Failed to add book. Please try again later.', 'error');
+      // Step 8: Handle errors
+      console.error('Error in handleAddBook:', error);
+      showSnackbar(
+        error instanceof Error
+          ? `Failed to add book: ${error.message}`
+          : 'Failed to add book. Please try again later.',
+        'error'
+      );
     }
   };
 

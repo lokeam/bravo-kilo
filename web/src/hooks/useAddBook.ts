@@ -1,11 +1,11 @@
 import useBookOperation from './useBookOperation';
-import { Book } from '../types/api';
+import { StringifiedBookFormData } from '../types/api';
 
 const useAddBook = () => {
   const { performOperation, isLoading, refetchLibraryData } = useBookOperation('add');
 
   return {
-    addBook: (book: Book) => performOperation(book),
+    addBook: (bookData: StringifiedBookFormData) => performOperation(bookData),
     isLoading,
     refetchLibraryData,
   };
