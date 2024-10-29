@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -12,26 +13,6 @@ import (
 	"github.com/lokeam/bravo-kilo/internal/books/repository"
 	"github.com/lokeam/bravo-kilo/internal/shared/collections"
 )
-
-// Book struct to hold simplified structure for Books
-type Book struct {
-	Authors     []string    `json:"authors"`
-	ImageLink   string      `json:"imageLink"`
-	Title       string      `json:"title"`
-	Subtitle    string      `json:"subtitle"`
-	Details     BookDetails `json:"details"`
-}
-
-// BookDetails struct to hold product specific info
-type BookDetails struct {
-	Genres       []string      `json:"genres"`
-	Description  string        `json:"description"`
-	ISBN10       string        `json:"isbn10"`
-	ISBN13       string        `json:"ibsn13"`
-	Language     string        `json:"language"`
-	PageCount    int           `json:"pageCount"`
-	PublishDate  string        `json:"publishDate"`
-}
 
 type Claims struct {
 	UserID int `json:"userID"`
@@ -219,8 +200,44 @@ func StringToRichText(text string) repository.RichText {
 }
 
 func RichTextToString(rt repository.RichText) string {
-	if len(rt.Ops) == 0 || rt.Ops[0].Insert == nil {
+	if len(rt.Ops) == 0 {
 			return ""
 	}
-	return *rt.Ops[0].Insert
+
+	// Handle the interface{} type for Insert
+	if rt.Ops[0].Insert == nil {
+			return ""
+	}
+
+	switch v := rt.Ops[0].Insert.(type) {
+	case string:
+			return v
+	default:
+			return fmt.Sprintf("%v", v) // fallback for other types
+	}
+}
+
+func UnmarshalRichTextJSON(data []byte, book *repository.Book) error {
+	type Alias repository.Book // Create an alias to avoid recursion
+	aux := &struct {
+		Description string `json:"description"`
+		Notes       string `json:"notes"`
+		*Alias
+	}{
+		Alias: (*Alias)(book),
+	}
+
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+
+	// Unmarshal the JSON strings into RichText
+	if err := json.Unmarshal([]byte(aux.Description), &book.Description); err != nil {
+		return err
+	}
+	if err := json.Unmarshal([]byte(aux.Notes), &book.Notes); err != nil {
+		return err
+	}
+
+	return nil
 }

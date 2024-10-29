@@ -201,6 +201,10 @@ func (h *BookHandlers) HandleInsertBook(response http.ResponseWriter, request *h
 	h.validate.RegisterValidation("isbn10", validateISBN10)
 	h.validate.RegisterValidation("isbn13", validateISBN13)
 
+	h.logger.Info("************")
+	h.logger.Info("HandleInsertBook called")
+	h.logger.Info("Request body", "body", request.Body)
+	h.logger.Info("************")
 	// Grab book data
 	var book repository.Book
 	err := json.NewDecoder(request.Body).Decode(&book)
@@ -223,6 +227,9 @@ func (h *BookHandlers) HandleInsertBook(response http.ResponseWriter, request *h
 			http.Error(response, "Error inserting book", http.StatusInternalServerError)
 			return
 	}
+
+	// Invalidate caches after inserting a book
+	h.BookCache.InvalidateCaches(bookID, userID)
 
 	// Send response back to FE
 	response.Header().Set("Content-Type", "application/json")
@@ -276,7 +283,7 @@ func (h *BookHandlers) HandleUpdateBook(response http.ResponseWriter, request *h
 	h.validate.RegisterValidation("isbn13", validateISBN13)
 
 	// Validate book ownership
-	_, bookID, err := h.ValidateBookOwnership(request)
+	userID, bookID, err := h.ValidateBookOwnership(request)
 	if err != nil {
 			h.logger.Error("Validation failed", "error", err)
 			http.Error(response, err.Error(), http.StatusUnauthorized)
@@ -303,12 +310,15 @@ func (h *BookHandlers) HandleUpdateBook(response http.ResponseWriter, request *h
 	}
 
 	// Update the book
-	err = h.bookUpdater.UpdateBookEntry(request.Context(), book)
+	err = h.bookUpdater.UpdateBookEntry(request.Context(), book, userID)
 	if err != nil {
 			h.logger.Error("Error updating book", "error", err)
 			http.Error(response, "Error updating book", http.StatusInternalServerError)
 			return
 	}
+
+	// Invalidate caches after successful update
+	h.BookCache.InvalidateCaches(bookID, userID)
 
 	response.WriteHeader(http.StatusOK)
 	json.NewEncoder(response).Encode(map[string]string{"message": "Book updated successfully"})
@@ -318,7 +328,7 @@ func (h *BookHandlers) HandleUpdateBook(response http.ResponseWriter, request *h
 // Delete Book
 func (h *BookHandlers) HandleDeleteBook(response http.ResponseWriter, request *http.Request) {
 	// Validate book ownership
-	_, bookID, err := h.ValidateBookOwnership(request)
+	userID, bookID, err := h.ValidateBookOwnership(request)
 	if err != nil {
 		h.logger.Error("Book ownership validation failed", "error", err)
 		http.Error(response, err.Error(), http.StatusUnauthorized)
@@ -332,6 +342,9 @@ func (h *BookHandlers) HandleDeleteBook(response http.ResponseWriter, request *h
 		http.Error(response, "Error deleting book", http.StatusInternalServerError)
 		return
 	}
+
+	// Invalidate caches after successful deletion
+	h.BookCache.InvalidateCaches(bookID, userID)
 
 	response.WriteHeader(http.StatusOK)
 	json.NewEncoder(response).Encode(map[string]string{"message": "Book deleted successfully"})
@@ -461,7 +474,7 @@ func (h *BookHandlers) HandleGetHomepageData(response http.ResponseWriter, reque
 	userLangChan := make(chan map[string]interface{}, 1)
 	userGenresChan := make(chan map[string]interface{}, 1)
 	userAuthorsChan := make(chan map[string]interface{}, 1)
-	errorChan := make(chan error, 1)
+	errorChan := make(chan error, 4) // match number of error channels to goroutines
 
 	// Goroutine for GetUserTags
 	go func() {
@@ -475,7 +488,7 @@ func (h *BookHandlers) HandleGetHomepageData(response http.ResponseWriter, reque
 
 	// Goroutine for GetBooksByLanguage
 	go func() {
-		langs, err := h.bookCache.GetBooksByLanguage(request.Context(), userID)
+		langs, err := h.BookCache.GetBooksByLanguage(request.Context(), userID)
 		if err != nil {
 			errorChan <- err
 			return

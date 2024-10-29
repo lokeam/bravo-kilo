@@ -20,7 +20,7 @@ type RichText struct {
 }
 
 type DeltaOp struct {
-	Insert     *string                `json:"insert,omitempty"`
+	Insert     interface{}            `json:"insert,omitempty"`     // Changed from *string to interface{}
 	Attributes map[string]interface{} `json:"attributes,omitempty"`
 }
 

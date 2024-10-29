@@ -11,7 +11,7 @@ import (
 )
 
 type BookUpdaterService interface {
-	UpdateBookEntry(ctx context.Context, book repository.Book) error
+	UpdateBookEntry(ctx context.Context, book repository.Book, userID int) error
 }
 
 type BookUpdaterServiceImpl struct {
@@ -69,10 +69,10 @@ func NewBookUpdaterService(
 	}, nil
 }
 
-func (b *BookUpdaterServiceImpl) UpdateBookEntry(ctx context.Context, book repository.Book) error {
+func (b *BookUpdaterServiceImpl) UpdateBookEntry(ctx context.Context, book repository.Book, userID int) error {
 	// Invalidate caches
-	b.bookCache.InvalidateCaches(book.ID)
-	b.logger.Info("Cache invalidated for book", "book", book.ID)
+	b.bookCache.InvalidateCaches(book.ID, userID)
+	b.logger.Info("Cache invalidated for book", "bookID", book.ID, "userID", userID)
 
 	// Normalize + sanitize book data before proceeding
 	b.bookService.NormalizeBookData(&book)

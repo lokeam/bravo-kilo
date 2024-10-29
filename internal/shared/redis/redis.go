@@ -5,37 +5,40 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/redis/go-redis/v9"
+	goredis "github.com/redis/go-redis/v9"
 )
 
-var Client *redis.Client
+// Client wraps the redis client to avoid type conflicts
+type Client = goredis.Client  // Use type alias instead of struct
 
-func InitRedis(logger *slog.Logger) (*redis.Client, error) {
-	opt, err := redis.ParseURL(os.Getenv("REDIS_URL"))
+// Global client instance
+var redisClient *Client
+
+func InitRedis(ctx context.Context,logger *slog.Logger) (*Client, error) {
+	opt, err := goredis.ParseURL(os.Getenv("REDIS_URL"))
 	if err != nil {
-		logger.Error("Failed to parse Redis URL", "error", err)
-		return nil, err
+			logger.Error("Failed to parse Redis URL", "error", err)
+			return nil, err
 	}
 
-	Client = redis.NewClient(opt)
+	redisClient = goredis.NewClient(opt)
 
 	// Ping Redis to check connection
-	ctx := context.Background()
-	_, err = Client.Ping(ctx).Result()
+	_, err = redisClient.Ping(ctx).Result()
 	if err != nil {
-		logger.Error("Failed to connect to Redis", "error", err)
-		return nil, err
+			logger.Error("Failed to connect to Redis", "error", err)
+			return nil, err
 	}
 
 	logger.Info("Successfully connected to Redis")
-	return Client, nil
+	return redisClient, nil
 }
 
 func Close(logger *slog.Logger) {
-	if Client != nil {
-		err := Client.Close()
-		if err != nil {
-			logger.Info("Error closing Redis client", "error", err)
-		}
+	if redisClient != nil {
+			err := redisClient.Close()
+			if err != nil {
+					logger.Info("Error closing Redis client", "error", err)
+			}
 	}
 }

@@ -111,16 +111,16 @@ func (r *BookRepositoryImpl) InitPreparedStatements() error {
 
 	// Prepared select statement for GetAllBooksByUserID
 	r.getAllBooksByUserIDStmt, err = r.DB.Prepare(`
-    SELECT DISTINCT
+    SELECT
         b.id,
         b.title,
         b.subtitle,
-        COALESCE(b.description, '{}') AS description,
+        COALESCE(b.description::text, '{}')::json AS description,
         b.language,
         b.page_count,
         b.publish_date,
         b.image_link,
-        COALESCE(b.notes, '{}') AS notes,
+        COALESCE(b.notes::text, '{}')::json AS notes,
         b.created_at,
         b.last_updated,
         b.isbn_10,
@@ -336,8 +336,8 @@ func (r *BookRepositoryImpl) GetAllBooksByUserID(userID int) ([]Book, error) {
 		// Fallback to raw SQL query if prepared statement is unavailable
 		r.Logger.Warn("Prepared statement for retrieving books by user ID is still uninitialized, using fallback query")
 		query := `
-			SELECT b.id, b.title, b.subtitle, b.description, b.language, b.page_count, b.publish_date,
-						 b.image_link, b.notes, b.created_at, b.last_updated, b.isbn_10, b.isbn_13
+			SELECT b.id, b.title, b.subtitle, COALESCE(b.description::text, '{}')::json AS description, b.language, b.page_count, b.publish_date,
+						 b.image_link, COALESCE(b.notes::text, '{}')::json AS notes, b.created_at, b.last_updated, b.isbn_10, b.isbn_13
 			FROM books b
 			INNER JOIN user_books ub ON b.id = ub.book_id
 			WHERE ub.user_id = $1`

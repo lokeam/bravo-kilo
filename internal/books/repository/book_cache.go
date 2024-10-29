@@ -23,12 +23,13 @@ var userTagsCache       sync.Map
 
 type BookCache interface {
 	InitPreparedStatements() error
+	CleanupPreparedStatements() error
 	GetAllBooksISBN10(userID int) (*collections.Set, error)
 	GetAllBooksISBN13(userID int) (*collections.Set, error)
 	GetAllBooksTitles(userID int) (*collections.Set, error)
 	GetAllBooksPublishDate(userID int) ([]BookInfo, error)
 	GetBooksByLanguage(ctx context.Context, userID int) (map[string]interface{}, error)
-	InvalidateCaches(bookID int)
+	InvalidateCaches(bookID int, userID int)
 }
 
 type BookCacheImpl struct {
@@ -68,8 +69,9 @@ func (b *BookCacheImpl) InitPreparedStatements() error {
 
 // ISBN10 + ISBN13 (Returns a HashSet)
 func (b *BookCacheImpl) GetAllBooksISBN10(userID int) (*collections.Set, error) {
+	cacheKey := b.formatCacheKey("isbn10", userID)
 	// Check cache
-	if cache, found := isbn10Cache.Load(userID); found {
+	if cache, found := isbn10Cache.Load(cacheKey); found {
 		b.Logger.Info("Fetching ISBN10 from cache")
 		return cache.(*collections.Set), nil
 	}
@@ -108,7 +110,7 @@ func (b *BookCacheImpl) GetAllBooksISBN10(userID int) (*collections.Set, error) 
 	}
 
 	// Cache the result
-	isbn10Cache.Store(userID, isbnSet)
+	isbn10Cache.Store(cacheKey, isbnSet)
 	b.Logger.Info("Caching ISBN10 for user", "userID", userID)
 
 	return isbnSet, nil
@@ -116,8 +118,9 @@ func (b *BookCacheImpl) GetAllBooksISBN10(userID int) (*collections.Set, error) 
 
 // (Returns a HashSet)
 func (b *BookCacheImpl) GetAllBooksISBN13(userID int) (*collections.Set, error) {
+	cacheKey := b.formatCacheKey("isbn13", userID)
 	// Check cache
-	if cache, found := isbn13Cache.Load(userID); found {
+	if cache, found := isbn13Cache.Load(cacheKey); found {
 		b.Logger.Info("Fetching ISBN13 from cache")
 		return cache.(*collections.Set), nil
 	}
@@ -156,7 +159,7 @@ func (b *BookCacheImpl) GetAllBooksISBN13(userID int) (*collections.Set, error) 
 	}
 
 	// Cache the result
-	isbn13Cache.Store(userID, isbnSet)
+	isbn13Cache.Store(cacheKey, isbnSet)
 	b.Logger.Info("Caching ISBN13 for user", "userID", userID)
 
 	return isbnSet, nil
@@ -164,8 +167,9 @@ func (b *BookCacheImpl) GetAllBooksISBN13(userID int) (*collections.Set, error) 
 
 // (Returns a HashSet)
 func (b *BookCacheImpl) GetAllBooksTitles(userID int) (*collections.Set, error) {
+	cacheKey := b.formatCacheKey("titles", userID)
 	// Check cache
-	if cache, found := titleCache.Load(userID); found {
+	if cache, found := titleCache.Load(cacheKey); found {
 		b.Logger.Info("Fetching Title info from cache")
 		return cache.(*collections.Set), nil
 	}
@@ -203,7 +207,7 @@ func (b *BookCacheImpl) GetAllBooksTitles(userID int) (*collections.Set, error) 
 	}
 
 	// Cache result
-	titleCache.Store(userID, titleSet)
+	titleCache.Store(cacheKey, titleSet)
 	b.Logger.Info("Caching Title info for user", "userID", userID)
 
 	return titleSet, nil
@@ -253,10 +257,21 @@ func (b *BookCacheImpl) GetAllBooksPublishDate(userID int) ([]BookInfo, error) {
 // Languages
 func (b *BookCacheImpl) GetBooksByLanguage(ctx context.Context, userID int) (map[string]interface{}, error) {
 	// Check cache
-	cacheKey := fmt.Sprintf("booksByLang:%d", userID)
-	if cache, found := booksByLangCache.Load(cacheKey); found {
-			b.Logger.Info("Fetching books by language from cache", "userID", userID)
-			return cache.(map[string]interface{}), nil
+	cacheKey := b.formatCacheKey("booksByLang:%d", userID)
+    // Check cache and validate data
+    if cache, found := booksByLangCache.Load(cacheKey); found {
+			if data, ok := cache.(map[string]interface{}); ok {
+					if langs, exists := data["booksByLang"].([]map[string]interface{}); exists {
+							b.Logger.Info("Cache hit for books by language",
+									"userID", userID,
+									"languagesCount", len(langs))
+							if len(langs) > 0 {
+									return data, nil
+							}
+							// If cache exists but is empty, log it
+							b.Logger.Warn("Empty language cache found, refreshing", "userID", userID)
+					}
+			}
 	}
 
 	// Use prepared statement if available
@@ -307,8 +322,17 @@ func (b *BookCacheImpl) GetBooksByLanguage(ctx context.Context, userID int) (map
 			return nil, err
 	}
 
+	// Add validation before caching
+	if len(booksByLang) == 0 {
+		b.Logger.Warn("No languages found for user", "userID", userID)
+	} else {
+		b.Logger.Info("Caching languages for user",
+				"userID", userID,
+				"languagesCount", len(booksByLang))
+	}
+
 	result := map[string]interface{}{
-			"booksByLang": booksByLang,
+		"booksByLang": booksByLang,
 	}
 
 	// Cache the result
@@ -319,11 +343,40 @@ func (b *BookCacheImpl) GetBooksByLanguage(ctx context.Context, userID int) (map
 }
 
 // Invalidate Caches
-func (b *BookCacheImpl) InvalidateCaches(bookID int) {
+func (b *BookCacheImpl) InvalidateCaches(bookID int, userID int) {
+	// Book-specific caches
 	isbn10Cache.Delete(bookID)
 	isbn13Cache.Delete(bookID)
 	titleCache.Delete(bookID)
 	formatsCache.Delete(bookID)
 	genresCache.Delete(bookID)
-	b.Logger.Info("Caches invalidated for book", "bookID", bookID)
+
+	// User-specific caches
+	langCacheKey := fmt.Sprintf("booksByLang:%d", userID)
+	booksByLangCache.Delete(langCacheKey)
+	booksByGenresCache.Delete(userID)
+	userTagsCache.Delete(userID)
+
+	b.Logger.Info("Caches invalidated",
+	"bookID", bookID,
+	"userID", userID)
+}
+
+// Format cache key to ensure only exactly one key format
+func (b *BookCacheImpl) formatCacheKey(prefix string, userID int) string {
+	return fmt.Sprintf("%s:%d", prefix, userID)
+}
+
+// Cleanup prepared statements
+func (b *BookCacheImpl) CleanupPreparedStatements() error {
+	if b.getAllLangStmt != nil {
+		if err := b.getAllLangStmt.Close(); err != nil {
+			b.Logger.Error("Failed to close getAllLangStmt", "error", err)
+			return fmt.Errorf("error closing getAllLangStmt: %w", err)
+		}
+		b.getAllLangStmt = nil
+	}
+
+	b.Logger.Info("Successfully cleaned up prepared statements")
+	return nil
 }

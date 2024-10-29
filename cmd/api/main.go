@@ -1,12 +1,14 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/joho/godotenv"
 	factory "github.com/lokeam/bravo-kilo/cmd/factory"
@@ -29,6 +31,10 @@ type application struct {
 }
 
 func main() {
+	// Initialize root context
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	// Ensure logs are flushed on exit
 	defer func() {
 		if err := recover(); err != nil {
@@ -37,70 +43,25 @@ func main() {
 		os.Stdout.Sync()
 	}()
 
-	// Set up signal handling
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-
-	go func() {
-		<-sigChan
-		logger.Log.Info("Received interrupt, shutting down...")
-		os.Stdout.Sync()
-		os.Exit(0)
-	}()
-
-	// Load environment variables
-	err := godotenv.Load(".env")
-	handler := slog.NewJSONHandler(os.Stdout, nil)
-	if err != nil {
-		slog.New(handler).Error("Error loading .env file", "error", err)
+	// Initialize environment and logging
+	if err := initializeEnvironment(); err != nil {
+		os.Exit(1)
 	}
 
-	// Initialize logger
-	logger.Init()
 	log := logger.Log
 
-	// Init jwt logger
-	jwt.InitLogger(log)
-
-	// Check if upload directory is set
-	uploadDir := os.Getenv("UPLOAD_DIR")
-	if uploadDir == "" {
-		log.Error("Upload dir is not set")
-		os.Exit(1)
-	}
-
-	var cfg appConfig
-	cfg.port = 8081
-
-	// Connect to the database
-	dataSrcName := os.Getenv("DSN")
-	db, err := driver.ConnectPostgres(dataSrcName, log)
-	if err != nil {
-		log.Error("Cannot connect to database", "error", err)
-		os.Exit(1)
-	}
-	defer db.SQL.Close()
-
-	// Initialize the config package with the logger
+	// Initialize configuration
+	cfg := appConfig{port: 8081}
 	config.InitConfig(log)
 
-	// Init Redis
-	redisClient, err := redis.InitRedis(log)
+	// Initialize resources
+	db, f, err := initializeResources(ctx, log)
 	if err != nil {
-		log.Error("Failed to initialize Redis", "error", err)
-		os.Exit(1)
+			log.Error("Failed to initialize resources", "error", err)
+			os.Exit(1)
 	}
+	defer db.SQL.Close()
 	defer redis.Close(log)
-
-	// Init factory for api
-	factory, err := factory.NewFactory(db.SQL, redisClient, log)
-	if err != nil {
-		log.Error("Error initializing factory", "error", err)
-		return
-	}
-
-	// Start deletion worker
-	factory.DeletionWorker.StartDeletionWorker()
 
 	// Create the application instance
 	app := &application{
@@ -108,28 +69,126 @@ func main() {
 		logger: log,
 	}
 
-	// Start the server with domain-specific handlers
-	err = app.serve(factory.BookHandlers, factory.SearchHandlers, factory.AuthHandlers)
-	if err != nil {
-		log.Error("Error starting the server", "error", err)
+	// Create server with timeouts
+	srv := app.serve(f.BookHandlers, f.SearchHandlers, f.AuthHandlers)
+
+	// Start background workers
+	f.DeletionWorker.StartDeletionWorker()
+	defer f.DeletionWorker.StopDeletionWorker()
+
+	// Set up error and shutdown channels
+	serverErrors := make(chan error, 1)
+	shutdown := make(chan os.Signal, 1)
+	signal.Notify(shutdown, syscall.SIGINT, syscall.SIGTERM)
+
+	// Start server in background
+	go func() {
+		log.Info("API starting", "port", app.config.port)
+		serverErrors <- srv.ListenAndServe()
+	}()
+
+	// Block until we receive a shutdown signal or server error
+	select {
+	case err := <-serverErrors:
+		log.Error("Server error", "error", err)
+	case sig := <-shutdown:
+		log.Info("Shutdown signal received", "signal", sig)
+
+		// Create shutdown context with timeout
+		shutdownCtx, shutdownCancel := context.WithTimeout(ctx, 10*time.Second)
+		defer shutdownCancel()
+
+		// Perform graceful shutdown
+		if err := gracefulShutdown(shutdownCtx, srv, f, log); err != nil {
+			log.Error("Shutdown error", "error", err)
+			// Force shutdown if graceful shutdown fails
+			srv.Close()
+		}
+	}
+}
+
+func initializeEnvironment() error {
+	// Load environment variables
+	if err := godotenv.Load(".env"); err != nil {
+		handler := slog.NewJSONHandler(os.Stdout, nil)
+		slog.New(handler).Error("Error loading .env file", "error", err)
 	}
 
-	// Stop deletion worker when application shuts down
-	defer factory.DeletionWorker.StopDeletionWorker()
+	// Initialize loggers
+	logger.Init()
+	jwt.InitLogger(logger.Log)
+
+	// Check if upload directory is set
+	if uploadDir := os.Getenv("UPLOAD_DIR"); uploadDir == "" {
+		logger.Log.Error("Upload dir is not set")
+		return fmt.Errorf("upload directory not set")
+	}
+
+	return nil
 }
 
 func (app *application) serve(
 	bookHandlers *handlers.BookHandlers,
 	searchHandlers *handlers.SearchHandlers,
 	authHandlers *authHandlers.AuthHandlers,
-) error {
-	app.logger.Info("API listening on port", "port", app.config.port)
+) *http.Server {
+	app.logger.Info("Initializing server", "port", app.config.port)
 
-	// Set up routes with domain handlers
-	srv := &http.Server{
-		Addr:    fmt.Sprintf(":%d", app.config.port),
-		Handler: app.routes(bookHandlers, searchHandlers, authHandlers),
+	return &http.Server{
+		Addr:         fmt.Sprintf(":%d", app.config.port),
+		Handler:      app.routes(bookHandlers, searchHandlers, authHandlers),
+		IdleTimeout:  time.Minute,
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 30 * time.Second,
+	}
+}
+
+func initializeResources(ctx context.Context, log *slog.Logger) (*driver.DB, *factory.Factory, error) {
+	// Connect to database
+	db, err := driver.ConnectPostgres(ctx, os.Getenv("DSN"), log)
+	if err != nil {
+			return nil, nil, fmt.Errorf("database connection error: %w", err)
 	}
 
-	return srv.ListenAndServe()
+	// Initialize Redis
+	redisClient, err := redis.InitRedis(ctx, log)
+	if err != nil {
+			return nil, nil, fmt.Errorf("redis initialization error: %w", err)
+	}
+
+	// Initialize factory
+	f, err := factory.NewFactory(db.SQL, redisClient, log)
+	if err != nil {
+			return nil, nil, fmt.Errorf("factory initialization error: %w", err)
+	}
+
+	// Initialize prepared statements for book cache
+	if err := f.BookHandlers.BookCache.InitPreparedStatements(); err != nil {
+			return nil, nil, fmt.Errorf("error initializing prepared statements: %w", err)
+	}
+
+	return db, f, nil
+}
+
+func gracefulShutdown(ctx context.Context, srv *http.Server, f *factory.Factory, log *slog.Logger) error {
+	// Cleanup order:
+	// 1. Server (stop accepting new requests)
+	// 2. Application resources (caches, workers)
+	// 3. Database connections (handled by defer in main)
+
+	// Shutdown server
+	if err := srv.Shutdown(ctx); err != nil {
+		return fmt.Errorf("server shutdown error: %w", err)
+	}
+
+	// Cleanup prepared statements
+	if err := f.BookHandlers.BookCache.CleanupPreparedStatements(); err != nil {
+		log.Error("Error cleaning prepared statements", "error", err)
+	}
+
+	// Stop deletion worker (already handled by defer in main)
+	f.DeletionWorker.StopDeletionWorker()
+
+	log.Info("Graceful shutdown completed")
+	return nil
 }
