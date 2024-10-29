@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect,useMemo } from 'react';
 import Bookshelf from '../components/Bookshelf/Bookshelf';
 import BarChartCard from '../components/Statistics/BarChartCard';
 import TableCard from '../components/Statistics/TableCard';
@@ -12,6 +12,19 @@ import { AggregatedHomePageData } from '../types/api';
 
 function Home() {
   const { data, isLoading } = useHomePageData();
+  // Extract homepageStats for debugging
+  const homepageStats = data?.homepageStats;
+  useEffect(() => {
+    if (homepageStats) {
+      console.log('Homepage stats received:', homepageStats);
+      console.log('Processed stats:', {
+        authors: homepageStats.userAuthors?.booksByAuthor,
+        genres: homepageStats.userBkGenres?.booksByGenre,
+        languages: homepageStats.userBkLang?.booksByLang,
+        tags: homepageStats.userTags?.userTags
+      });
+    }
+  }, [homepageStats]);
 
   const { books, booksByFormat, totalBooks, booksByLang, booksByGenre, userTags, booksByAuthor } = useMemo(() => {
     const defaultData: AggregatedHomePageData = {
@@ -52,14 +65,21 @@ function Home() {
     };
   }, [data]);
 
-  const isEmpty = useMemo(() =>
-    books.length === 0 &&
-    booksByFormat.every(format => format.count === 0) &&
-    booksByLang.length === 0 &&
-    booksByGenre.length === 0 &&
-    booksByAuthor.length === 0 &&
-    userTags.length === 0,
-  [books, booksByFormat, booksByLang, booksByGenre, booksByAuthor, userTags]);
+  const isEmpty = useMemo(() => {
+    const hasNoBooks = books.length === 0;
+    const hasNoFormats = booksByFormat.every(format => format.count === 0);
+    const hasNoLanguages = !booksByLang?.length;
+    const hasNoGenres = !booksByGenre?.length;
+    const hasNoAuthors = !booksByAuthor?.length;
+    const hasNoTags = !userTags?.length;
+
+    return hasNoBooks &&
+           hasNoFormats &&
+           hasNoLanguages &&
+           hasNoGenres &&
+           hasNoAuthors &&
+           hasNoTags;
+  }, [books, booksByFormat, booksByLang, booksByGenre, booksByAuthor, userTags]);
 
   if (isLoading) return (
     <div className="bk_home flex flex-col items-center px-5 antialiased mdTablet:pl-1 pr-5 mdTablet:ml-24 h-screen pt-12">
@@ -78,7 +98,6 @@ function Home() {
   console.log('===========');
   console.log('data package: ', data);
   console.log('booksByAuthor: ', booksByAuthor);
-
   console.log('books.length: ', books.length || 0);
 
   return (
@@ -94,31 +113,41 @@ function Home() {
           <div className="box-border grid grid-cols-12 gap-6">
 
             {/* Format data */}
-            <DonutChartCard
-              totalBooks={books.length || 0}
-              bookFormats={booksByFormat}
-            />
+            {booksByFormat && booksByFormat.length > 0 && (
+              <DonutChartCard
+                totalBooks={books.length || 0}
+                bookFormats={booksByFormat}
+              />
+            )}
 
             {/* Tag Data */}
-            <TableCard userTags={userTags}/>
+            {userTags && userTags.length > 0 && (
+              <TableCard userTags={userTags}/>
+            )}
 
             {/* Author data */}
-            <BarChartCard
-              booksByAuthor={booksByAuthor}
-              totalBooks={totalBooks}
-            />
+            {booksByAuthor && booksByAuthor.length > 0 && (
+              <BarChartCard
+                booksByAuthor={booksByAuthor}
+                totalBooks={totalBooks}
+              />
+            )}
 
             {/* Genre data */}
-            <BarChartCard
-              booksByGenre={booksByGenre}
-              totalBooks={totalBooks}
-            />
+            {booksByGenre && booksByGenre.length > 0 && (
+              <BarChartCard
+                booksByGenre={booksByGenre}
+                totalBooks={totalBooks}
+              />
+            )}
 
             {/* Language data */}
-            <BarChartCard
-              booksByLang={booksByLang}
-              totalBooks={totalBooks}
-            />
+            {booksByLang && booksByLang.length > 0 && (
+              <BarChartCard
+                booksByLang={booksByLang}
+                totalBooks={totalBooks}
+              />
+            )}
 
 
           </div>

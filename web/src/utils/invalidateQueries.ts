@@ -1,7 +1,7 @@
 
 import { QueryClient } from '@tanstack/react-query';
 
-export const invalidateLibraryQueries = (
+export const invalidateLibraryQueries = async (
   queryClient: QueryClient,
   userID: number,
   refetchType: 'active' | 'inactive' | 'all' | 'none' = 'active') => {
@@ -14,16 +14,25 @@ export const invalidateLibraryQueries = (
     'booksHomepage',
   ];
 
-  queryClient.invalidateQueries({
-    predicate: (query) => {
-      const queryKey = query.queryKey;
-      return (
-        Array.isArray(queryKey) &&
-        queryKey.length === 2 &&
-        libraryQueryPrefixes.includes(queryKey[0] as string) &&
-        queryKey[1] === userID
-      );
-    },
-    refetchType,
-  });
+  await Promise.all(
+    libraryQueryPrefixes.map((prefix) => {
+      queryClient.invalidateQueries({
+        queryKey: [prefix, userID],
+        refetchType,
+        exact: true,
+      });
+    })
+  );
+
+  // Force an immediate refetch if refetchType isn't 'none'
+  if (refetchType !== 'none') {
+    await Promise.all(
+      libraryQueryPrefixes.map(prefix => {
+        queryClient.refetchQueries({
+          queryKey: [prefix, userID],
+          exact: true,
+        })
+      })
+    )
+  }
 };

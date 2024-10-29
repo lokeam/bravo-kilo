@@ -45,13 +45,19 @@ export type BookFormData = {
   notes: QuillContent | null; // Quill Delta object
 };
 
-// Data to be send to endpoint
+// Data for form processing
 export type StringifiedBookFormData = Omit<BookFormData, 'description' | 'notes' | 'authors' | 'genres' | 'tags'> & {
   authors: string[];
   genres: string[];
   tags: string[];
   description: string;
   notes: string | null;
+};
+
+// Form data for API payload
+export type BookAPIPayload = Omit<StringifiedBookFormData, 'description' | 'notes'> & {
+  description: QuillContent;
+  notes: QuillContent | null;
 };
 
 // Data structure for Books sorted by IndividualGenre, used on Library page for sorting

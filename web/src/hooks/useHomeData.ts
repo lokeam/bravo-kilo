@@ -5,6 +5,17 @@ import useFetchBooksFormat from './useFetchBooksFormat';
 import useFetchHomepageData from './useFetchHomepageData';
 import { AggregatedHomePageData, BooksByFormat } from '../types/api';
 
+interface HomePageStats {
+  authorsList: Array<{ name: string; count: number }>;
+  booksByGenre: Array<{ genre: string; count: number }>;
+  booksByLanguage: Array<{ language: string; count: number }>;
+  userTags: Array<{ label: string; count: number }>;
+}
+
+interface FormatStats {
+  formats: Array<{ format: string; count: number }>;
+}
+
 const useHomePageData = () => {
   const { data: user, isLoading: isUserLoading, isAuthenticated } = useUser();
   const userId = user?.id;
@@ -46,7 +57,27 @@ const useHomePageData = () => {
         audioBook: Array.isArray(booksByFormat.audioBook) ? booksByFormat.audioBook : [],
       };
 
-      return { books, booksByFormat: formattedBooksByFormat, homepageStats };
+      // Ensure we have valid arrays for all stats
+      const safeHomepageStats = {
+        userAuthors: {
+          booksByAuthor: homepageStats.userAuthors?.booksByAuthor || []
+        },
+        userBkGenres: {
+          booksByGenre: homepageStats.userBkGenres?.booksByGenre || []
+        },
+        userBkLang: {
+          booksByLang: homepageStats.userBkLang?.booksByLang || []
+        },
+        userTags: {
+          userTags: homepageStats.userTags?.userTags || []
+        }
+      };
+
+      return {
+        books,
+        booksByFormat: formattedBooksByFormat,
+        homepageStats: safeHomepageStats
+      };
     }
     return null;
   }, [books, booksByFormat, homepageStats]);

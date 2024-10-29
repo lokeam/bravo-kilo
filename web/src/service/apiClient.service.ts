@@ -1,5 +1,9 @@
-import axios, { AxiosError } from 'axios';
-import { Book, StringifiedBookFormData } from '../types/api';
+import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
+import { Book, BookAPIPayload } from '../types/api';
+
+interface RetryConfig extends InternalAxiosRequestConfig {
+  _retry?: boolean;
+}
 
 let csrfToken: string | null = null;
 
@@ -15,9 +19,13 @@ export const refreshCSRFToken = async () => {
     const response = await apiClient.get('/api/v1/csrf-token');
     console.log('CSRF token response: ', response);
 
-    const newCSRFToken = response.headers['x-csrf-token'];
+    const newCSRFToken =
+      response.headers['x-csrf-token'] ||
+      response.headers['X-CSRF-Token'] ||
+      response.headers['X-CSRF-TOKEN'];
     if (newCSRFToken) {
       csrfToken = newCSRFToken;
+      apiClient.defaults.headers.common['X-CSRF-Token'] = newCSRFToken;
       console.log('New CSRF token set: ', csrfToken);
     } else {
       console.warn('No CSRF token in refresh response');
@@ -28,8 +36,8 @@ export const refreshCSRFToken = async () => {
 };
 
 apiClient.interceptors.response.use(
+  // Success handler remains the same
   response => {
-    // Capture CSRF token from response headers
     const csrfTokenFromHeader = response.headers['x-csrf-token'];
     if (csrfTokenFromHeader) {
       csrfToken = csrfTokenFromHeader;
@@ -40,12 +48,17 @@ apiClient.interceptors.response.use(
     }
     return response;
   },
-  async error => {
+  // Error handler with proper typing
+  async (error: AxiosError) => {
     console.error('Response error:', error);
-    const originalRequest = error.config;
+    const originalRequest = error.config as RetryConfig;
+
+    if (!originalRequest) {
+      return Promise.reject(error);
+    }
 
     // Extract the URL path
-    const urlPath = new URL(originalRequest.url, apiClient.defaults.baseURL).pathname;
+    const urlPath = new URL(originalRequest.url || '', apiClient.defaults.baseURL).pathname;
 
     // Exclude specific URLs from interceptor logic
     const excludedUrls = ['/auth/token/verify', '/auth/token/refresh', '/auth/google/signin'];
@@ -54,7 +67,7 @@ apiClient.interceptors.response.use(
     }
 
     // Check if error response and status exist
-    if (error.response && error.response.status === 401 && !originalRequest._retry) {
+    if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
 
       try {
@@ -68,18 +81,34 @@ apiClient.interceptors.response.use(
       }
     }
 
+    // If it's a CSRF error, try to refresh the token and retry the request
+    if (error.response?.status === 403) {
+      try {
+        await refreshCSRFToken();
+        return apiClient(originalRequest);
+      } catch (csrfError) {
+        console.error('CSRF refresh failed:', csrfError);
+        return Promise.reject(csrfError);
+      }
+    }
+
     return Promise.reject(error);
   }
 );
 
-
 apiClient.interceptors.request.use(
-  config => {
-    if (csrfToken && ['post', 'put', 'delete'].includes(config.method?.toLowerCase() || '')) {
-      config.headers['X-CSRF-Token'] = csrfToken;
-      console.log('********** interceptors.request - CRF Token capture ***********');
+  async config => {
+    // For POST, PUT, DELETE requests
+    if (['post', 'put', 'delete'].includes(config.method?.toLowerCase() || '')) {
+      // If we don't have a CSRF token, try to get one
+      if (!csrfToken) {
+        await refreshCSRFToken();
+      }
+
+      // Set the CSRF token in the request headers
       if (csrfToken) {
         config.headers['X-CSRF-Token'] = csrfToken;
+        console.log('********** interceptors.request - CSRF Token capture ***********');
         console.log(`CSRF token added to ${config.method?.toUpperCase()} request:`, csrfToken);
       } else {
         console.warn(`No CSRF token available for ${config.method?.toUpperCase()} request`);
@@ -94,7 +123,7 @@ apiClient.interceptors.request.use(
       console.error('CSRF Error:', error.response.data);
       console.error('Current CSRF Token:', csrfToken);
     }
-    console.error('Request error:', error);
+    console.error('Request interceptor error:', error);
     return Promise.reject(error);
   }
 );
@@ -164,6 +193,18 @@ export const fetchBookIDByTitle = async (bookTitle: string) => {
 };
 
 export const fetchHomepageData = async (userID: number) => {
+  try {
+    const { data } = await apiClient.get(`/api/v1/user/books/homepage?userID=${userID}`);
+    return data || {
+      userBkLang: { booksByLang: [] },
+      userBkGenres: { booksByGenre: [] },
+      userAuthors: { booksByAuthor: [] },
+      userTags: { userTags: [] }
+    };
+  } catch (error) {
+    console.error('Error fetching homepage data:', error);
+  }
+
   const { data } = await apiClient.get(`/api/v1/user/books/homepage?userID=${userID}`);
   return data || [];
 };
@@ -207,7 +248,7 @@ export const signOutUser = async () => {
   await apiClient.post('/auth/signout');
 };
 
-export const updateBook = async (book: StringifiedBookFormData, bookID: string) => {
+export const updateBook = async (book: BookAPIPayload, bookID: string): Promise<Book> => {
   console.log('apiClient service, update book before trycatch');
   try {
     console.log('apiClient.service, updateBook, data - ', bookID);
@@ -219,7 +260,7 @@ export const updateBook = async (book: StringifiedBookFormData, bookID: string) 
   }
 };
 
-export const addBook = async (book: StringifiedBookFormData) => {
+export const addBook = async (book: BookAPIPayload): Promise<Book> => {
   console.log('apiClient.service, received book data:', book);
 
   console.log('Description:', book.description);
@@ -232,17 +273,8 @@ export const addBook = async (book: StringifiedBookFormData) => {
     console.warn('Warning: Notes is empty or null');
   }
 
-  // No need to modify book object here, it should already be in the correct format
-
-  console.log('Stringified book object:', JSON.stringify(book));
-
   try {
-    const csrfToken = document.cookie.replace(/(?:(?:^|.*;\s*)_gorilla_csrf\s*\=\s*([^;]*).*$)|^.*$/, "$1");
-    const { data } = await apiClient.post('/api/v1/books/add', book, {
-      headers: {
-        'X-CSRF-Token': csrfToken
-      }
-    });
+    const { data } = await apiClient.post('/api/v1/books/add', book);
     console.log('apiClient.service, received response from addBook:', data);
     return data;
   } catch (error) {
