@@ -143,8 +143,10 @@ const QuillEditor: React.FC<QuillEditorProps> = ({
         placeholder,
         modules: {
           toolbar: [
+            [{ header: [1, 2, 3,false] }],
             ['bold', 'italic', 'underline', 'strike'],
-            ['blockquote', 'code-block'],
+            [{ color: [] }, { background: [] }],
+            ['blockquote'],
             [{ 'list': 'ordered'}, { 'list': 'bullet' }],
             [{ 'indent': '-1'}, { 'indent': '+1' }],
             ['clean']
