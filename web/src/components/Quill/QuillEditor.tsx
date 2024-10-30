@@ -18,12 +18,17 @@ interface QuillEditorProps {
   readOnly?: boolean;
 }
 
+// Typeguard to check if obj has ops property
+function hasOps(obj: any): obj is { ops: any[] } {
+  return obj && typeof obj === 'object' && 'ops' in obj;
+}
+
+
 const QuillEditor: React.FC<QuillEditorProps> = ({
   value,
   onChange,
   placeholder,
   onError,
-  readOnly = false
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const quillRef = useRef<Quill | null>(null);
@@ -41,9 +46,14 @@ const QuillEditor: React.FC<QuillEditorProps> = ({
         console.log('Value is Delta instance:', val);
 
         // Handle nested Delta structure
-        if (val.ops?.[0]?.insert?.ops) {
+        const insert = val.ops?.[0].insert;
+        if (
+          insert &&
+          typeof insert === 'object' &&
+          hasOps(insert)
+        ) {
           console.log('Found nested Delta structure');
-          const nestedOps = val.ops[0].insert.ops;
+          const nestedOps = insert.ops;
 
           // Handle stringified content in nested ops
           if (typeof nestedOps[0]?.insert === 'string') {
@@ -159,6 +169,7 @@ const QuillEditor: React.FC<QuillEditorProps> = ({
       quill.setContents(initialDelta, 'silent');
 
       // Set up change handler
+      // @ts-expect-error
       quill.on('text-change', (delta, oldDelta, source) => {
         if (source === 'user') {
           const contents = quill.getContents();

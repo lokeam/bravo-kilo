@@ -18,7 +18,6 @@ import (
 	"github.com/lokeam/bravo-kilo/internal/books/repository"
 	"github.com/lokeam/bravo-kilo/internal/shared/collections"
 	"github.com/lokeam/bravo-kilo/internal/shared/transaction"
-	"github.com/lokeam/bravo-kilo/internal/shared/utils"
 )
 
 type BookService interface {
@@ -335,11 +334,12 @@ func (s *BookServiceImpl) SanitizeBookData(book *repository.Book) {
 	book.Language = s.SanitizeAndUnescape(book.Language)
 
 	// Handle RichText fields
-	descriptionStr := utils.RichTextToString(book.Description)
-	notesStr := utils.RichTextToString(book.Notes)
-
-	book.Description = utils.StringToRichText(s.SanitizeAndUnescape(descriptionStr))
-	book.Notes = utils.StringToRichText(s.SanitizeAndUnescape(notesStr))
+	if len(book.Description.Ops) > 0 {
+		s.sanitizeRichTextContent(&book.Description)
+	}
+	if len(book.Notes.Ops) > 0 {
+		s.sanitizeRichTextContent(&book.Notes)
+	}
 
 	// Sanitize genres, formats, and tags
 	for i := range book.Genres {
@@ -357,6 +357,27 @@ func (s *BookServiceImpl) SanitizeBookData(book *repository.Book) {
 	// Authors only need sanitization, no case normalization
 	for i := range book.Authors {
 		book.Authors[i] = s.SanitizeAndUnescape(book.Authors[i])
+	}
+}
+
+func (s *BookServiceImpl) sanitizeRichTextContent(rt *repository.RichText) {
+	if rt == nil {
+		s.logger.Warn("Received nil RichText")
+		return
+	}
+
+	if len(rt.Ops) == 0 {
+		s.logger.Debug("Received empty RichText ops")
+		return
+	}
+
+	for i := range rt.Ops {
+		if rt.Ops[i].Insert != nil {
+			switch v := rt.Ops[i].Insert.(type) {
+			case string:
+					rt.Ops[i].Insert = s.sanitizer.Sanitize(v)
+			}
+		}
 	}
 }
 
