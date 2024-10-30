@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/lib/pq"
 	"github.com/lokeam/bravo-kilo/internal/dbconfig"
@@ -26,11 +27,12 @@ type FormatRepository interface {
 type FormatRepositoryImpl struct {
 	DB                        *sql.DB
 	Logger                    *slog.Logger
+	BookCache                 BookCache
 	getAllBooksByFormatStmt   *sql.Stmt
 	getFormatsStmt            *sql.Stmt
 }
 
-func NewFormatRepository(db *sql.DB, logger *slog.Logger) (FormatRepository, error) {
+func NewFormatRepository(db *sql.DB, logger *slog.Logger, bookCache BookCache) (FormatRepository, error) {
 	if db == nil || logger == nil {
 		return nil, fmt.Errorf("database or logger is nil")
 	}
@@ -38,6 +40,7 @@ func NewFormatRepository(db *sql.DB, logger *slog.Logger) (FormatRepository, err
 	return &FormatRepositoryImpl{
 		DB:          db,
 		Logger:      logger,
+		BookCache:   bookCache,
 	}, nil
 }
 
@@ -110,6 +113,11 @@ func (r *FormatRepositoryImpl) AddFormats(tx *sql.Tx, ctx context.Context, bookI
 		return err
 	}
 
+	// Invalidate cache after successful update
+	cacheKey := r.BookCache.FormatCacheKey("formats", bookID)
+	formatsCache.Delete(cacheKey)
+	r.Logger.Info("Invalidated cache for formats", "bookID", bookID)
+
 	return nil
 }
 
@@ -130,6 +138,22 @@ func (b *FormatRepositoryImpl) AddOrGetFormatID(ctx context.Context, tx *sql.Tx,
 }
 
 func (r *FormatRepositoryImpl) GetAllBooksByFormat(userID int) (map[string][]Book, error) {
+	// Check cache
+	cacheKey := r.BookCache.FormatCacheKey("formats", userID)
+	r.Logger.Info("Fetching books by format from cache", "userID", userID)
+
+	if cacheData, found := formatsCache.Load(cacheKey); found {
+		if item, ok := cacheData.(*CacheItem); ok {
+			if bookMap, ok := item.Value.(map[string][]Book); ok {
+					r.BookCache.RecordCacheHit(item, "formats")
+					return bookMap, nil
+			}
+		}
+	} else {
+		r.BookCache.RecordCacheMiss(nil, "formats")
+	}
+
+
 	ctx, cancel := context.WithTimeout(context.Background(), dbconfig.DBTimeout)
 	defer cancel()
 
@@ -258,15 +282,33 @@ func (r *FormatRepositoryImpl) GetAllBooksByFormat(userID int) (map[string][]Boo
 		return nil, err
 	}
 
+	// Cache the result
+	cacheItem := &CacheItem{
+		Value:      booksByFormat,
+		ExpireTime: time.Now().Add(cacheTTL["formats"]),
+		Hits:       0,
+		Misses:     1,
+	}
+	formatsCache.Store(cacheKey, cacheItem)
+	r.Logger.Info("Cached books by format", "userID", userID)
+
 	return booksByFormat, nil
 }
 
 func (b *FormatRepositoryImpl) GetFormats(ctx context.Context, bookID int) ([]string, error) {
 	// Check cache
-	if cache, found := formatsCache.Load(bookID); found {
-		b.Logger.Info("Fetching formats book info from cache", "bookID", bookID)
-		cachedFormats := cache.([]string)
-		return append([]string(nil), cachedFormats...), nil
+	cacheKey := b.BookCache.FormatCacheKey("formats", bookID)
+	b.Logger.Info("Fetching formats book info from cache", "bookID", bookID)
+
+	if cacheData, found := formatsCache.Load(cacheKey); found {
+		if item, ok := cacheData.(*CacheItem); ok {
+			if formats, ok := item.Value.([]string); ok {
+				b.BookCache.RecordCacheHit(item, "formats")
+				return append([]string(nil), formats...), nil
+			}
+		}
+	} else {
+		b.BookCache.RecordCacheMiss(nil, "formats")
 	}
 
 	var rows *sql.Rows
@@ -309,8 +351,14 @@ func (b *FormatRepositoryImpl) GetFormats(ctx context.Context, bookID int) ([]st
 		return nil, err
 	}
 
-	// Cache result
-	formatsCache.Store(bookID, formats)
+	// Cache result with metrics
+	cacheItem := &CacheItem{
+		Value:      formats,
+		ExpireTime: time.Now().Add(cacheTTL["formats"]),
+		Hits:       0,
+		Misses:     1,
+	}
+	formatsCache.Store(cacheKey, cacheItem)
 	b.Logger.Info("Caching formats for book", "bookID", bookID)
 
 	return formats, nil
@@ -337,13 +385,18 @@ func (r *FormatRepositoryImpl) GetOrInsertFormat(ctx context.Context, formatType
 	return formatID, nil
 }
 
-func (b *FormatRepositoryImpl) AssociateFormatWithBooks(ctx context.Context, tx *sql.Tx, bookID, authorID int) error {
-	statement := `INSERT INTO book_authors (book_id, author_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`
-	_, err := tx.ExecContext(ctx, statement, bookID, authorID)
+func (b *FormatRepositoryImpl) AssociateFormatWithBooks(ctx context.Context, tx *sql.Tx, bookID, formatID int) error {
+	statement := `INSERT INTO book_formats (book_id, format_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`
+	_, err := tx.ExecContext(ctx, statement, bookID, formatID)
 	if err != nil {
-		b.Logger.Error("Error adding author association", "error", err)
-		return err
+			b.Logger.Error("Error adding format association", "error", err)
+			return err
 	}
+
+	// Invalidate both book-specific and user-specific format caches
+	cacheKey := b.BookCache.FormatCacheKey("formats", bookID)
+	formatsCache.Delete(cacheKey)
+	b.Logger.Info("Invalidated formats cache", "bookID", bookID)
 
 	return nil
 }
@@ -361,6 +414,10 @@ func (b *FormatRepositoryImpl) RemoveSpecificFormats(ctx context.Context, bookID
 		b.Logger.Error("Error removing specific formats", "error", err)
 		return err
 	}
+
+	cacheKey := b.BookCache.FormatCacheKey("formats", bookID)
+	formatsCache.Delete(cacheKey)
+	b.Logger.Info("Invalidated formats cache", "bookID", bookID)
 
 	return nil
 }

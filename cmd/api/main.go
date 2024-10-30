@@ -157,7 +157,7 @@ func initializeResources(ctx context.Context, log *slog.Logger) (*driver.DB, *fa
 	}
 
 	// Initialize factory
-	f, err := factory.NewFactory(db.SQL, redisClient, log)
+	f, err := factory.NewFactory(ctx, db.SQL, redisClient, log)
 	if err != nil {
 			return nil, nil, fmt.Errorf("factory initialization error: %w", err)
 	}
@@ -180,6 +180,10 @@ func gracefulShutdown(ctx context.Context, srv *http.Server, f *factory.Factory,
 	if err := srv.Shutdown(ctx); err != nil {
 		return fmt.Errorf("server shutdown error: %w", err)
 	}
+
+
+	// Stop book cache cleanup worker
+	f.BookHandlers.BookCache.StopCleanupWorker()
 
 	// Cleanup prepared statements
 	if err := f.BookHandlers.BookCache.CleanupPreparedStatements(); err != nil {

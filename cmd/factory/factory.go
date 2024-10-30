@@ -1,6 +1,7 @@
 package init
 
 import (
+	"context"
 	"database/sql"
 	"log/slog"
 	"os"
@@ -26,7 +27,7 @@ type Factory struct {
 }
 
 // NewFactory initializes repositories, services, and handlers
-func NewFactory(db *sql.DB, redisClient *redis.Client,log *slog.Logger) (*Factory, error) {
+func NewFactory(ctx context.Context,db *sql.DB, redisClient *redis.Client,log *slog.Logger) (*Factory, error) {
 	// Initialize repositories
 	authorRepo, err := repository.NewAuthorRepository(db, log)
 	if err != nil {
@@ -34,13 +35,19 @@ func NewFactory(db *sql.DB, redisClient *redis.Client,log *slog.Logger) (*Factor
 		return nil, err
 	}
 
-	genreRepo, err := repository.NewGenreRepository(db, log)
+	bookCache, err := repository.NewBookCache(ctx, db, log)
+	if err != nil {
+		log.Error("Error initializing book cache", "error", err)
+		return nil, err
+	}
+
+	genreRepo, err := repository.NewGenreRepository(db, log, bookCache)
 	if err != nil {
 		log.Error("Error initializing genre repository", "error", err)
 		return nil, err
 	}
 
-	formatRepo, err := repository.NewFormatRepository(db, log)
+	formatRepo, err := repository.NewFormatRepository(db, log, bookCache)
 	if err != nil {
 		log.Error("Error initializing format repository", "error", err)
 		return nil, err
@@ -55,12 +62,6 @@ func NewFactory(db *sql.DB, redisClient *redis.Client,log *slog.Logger) (*Factor
 	bookRepo, err := repository.NewBookRepository(db, log, authorRepo, genreRepo, formatRepo)
 	if err != nil {
 		log.Error("Error initializing book repository", "error", err)
-		return nil, err
-	}
-
-	bookCache, err := repository.NewBookCache(db, log)
-	if err != nil {
-		log.Error("Error initializing book cache", "error", err)
 		return nil, err
 	}
 

@@ -23,12 +23,13 @@ type GenreRepository interface {
 type GenreRepositoryImpl struct {
 	DB                        *sql.DB
 	Logger                    *slog.Logger
+	BookCache                 BookCache
 	getAllBooksByGenresStmt   *sql.Stmt
 	getBookListByGenreStmt    *sql.Stmt
 }
 
 
-func NewGenreRepository(db *sql.DB, logger *slog.Logger) (GenreRepository, error) {
+func NewGenreRepository(db *sql.DB, logger *slog.Logger, bookCache BookCache) (GenreRepository, error) {
 	if db == nil || logger == nil {
 		return nil, fmt.Errorf("database or logger is nil")
 	}
@@ -36,6 +37,7 @@ func NewGenreRepository(db *sql.DB, logger *slog.Logger) (GenreRepository, error
 	return &GenreRepositoryImpl{
 		DB:          db,
 		Logger:      logger,
+		BookCache:   bookCache,
 	}, nil
 }
 
@@ -110,6 +112,21 @@ func (r *GenreRepositoryImpl) GetGenreIDByName(ctx context.Context, tx *sql.Tx, 
 }
 
 func (r *GenreRepositoryImpl) GetAllBooksByGenres(ctx context.Context, userID int) (map[string]interface{}, error) {
+	// Check cache
+	cacheKey := r.BookCache.FormatCacheKey("allBooksByGenres", userID)
+
+	r.Logger.Info("Fetching allBooksByGenres from cache")
+	if cacheData, found := allBooksByGenresCache.Load(cacheKey); found {
+		if item, ok := cacheData.(*CacheItem); ok {
+				if data, ok := item.Value.(map[string]interface{}); ok {
+						r.BookCache.RecordCacheHit(item, "allBooksByGenres")
+						return data, nil
+				}
+		}
+	} else {
+			r.BookCache.RecordCacheMiss(nil, "allBooksByGenres")
+	}
+
 	var rows *sql.Rows
 	var err error
 
@@ -254,21 +271,34 @@ func (r *GenreRepositoryImpl) GetAllBooksByGenres(ctx context.Context, userID in
 			}
 	}
 
-	//r.Logger.Info("Final result being sent to the frontend", "result", result)
+	// Cache the result with metrics
+	cacheItem := &CacheItem{
+		Value: result,
+		ExpireTime: time.Now().Add(cacheTTL["allBooksByGenres"]),
+		Hits: 0,
+		Misses: 1, // First miss that caused cache entry to be created
+	}
+	allBooksByGenresCache.Store(cacheKey, cacheItem)
+	r.Logger.Info("Caching allBooksByGenres for user", "userID", userID)
 	return result, nil
 }
 
 func (b *GenreRepositoryImpl) GetBooksListByGenre(ctx context.Context, userID int) (map[string]interface{}, error) {
-	const cacheTTL = time.Hour
+	// Check cache
+	cacheKey := b.BookCache.FormatCacheKey("bookCountByGenre", userID)
 
-	// Check cache with TTL
-	if cacheEntry, found := booksByGenresCache.Load(userID); found {
-			entry := cacheEntry.(BooksByGenresCacheEntry)
-			if time.Since(entry.timestamp) < cacheTTL {
-					b.Logger.Info("Fetching genres info from cache for user", "userID", userID)
-					return entry.data, nil
+	b.Logger.Info("Fetching bookCountByGenre from cache")
+	if cacheData, found := bookCountByGenreCache.Load(cacheKey); found {
+		if item, ok := cacheData.(*CacheItem); ok {
+			if data, ok := item.Value.(map[string]interface{}); ok {
+				if genres, exists := data["bookCountByGenre"].([]map[string]interface{}); exists && len(genres) > 0 {
+					b.BookCache.RecordCacheHit(item, "bookCountByGenre")
+					return data, nil
 			}
-			booksByGenresCache.Delete(userID) // Cache entry expired, delete it
+			}
+		}
+	} else {
+		b.BookCache.RecordCacheMiss(nil, "bookCountByGenre")
 	}
 
 	var rows *sql.Rows
@@ -326,22 +356,39 @@ func (b *GenreRepositoryImpl) GetBooksListByGenre(ctx context.Context, userID in
 	}
 
 	// Cache the result with TTL
-	booksByGenresCache.Store(userID, BooksByGenresCacheEntry{
-			data:      result,
-			timestamp: time.Now(),
-	})
-	b.Logger.Info("Caching genres info for user", "userID", userID)
+	cacheItem := &CacheItem{
+		Value: result,
+		ExpireTime: time.Now().Add(cacheTTL["bookCountByGenre"]),
+		Hits: 0,
+		Misses: 1, // First miss that caused cache entry to be created
+	}
+	bookCountByGenreCache.Store(cacheKey, cacheItem)
+	b.Logger.Info("Caching bookCountByGenre info for user", "userID", userID)
 
 	return result, nil
 }
 
 func (b *GenreRepositoryImpl) AssociateBookWithGenre(ctx context.Context, tx *sql.Tx, bookID, genreID int) error {
+	// Grab userID for this book
+	var userID int
+	err := tx.QueryRowContext(ctx, `
+	SELECT user_id
+	FROM user_books
+	WHERE book_id = $1`, bookID).Scan(&userID)
+if err != nil {
+	b.Logger.Error("Error getting userID for book", "error", err, "bookID", bookID)
+	return err
+}
+
 	statement := `INSERT INTO book_genres (book_id, genre_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`
-	_, err := tx.ExecContext(ctx, statement, bookID, genreID)
+	_, err = tx.ExecContext(ctx, statement, bookID, genreID)
 	if err != nil {
 		b.Logger.Error("Error adding author association", "error", err)
 		return err
 	}
 
+
+	// Invalidate all genre-related caches
+	b.BookCache.InvalidateCaches(bookID, userID)
 	return nil
 }

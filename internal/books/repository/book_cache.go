@@ -6,20 +6,38 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/lokeam/bravo-kilo/internal/dbconfig"
 	"github.com/lokeam/bravo-kilo/internal/shared/collections"
 )
 
-var isbn10Cache         sync.Map
-var isbn13Cache         sync.Map
-var titleCache          sync.Map
-var formatsCache        sync.Map
-var genresCache         sync.Map
-var booksByLangCache    sync.Map
-var booksByGenresCache  sync.Map
-var userTagsCache       sync.Map
+var isbn10Cache              sync.Map
+var isbn13Cache              sync.Map
+var titleCache               sync.Map
+var formatsCache             sync.Map
+var booksByLangCache         sync.Map
+var bookCountByGenreCache    sync.Map
+var allBooksByGenresCache    sync.Map
+var userTagsCache            sync.Map
+
+const (
+	ShortTTL  = 15 * time.Minute // Frequently changing data
+	MediumTTL = 1 * time.Hour   // Session-related data
+	LongTTL   = 24 * time.Hour  // Static data
+)
+
+var cacheTTL = map[string]time.Duration{
+	"isbn10":                LongTTL,   // Book detail/form meta data
+	"isbn13":                LongTTL,   // Book detail/form meta data
+	"titles":                MediumTTL, // Book detail/form meta data
+	"formats":               LongTTL,   // Home page statistics and Library page sorting
+	"booksByLang":           ShortTTL,  // Home page statistics
+	"bookCountByGenre":      ShortTTL,  // Home page statistics
+	"allBooksByGenres":      ShortTTL,  // Library page sorting
+	"userTags":              ShortTTL,  // Book detail/form meta data
+}
 
 type BookCache interface {
 	InitPreparedStatements() error
@@ -30,23 +48,39 @@ type BookCache interface {
 	GetAllBooksPublishDate(userID int) ([]BookInfo, error)
 	GetBooksByLanguage(ctx context.Context, userID int) (map[string]interface{}, error)
 	InvalidateCaches(bookID int, userID int)
+	StopCleanupWorker()
+	FormatCacheKey(prefix string, userID int) string
+	RecordCacheHit(item *CacheItem, cacheType string)
+	RecordCacheMiss(item *CacheItem, cacheType string)
 }
 
 type BookCacheImpl struct {
 	DB               *sql.DB
 	Logger           *slog.Logger
 	getAllLangStmt   *sql.Stmt
+	stopCleanup      chan struct{} // Signal channel to stop cleanup goroutine
+	isRunning        atomic.Bool // Thread-safe boolean for worker status
 }
 
-func NewBookCache(db *sql.DB, logger *slog.Logger) (BookCache, error) {
+type CacheItem struct {
+	Value       interface{}
+	ExpireTime  time.Time
+	Hits        int64 // For monitoring
+	Misses      int64 // For monitoring
+}
+
+func NewBookCache(ctx context.Context, db *sql.DB, logger *slog.Logger) (BookCache, error) {
 	if db == nil || logger == nil {
 		return nil, fmt.Errorf("book cache, database or logger is nil")
 	}
 
-	return &BookCacheImpl{
-		DB:              db,
-		Logger:          logger,
-	}, nil
+	bc := &BookCacheImpl{
+		DB:     db,
+		Logger: logger,
+	}
+
+	bc.startCleanupWorker(ctx)
+	return bc, nil
 }
 
 func (b *BookCacheImpl) InitPreparedStatements() error {
@@ -69,11 +103,16 @@ func (b *BookCacheImpl) InitPreparedStatements() error {
 
 // ISBN10 + ISBN13 (Returns a HashSet)
 func (b *BookCacheImpl) GetAllBooksISBN10(userID int) (*collections.Set, error) {
-	cacheKey := b.formatCacheKey("isbn10", userID)
+	cacheKey := b.FormatCacheKey("isbn10", userID)
 	// Check cache
-	if cache, found := isbn10Cache.Load(cacheKey); found {
-		b.Logger.Info("Fetching ISBN10 from cache")
-		return cache.(*collections.Set), nil
+	b.Logger.Info("Fetching ISBN10 from cache")
+	if cacheData, found := isbn10Cache.Load(cacheKey); found {
+		if item, ok := cacheData.(*CacheItem); ok {
+			b.RecordCacheHit(item, "isbn10")
+			return item.Value.(*collections.Set), nil
+		}
+	} else {
+		b.RecordCacheMiss(nil, "isbn10")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), dbconfig.DBTimeout)
@@ -109,8 +148,14 @@ func (b *BookCacheImpl) GetAllBooksISBN10(userID int) (*collections.Set, error) 
 		return nil, err
 	}
 
-	// Cache the result
-	isbn10Cache.Store(cacheKey, isbnSet)
+	// Cache result w/ metrics
+	cacheItem := &CacheItem{
+		Value:      isbnSet,
+		ExpireTime: time.Now().Add(cacheTTL["isbn10"]),
+		Hits:       0,
+		Misses:     1, // First time cache miss
+	}
+	isbn10Cache.Store(cacheKey, cacheItem)
 	b.Logger.Info("Caching ISBN10 for user", "userID", userID)
 
 	return isbnSet, nil
@@ -118,11 +163,16 @@ func (b *BookCacheImpl) GetAllBooksISBN10(userID int) (*collections.Set, error) 
 
 // (Returns a HashSet)
 func (b *BookCacheImpl) GetAllBooksISBN13(userID int) (*collections.Set, error) {
-	cacheKey := b.formatCacheKey("isbn13", userID)
+	cacheKey := b.FormatCacheKey("isbn13", userID)
 	// Check cache
-	if cache, found := isbn13Cache.Load(cacheKey); found {
-		b.Logger.Info("Fetching ISBN13 from cache")
-		return cache.(*collections.Set), nil
+	b.Logger.Info("Fetching ISBN13 from cache")
+	if cacheData, found := isbn13Cache.Load(cacheKey); found {
+		if item, ok := cacheData.(*CacheItem); ok {
+			b.RecordCacheHit(item, "isbn13")
+			return item.Value.(*collections.Set), nil
+		}
+	} else {
+		b.RecordCacheMiss(nil, "isbn13")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), dbconfig.DBTimeout)
@@ -158,8 +208,14 @@ func (b *BookCacheImpl) GetAllBooksISBN13(userID int) (*collections.Set, error) 
 		return nil, err
 	}
 
-	// Cache the result
-	isbn13Cache.Store(cacheKey, isbnSet)
+	// Cache the result w/ metrics
+	cacheItem := &CacheItem{
+		Value:      isbnSet,
+		ExpireTime: time.Now().Add(cacheTTL["isbn13"]),
+		Hits:       0,
+		Misses:     1,
+	}
+	isbn13Cache.Store(cacheKey, cacheItem)
 	b.Logger.Info("Caching ISBN13 for user", "userID", userID)
 
 	return isbnSet, nil
@@ -167,11 +223,16 @@ func (b *BookCacheImpl) GetAllBooksISBN13(userID int) (*collections.Set, error) 
 
 // (Returns a HashSet)
 func (b *BookCacheImpl) GetAllBooksTitles(userID int) (*collections.Set, error) {
-	cacheKey := b.formatCacheKey("titles", userID)
+	cacheKey := b.FormatCacheKey("titles", userID)
 	// Check cache
-	if cache, found := titleCache.Load(cacheKey); found {
-		b.Logger.Info("Fetching Title info from cache")
-		return cache.(*collections.Set), nil
+	b.Logger.Info("Fetching Title info from cache")
+	if cacheData, found := titleCache.Load(cacheKey); found {
+		if item, ok := cacheData.(*CacheItem); ok {
+			b.RecordCacheHit(item, "titles")
+			return item.Value.(*collections.Set), nil
+		}
+	} else {
+		b.RecordCacheMiss(nil, "titles")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), dbconfig.DBTimeout)
@@ -207,7 +268,13 @@ func (b *BookCacheImpl) GetAllBooksTitles(userID int) (*collections.Set, error) 
 	}
 
 	// Cache result
-	titleCache.Store(cacheKey, titleSet)
+	cacheItem := &CacheItem{
+		Value:      titleSet,
+		ExpireTime: time.Now().Add(cacheTTL["titles"]),
+		Hits:       0,
+		Misses:     1,
+	}
+	titleCache.Store(cacheKey, cacheItem)
 	b.Logger.Info("Caching Title info for user", "userID", userID)
 
 	return titleSet, nil
@@ -257,21 +324,20 @@ func (b *BookCacheImpl) GetAllBooksPublishDate(userID int) ([]BookInfo, error) {
 // Languages
 func (b *BookCacheImpl) GetBooksByLanguage(ctx context.Context, userID int) (map[string]interface{}, error) {
 	// Check cache
-	cacheKey := b.formatCacheKey("booksByLang:%d", userID)
+	cacheKey := b.FormatCacheKey("booksByLang", userID)
+	b.Logger.Info("Fetching Title info from cache")
     // Check cache and validate data
-    if cache, found := booksByLangCache.Load(cacheKey); found {
-			if data, ok := cache.(map[string]interface{}); ok {
-					if langs, exists := data["booksByLang"].([]map[string]interface{}); exists {
-							b.Logger.Info("Cache hit for books by language",
-									"userID", userID,
-									"languagesCount", len(langs))
-							if len(langs) > 0 {
+    if cacheData, found := booksByLangCache.Load(cacheKey); found {
+			if item, ok := cacheData.(*CacheItem); ok {
+					if data, ok := item.Value.(map[string]interface{}); ok {
+							if langs, exists := data["booksByLang"].([]map[string]interface{}); exists && len(langs) > 0 {
+									b.RecordCacheHit(item, "booksByLang")
 									return data, nil
 							}
-							// If cache exists but is empty, log it
-							b.Logger.Warn("Empty language cache found, refreshing", "userID", userID)
 					}
 			}
+	} else {
+		b.RecordCacheMiss(nil, "booksByLang")
 	}
 
 	// Use prepared statement if available
@@ -336,7 +402,13 @@ func (b *BookCacheImpl) GetBooksByLanguage(ctx context.Context, userID int) (map
 	}
 
 	// Cache the result
-	booksByLangCache.Store(cacheKey, result)
+	cacheItem := &CacheItem{
+		Value:      result,
+		ExpireTime: time.Now().Add(cacheTTL["booksByLang"]),
+		Hits:       0,
+		Misses:     1, // First miss that caused cache entry
+	}
+	booksByLangCache.Store(cacheKey, cacheItem)
 	b.Logger.Info("Caching books by language", "userID", userID)
 
 	return result, nil
@@ -344,26 +416,28 @@ func (b *BookCacheImpl) GetBooksByLanguage(ctx context.Context, userID int) (map
 
 // Invalidate Caches
 func (b *BookCacheImpl) InvalidateCaches(bookID int, userID int) {
-	// Book-specific caches
-	isbn10Cache.Delete(bookID)
-	isbn13Cache.Delete(bookID)
-	titleCache.Delete(bookID)
-	formatsCache.Delete(bookID)
-	genresCache.Delete(bookID)
 
-	// User-specific caches
-	langCacheKey := fmt.Sprintf("booksByLang:%d", userID)
-	booksByLangCache.Delete(langCacheKey)
-	booksByGenresCache.Delete(userID)
-	userTagsCache.Delete(userID)
+    // Book-specific caches
+    if bookID > 0 {
+			formatsCache.Delete(b.FormatCacheKey("formats", bookID))
+	}
 
-	b.Logger.Info("Caches invalidated",
-	"bookID", bookID,
-	"userID", userID)
+    // Book-specific caches
+    isbn10Cache.Delete(b.FormatCacheKey("isbn10", userID))
+    isbn13Cache.Delete(b.FormatCacheKey("isbn13", userID))
+    titleCache.Delete(b.FormatCacheKey("titles", userID))
+
+    // User-specific caches
+    booksByLangCache.Delete(b.FormatCacheKey("booksByLang", userID))
+    bookCountByGenreCache.Delete(b.FormatCacheKey("bookCountByGenre", userID))
+    allBooksByGenresCache.Delete(b.FormatCacheKey("allBooksByGenres", userID))
+    userTagsCache.Delete(b.FormatCacheKey("userTags", userID))
+
+    b.Logger.Info("Caches invalidated", "bookID", bookID, "userID", userID)
 }
 
 // Format cache key to ensure only exactly one key format
-func (b *BookCacheImpl) formatCacheKey(prefix string, userID int) string {
+func (b *BookCacheImpl) FormatCacheKey(prefix string, userID int) string {
 	return fmt.Sprintf("%s:%d", prefix, userID)
 }
 
@@ -379,4 +453,89 @@ func (b *BookCacheImpl) CleanupPreparedStatements() error {
 
 	b.Logger.Info("Successfully cleaned up prepared statements")
 	return nil
+}
+
+// Start cleanup worker
+func (b *BookCacheImpl) startCleanupWorker(ctx context.Context) {
+	b.stopCleanup = make(chan struct{})
+	b.isRunning.Store(true)
+
+	go func() {
+		ticker := time.NewTicker(15 * time.Minute)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <- ticker.C:
+				b.cleanup()
+			case <- b.stopCleanup:
+				b.Logger.Info("Cleanup worker stopped")
+				return
+			case <- ctx.Done():
+				b.Logger.Info("Cleanup worker stopped due to context cancellation")
+				return
+			}
+		}
+	}()
+
+	b.Logger.Info("Cache cleanup worker started")
+}
+
+// Cleanup method
+func (b *BookCacheImpl) cleanup() {
+	b.Logger.Info("Starting cache cleanup")
+	start := time.Now()
+	cleanupCache(&isbn10Cache, "isbn10", b.Logger)
+	cleanupCache(&isbn13Cache, "isbn13", b.Logger)
+	cleanupCache(&titleCache, "titles", b.Logger)
+	cleanupCache(&formatsCache, "formats", b.Logger)
+	cleanupCache(&booksByLangCache, "booksByLang", b.Logger)
+	cleanupCache(&bookCountByGenreCache, "bookCountByGenre", b.Logger)
+	cleanupCache(&allBooksByGenresCache, "allBooksByGenres", b.Logger)
+	cleanupCache(&userTagsCache, "userTags", b.Logger)
+
+	b.Logger.Info("Cache cleanup completed",
+		"duration", time.Since(start),
+	)
+}
+
+// Helper fn to cleanup individual caches
+func cleanupCache(cache *sync.Map, cacheType string, logger *slog.Logger) {
+	var deleted int
+
+	cache.Range(func(key, value interface{}) bool {
+		if item, ok := value.(*CacheItem); ok {
+			if time.Now().After(item.ExpireTime) {
+				cache.Delete(key)
+				deleted++
+			}
+		}
+		return true
+	})
+
+	if deleted > 0 {
+		logger.Info("Cleaned up expired items from cache", "cache", cacheType, "deleted", deleted)
+	}
+}
+
+// Method to stop the cleanup worker
+func (b *BookCacheImpl) StopCleanupWorker() {
+	if b.isRunning.Load() {
+		close(b.stopCleanup)
+		b.isRunning.Store(false)
+		b.Logger.Info("Cache cleanup worker stop signal sent")
+	}
+}
+
+// Helper methods for tracking metrics
+func (b *BookCacheImpl) RecordCacheHit(item *CacheItem, cacheType string) {
+	atomic.AddInt64(&item.Hits, 1)
+	b.Logger.Debug("Cache hit", "type", cacheType, "hits", item.Hits, "misses", item.Misses)
+}
+
+func (b *BookCacheImpl) RecordCacheMiss(item *CacheItem, cacheType string) {
+	if item != nil {
+		atomic.AddInt64(&item.Misses, 1)
+		b.Logger.Debug("Cache miss", "type", cacheType, "hits", item.Hits, "misses", item.Misses)
+	}
 }
