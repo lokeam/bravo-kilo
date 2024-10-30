@@ -15,7 +15,7 @@ import useUpdateBook from '../hooks/useUpdateBook';
 import useDeleteBook from '../hooks/useDeleteBook';
 import useFetchBookById from '../hooks/useFetchBookById';
 import useStore from '../store/useStore';
-
+import { transformFormData } from '../utils/bookFormHelpers';
 import { IoIosWarning } from "react-icons/io";
 import { MdDeleteForever } from "react-icons/md";
 import { RiFileCopyLine } from "react-icons/ri";
@@ -34,8 +34,8 @@ const EditBook = () => {
   const { showSnackbar } = useStore();
 
   const { data: book, isLoading: isFetchLoading, isError } = useFetchBookById(bookID as string, !!bookID);
-  const { updateBook, isLoading: isUpdateLoading, LoadingComponent: UpdateLoadingComponent } = useUpdateBook(bookID as string);
-  const { deleteBook, isLoading: isDeleteLoading, LoadingComponent: DeleteLoadingComponent } = useDeleteBook();
+  const { updateBook, isLoading: isUpdateLoading } = useUpdateBook(bookID as string);
+  const { deleteBook } = useDeleteBook();
 
   if (isFetchLoading) return <Loading />;
   if (isError || !book) return <div>Error loading book data</div>;
@@ -43,22 +43,9 @@ const EditBook = () => {
   // Form Submittal
   const handleUpdateBook: SubmitHandler<BookFormData> = async (data) => {
     console.log(`Form submitted with data ${data}`);
-    const defaultDate = new Date().toISOString();
-
-    const updatedBook = {
-      ...data,
-      id: Number(bookID),
-      createdAt: defaultDate,
-      lastUpdated: defaultDate,
-      isbn10: data.isbn10 || '',
-      isbn13: data.isbn13 || '',
-      authors: data.authors.map((authorObj) => authorObj.author.trim()).filter((author) => author !== ''),
-      genres: data.genres.map((genreObj) => genreObj.genre.trim()).filter((genre) => genre !== ''),
-      tags: data.tags.map((tagObj) => tagObj.tag.trim()).filter((tag) => tag !== ''),
-    };
-
     try {
-      await updateBook(updatedBook);
+      const stringifiedData = transformFormData(data);
+      await updateBook(stringifiedData);
       showSnackbar('Book updated successfully', 'updated');
       navigate('/library');
     } catch (error) {
@@ -87,8 +74,15 @@ const EditBook = () => {
   // Delete Modal
   const openModal = () => setOpened(true);
   const closeModal = () => setOpened(false);
+
   const handleDelete = async (event: React.MouseEvent<HTMLButtonElement>) => {
     event?.preventDefault();
+
+    if (!bookID) {
+      showSnackbar('No book ID found', 'error');
+      return;
+    }
+
     try {
       await deleteBook(bookID as string);
       showSnackbar('Book deleted successfully', 'removed');

@@ -43,7 +43,11 @@ export const transformFormData = (data: BookFormData): StringifiedBookFormData =
     authors: data.authors.map(a => a.author.trim()).filter(author => author !== ''),
     genres: data.genres.map(g => g.genre.trim()).filter(genre => genre !== ''),
     tags: data.tags.map(t => t.tag.trim()).filter(tag => tag !== ''),
-    description: JSON.stringify(data.description),
-    notes: data.notes ? JSON.stringify(data.notes) : null,
+    description: JSON.stringify({
+      ops: data.description instanceof Delta ? data.description.ops : data.description.ops
+    }),
+    notes: data.notes ? JSON.stringify({
+      ops: data.notes instanceof Delta ? data.notes.ops : data.notes.ops
+    }) : null,
   };
 };

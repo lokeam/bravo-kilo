@@ -4,7 +4,7 @@ import BookForm from '../components/BookForm/BookForm';
 import PageWithErrorBoundary from '../components/ErrorMessages/PageWithErrorBoundary';
 import useAddBook from '../hooks/useAddBook';
 import useStore from '../store/useStore';
-import { BookFormData, StringifiedBookFormData, Book, isQuillDelta } from '../types/api';
+import { BookFormData, isQuillDelta } from '../types/api';
 import Loading from '../components/Loading/Loading';
 import { transformFormData } from '../utils/bookFormHelpers';
 
@@ -55,14 +55,11 @@ function ManualAddBook() {
       }
 
       // Step 5: Add metadata
-      const enrichedData: StringifiedBookFormData = {
-        ...stringifiedData,
-      };
 
-      console.log('Submitting book data:', enrichedData);
+      console.log('Submitting apiPayload:', stringifiedData);
 
       // Step 6: Submit data
-      await addBook(enrichedData);
+      await addBook(stringifiedData);
 
       // Step 7: Handle success
       await refetchLibraryData();

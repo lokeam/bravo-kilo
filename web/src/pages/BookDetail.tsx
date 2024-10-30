@@ -97,18 +97,37 @@ const BookDetail = () => {
   // const notes = book.notes?.Valid ? JSON.parse(book.notes.String) : 'No personal notes available';
 
 
-  const parseContent = (content: string | null | undefined): Delta => {
-    if (!content) return new Delta();
-    try {
-      return new Delta(JSON.parse(content));
-    } catch (error) {
-      console.error('Error parsing content:', error);
-      return new Delta().insert(content || '');
-    }
-  };
+  const parseRichTextContent = (content: any) => {
+    if (!content) return null;
 
-  const description = book.description || { ops: [] };
-  const notes = book.notes || { ops: [] };
+    try {
+      // If content is already a Delta-like obj
+      if (
+        content &&
+        typeof content === 'object' &&
+        Array.isArray(content.ops)
+      ) {
+        return content;
+      }
+
+      // If content is a stringified Delta obj
+      if (typeof content === 'string') {
+        const parsedContent = JSON.parse(content);
+
+        if (parsedContent && Array.isArray(parsedContent.ops)) {
+          return parsedContent;
+        }
+      }
+
+      return null;
+    } catch (error) {
+      console.error('parseRichTextContent error: ', error);
+      return null;
+    }
+  }
+
+  const description = parseRichTextContent(book.description);
+  const notes = parseRichTextContent(book.notes);
 
   console.log('book.description: ', description);
   console.log('notes: ', notes);
@@ -238,18 +257,16 @@ const BookDetail = () => {
                 ))}
               </div>
             </div>
+            <div className="bk_description text-left mb-4">
+              <h3 className="text-2xl font-bold pb-2 text-black dark:text-white">Book Description</h3>
+              { description && <QuillContent content={description} /> }
+            </div>
             {hasNotes && (
               <div className="bk_description text-left mb-4">
                 <h3 className="text-2xl font-bold mb-2 text-black dark:text-white">Personal Notes</h3>
-                <p className="text-charcoal dark:text-cadet-gray">{book.notes}</p>
+                { notes && <QuillContent content={notes} />}
               </div>
             )}
-            <div className="bk_description text-left mb-4">
-              <h3 className="text-2xl font-bold pb-2 text-black dark:text-white">Book Description</h3>
-              {book.description && book.description.ops && (
-                <QuillContent content={book.description} />
-)}
-            </div>
           </div>
         </div>
       </div>

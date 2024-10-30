@@ -34,23 +34,60 @@ function BookForm({
   const { formattedDate, dateWarning } = useFormatPublishDate(initialData?.publishDate || '');
   const bookDataEmpty = useMemo(() => _.isEmpty(initialData), [initialData]);
 
-  const initialDescription = useMemo(() => {
-    if (initialData?.description) {
-      return typeof initialData.description === 'string'
-        ? new Delta(JSON.parse(initialData.description))
-        : new Delta(initialData.description);
-    }
-    return new Delta();
-  }, [initialData?.description]);
+  const parseQuillContent = (content: any): Delta => {
+    try {
+      if (!content) return new Delta();
 
-  const initialNotes = useMemo(() => {
-    if (initialData?.notes) {
-      return typeof initialData.notes === 'string'
-        ? new Delta(JSON.parse(initialData.notes))
-        : new Delta(initialData.notes);
+      // If content is already a Delta instance
+      if (content instanceof Delta) return content;
+
+      // If content is a stringified Delta
+      if (typeof content === 'string') {
+        const parsed = JSON.parse(content);
+        if (parsed && Array.isArray(parsed.ops)) {
+          return new Delta(parsed.ops);
+        }
+      }
+
+      // If content is a Delta-like object
+      if (content && typeof content === 'object' && Array.isArray(content.ops)) {
+        return new Delta(content.ops);
+      }
+
+      // Fallback: create simple Delta with the content
+      return new Delta().insert(String(content));
+    } catch (error) {
+      console.error('Error parsing Quill content:', error);
+      return new Delta();
     }
-    return new Delta();
-  }, [initialData?.notes]);
+  };
+
+  const initialDescription = useMemo(() =>
+    parseQuillContent(initialData?.description), [initialData?.description]
+  );
+
+  const initialNotes = useMemo(() =>
+    parseQuillContent(initialData?.notes), [initialData?.notes]
+  );
+
+  // Original version
+  // const initialDescription = useMemo(() => {
+  //   if (initialData?.description) {
+  //     return typeof initialData.description === 'string'
+  //       ? new Delta(JSON.parse(initialData.description))
+  //       : new Delta(initialData.description);
+  //   }
+  //   return new Delta();
+  // }, [initialData?.description]);
+
+  // const initialNotes = useMemo(() => {
+  //   if (initialData?.notes) {
+  //     return typeof initialData.notes === 'string'
+  //       ? new Delta(JSON.parse(initialData.notes))
+  //       : new Delta(initialData.notes);
+  //   }
+  //   return new Delta();
+  // }, [initialData?.notes]);
 
   const [description, setDescription] = useState<Delta>(initialDescription);
   const [notes, setNotes] = useState<Delta>(initialNotes);
