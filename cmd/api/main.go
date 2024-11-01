@@ -21,6 +21,8 @@ import (
 	"github.com/lokeam/bravo-kilo/internal/shared/redis"
 )
 
+var defaultRedisClient *redis.RedisClient
+
 type appConfig struct {
 	port int
 }
@@ -151,10 +153,22 @@ func initializeResources(ctx context.Context, log *slog.Logger) (*driver.DB, *fa
 	}
 
 	// Initialize Redis
-	redisClient, err := redis.InitRedis(ctx, log)
-	if err != nil {
-			return nil, nil, fmt.Errorf("redis initialization error: %w", err)
+	cfg := redis.NewRedisConfig()
+	if err := cfg.LoadFromEnv(); err != nil {
+		return nil, nil, fmt.Errorf("redis config error: %w", err)
 	}
+
+	redisClient, err := redis.NewRedisClient(cfg, log)
+	if err != nil {
+		return nil, nil, fmt.Errorf("redis client error: %w", err)
+	}
+	defaultRedisClient = redisClient
+
+	// Connect to Redis
+	if err := redisClient.Connect(ctx); err != nil {
+		return nil, nil, fmt.Errorf("redis connection error: %w", err)
+	}
+	defaultRedisClient = redisClient
 
 	// Initialize factory
 	f, err := factory.NewFactory(ctx, db.SQL, redisClient, log)
@@ -179,6 +193,13 @@ func gracefulShutdown(ctx context.Context, srv *http.Server, f *factory.Factory,
 	// Shutdown server
 	if err := srv.Shutdown(ctx); err != nil {
 		return fmt.Errorf("server shutdown error: %w", err)
+	}
+
+// Shut down Redis
+	if defaultRedisClient != nil {
+		if err := defaultRedisClient.Close(); err != nil {
+			log.Error("Error closing Redis connection", "error", err)
+		}
 	}
 
 

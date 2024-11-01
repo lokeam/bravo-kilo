@@ -13,9 +13,9 @@ import (
 	"github.com/lokeam/bravo-kilo/internal/books/repository"
 	"github.com/lokeam/bravo-kilo/internal/books/services"
 	"github.com/lokeam/bravo-kilo/internal/shared/models"
+	"github.com/lokeam/bravo-kilo/internal/shared/redis"
 	"github.com/lokeam/bravo-kilo/internal/shared/transaction"
 	"github.com/lokeam/bravo-kilo/internal/shared/workers"
-	"github.com/redis/go-redis/v9"
 )
 
 // Factory initializes all components and returns them
@@ -27,7 +27,7 @@ type Factory struct {
 }
 
 // NewFactory initializes repositories, services, and handlers
-func NewFactory(ctx context.Context,db *sql.DB, redisClient *redis.Client,log *slog.Logger) (*Factory, error) {
+func NewFactory(ctx context.Context,db *sql.DB, redisClient *redis.RedisClient,log *slog.Logger) (*Factory, error) {
 	// Initialize repositories
 	authorRepo, err := repository.NewAuthorRepository(db, log)
 	if err != nil {
@@ -65,7 +65,7 @@ func NewFactory(ctx context.Context,db *sql.DB, redisClient *redis.Client,log *s
 		return nil, err
 	}
 
-	bookRedisCache, err := repository.NewBookRedisCache(redisClient, log)
+	bookRedisCache, err := repository.NewBookRedisCache(redisClient.GetClient(), log)
 	if err != nil {
 		log.Error("Error initializing book redis cache", "error", err)
 	}
