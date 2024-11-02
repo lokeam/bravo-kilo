@@ -8,6 +8,7 @@ import (
 	"github.com/lokeam/bravo-kilo/internal/books"
 	"github.com/lokeam/bravo-kilo/internal/books/repository"
 	"github.com/lokeam/bravo-kilo/internal/books/services"
+	"github.com/lokeam/bravo-kilo/internal/shared/redis"
 
 	"github.com/go-playground/validator/v10"
 	"github.com/microcosm-cc/bluemonday"
@@ -30,6 +31,7 @@ type BookHandlers struct {
 	exportLimiter     *rate.Limiter
 	logger            *slog.Logger
 	bookModels        books.Models
+	redisClient       *redis.RedisClient
 	sanitizer         *bluemonday.Policy
 	validate          *validator.Validate
 	DB                *sql.DB
@@ -52,6 +54,7 @@ func NewBookHandlers(
 	bookUpdater services.BookUpdaterService,
 	bookService services.BookService,
 	exportService services.ExportService,
+	redisClient *redis.RedisClient,
 	) (*BookHandlers, error) {
 	if logger == nil {
 		return nil, fmt.Errorf("logger cannot be nil")
@@ -95,6 +98,11 @@ func NewBookHandlers(
 			return nil, fmt.Errorf("failed to initialize sanitizer")
 	}
 
+	if redisClient == nil {
+		return nil, fmt.Errorf("redisClient cannot be nil")
+	}
+
+
 	return &BookHandlers{
 		DB:                db,
 		logger:            logger,
@@ -113,5 +121,6 @@ func NewBookHandlers(
 		exportLimiter:     rate.NewLimiter(rate.Limit(1), 3),
 		validate:          validate,
 		sanitizer:         sanitizer,
+		redisClient:       redisClient,
 	}, nil
 }

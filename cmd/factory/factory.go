@@ -166,6 +166,7 @@ func NewFactory(ctx context.Context,db *sql.DB, redisClient *redis.RedisClient,l
 		bookUpdaterService,
 		bookService,
 		exportService,
+		redisClient,
 	)
 	if err != nil {
 		return nil, err

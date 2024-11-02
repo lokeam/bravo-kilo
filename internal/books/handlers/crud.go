@@ -10,6 +10,7 @@ import (
 	"github.com/lokeam/bravo-kilo/config"
 	"github.com/lokeam/bravo-kilo/internal/books/repository"
 	"github.com/lokeam/bravo-kilo/internal/shared/jwt"
+	"github.com/lokeam/bravo-kilo/internal/shared/redis"
 	"github.com/lokeam/bravo-kilo/internal/shared/utils"
 
 	"golang.org/x/text/cases"
@@ -18,6 +19,12 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-playground/validator/v10"
 )
+
+type JSONResponse struct {
+	Data        interface{} `json:"data,omitempty"`
+	Error       string      `json:"error,omitempty"`
+	StatusCode  int         `json:"-"` // Do not include in JSON response
+}
 
 // Validate Ownership
 func (h *BookHandlers) ValidateBookOwnership(request *http.Request) (int, int, error) {
@@ -63,28 +70,55 @@ func (h *BookHandlers) HandleGetAllUserBooks(response http.ResponseWriter, reque
 	}
 	h.logger.Info("User ID extracted successfully", "userID", userID)
 
+	// Attempt to fetch books from Redis cache
+	cacheKey := fmt.Sprintf("%s%d", redis.PrefixBook, userID)
+	if cachedData, err := h.redisClient.Get(request.Context(), cacheKey); err == nil {
+		var books []repository.Book
+		if err := json.Unmarshal([]byte(cachedData), &books); err == nil {
+			h.logger.Info("Crud.go - HandleGetAllUserBooks - Cache hit: returning books from cache")
+			h.sendJSONResponse(response, JSONResponse{
+				Data: map[string]interface{}{
+					"books":       books,
+					"isInLibrary": true,
+					"source":      "cache",
+				},
+			})
+			return
+		}
+		h.logger.Error("Crud.go - HandleGetAllUserBooks - Failed to unmarshal cached data", "error", err)
+	}
+
+	// Cache miss - fetch books from DB
 	books, err := h.bookRepo.GetAllBooksByUserID(userID)
 	if err != nil {
 		h.logger.Error("Error fetching books", "error", err)
-		http.Error(response, "Error fetching books", http.StatusInternalServerError)
+		h.sendJSONResponse(response, JSONResponse{
+			Error:      "Error fetching books",
+			StatusCode: http.StatusInternalServerError,
+		})
 		return
 	}
-	h.logger.Info("Books fetched successfully", "count", len(books))
 
 	// Reverse Normalize Book Data
 	h.bookService.ReverseNormalizeBookData(&books)
 
-	dbResponse := map[string]interface{}{
-		"books": books,
-		"isInLibrary": true,
+	// Cache the normalized data
+	if booksJSON, err := json.Marshal(books); err == nil {
+		cacheDuration := h.redisClient.GetConfig().CacheConfig.BookList
+		if err := h.redisClient.Set(request.Context(), cacheKey, booksJSON, cacheDuration); err != nil {
+			h.logger.Error("Crud.go - HandleGetAllUserBooks - Failed to cache normalized books", "error", err)
+		}
 	}
 
-	response.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(response).Encode(dbResponse); err != nil {
-		h.logger.Error("Error encoding response", "error", err)
-		http.Error(response, "Error encoding response", http.StatusInternalServerError)
-		return
-	}
+	// Send response
+	h.sendJSONResponse(response, JSONResponse{
+		Data: map[string]interface{}{
+			"books":       books,
+			"isInLibrary": true,
+			"source":      "db",
+		},
+	})
+
 	//h.logger.Info("HandleGetAllUserBooks completed successfully")
 }
 
@@ -104,6 +138,24 @@ func (h *BookHandlers) HandleGetBooksByAuthors(response http.ResponseWriter, req
 	}
 	h.logger.Info("Valid user ID received from token", "userID", userID)
 
+	// Attempt to fetch from Redis cache
+	cacheKey := fmt.Sprintf("%s%d", redis.PrefixBookAuthor, userID)
+	if cachedData, err := h.redisClient.Get(request.Context(), cacheKey); err == nil {
+		var booksByAuthors map[string][]repository.Book
+		if err := json.Unmarshal([]byte(cachedData), &booksByAuthors); err == nil {
+			h.logger.Info("Crud.go - HandleGetBooksByAuthors - Cache hit: returning books from cache")
+			h.sendJSONResponse(response, JSONResponse{
+				Data: map[string]interface{}{
+					"booksByAuthors": booksByAuthors,
+					"source":         "cache",
+				},
+			})
+			return
+		}
+		h.logger.Error("Crud.go - HandleGetBooksByAuthors - Failed to unmarshal cached data", "error", err)
+	}
+
+	// Cache miss - fetch by authors from db
 	booksByAuthors, err := h.authorRepo.GetAllBooksByAuthors(userID)
 	if err != nil {
 			h.logger.Error("Error fetching books by authors", "error", err)
@@ -112,11 +164,21 @@ func (h *BookHandlers) HandleGetBooksByAuthors(response http.ResponseWriter, req
 	}
 	//h.logger.Info("Books by authors fetched successfully", "authorCount", len(booksByAuthors))
 
-	response.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(response).Encode(booksByAuthors); err != nil {
-			h.logger.Error("Error encoding response", "error", err)
-			http.Error(response, "Error encoding response", http.StatusInternalServerError)
+	// Cache data
+	if booksByAuthorsJSON, err := json.Marshal(booksByAuthors); err == nil {
+		cacheDuration := h.redisClient.GetConfig().CacheConfig.BooksByAuthor
+		if err := h.redisClient.Set(request.Context(), cacheKey, booksByAuthorsJSON, cacheDuration); err != nil {
+			h.logger.Error("Crud.go - HandleGetBooksByAuthors - Failed to cache books by authors", "error", err)
+		}
 	}
+
+	// Send response
+	h.sendJSONResponse(response, JSONResponse{
+		Data: map[string]interface{}{
+			"booksByAuthors": booksByAuthors,
+			"source": "db",
+		},
+	})
 	//h.logger.Info("HandleGetBooksByAuthors completed successfully")
 }
 
@@ -125,8 +187,8 @@ func (h *BookHandlers) HandleGetBookByID(response http.ResponseWriter, request *
 	// Set Content Security Policy headers
 	utils.SetCSPHeaders(response)
 
-	// Extract and ignore userID from JWT
-	_, err := jwt.ExtractUserIDFromJWT(request, config.AppConfig.JWTPublicKey)
+	// Extract userID from JWT
+	userID, err := jwt.ExtractUserIDFromJWT(request, config.AppConfig.JWTPublicKey)
 	if err != nil {
 		h.logger.Error("Error extracting user ID", "error", err)
 		http.Error(response, err.Error(), http.StatusUnauthorized)
@@ -141,7 +203,29 @@ func (h *BookHandlers) HandleGetBookByID(response http.ResponseWriter, request *
 		return
 	}
 
-	// Fetch the book by ID
+		// Attempt to fetch books from Redis cache
+		cacheKey := fmt.Sprintf("%s:%d:%d", redis.PrefixBookDetail, userID, bookID)
+		if cachedData, err := h.redisClient.Get(request.Context(), cacheKey); err == nil {
+			var book repository.Book
+			if err := json.Unmarshal([]byte(cachedData), &book); err == nil {
+				h.logger.Info("Crud.go - HandleGetBookByID - Cache hit: returning books from cache")
+
+				// Apply title casing
+				caser := cases.Title(language.Und)
+				book.Title = caser.String(book.Title)
+
+				h.sendJSONResponse(response, JSONResponse{
+					Data: map[string]interface{}{
+						"book":       book,
+						"source":      "cache",
+					},
+				})
+				return
+			}
+			h.logger.Error("Crud.go - HandleGetBookByID - Failed to unmarshal cached data", "error", err)
+		}
+
+	// Cache miss - fetch book by ID from db
 	book, err := h.bookRepo.GetBookByID(bookID)
 	if err != nil {
 		h.logger.Error("Error fetching book", "error", err)
@@ -149,13 +233,25 @@ func (h *BookHandlers) HandleGetBookByID(response http.ResponseWriter, request *
 		return
 	}
 
+	// Apply title casing
 	caser := cases.Title(language.Und)
 	book.Title = caser.String(book.Title)
 
-	response.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(response).Encode(map[string]interface{}{"book": book}); err != nil {
-		http.Error(response, "Error encoding response", http.StatusInternalServerError)
+	// Cache book data
+	if bookJSON, err := json.Marshal(book); err == nil {
+		cacheDuration := h.redisClient.GetConfig().CacheConfig.BookDetail
+		if err := h.redisClient.Set(request.Context(), cacheKey, bookJSON, cacheDuration); err != nil {
+			h.logger.Error("Crud.go - HandleGetBookByID - Failed to cache book data", "error", err, "bookID", bookID)
+		}
 	}
+
+	// Send response
+	h.sendJSONResponse(response, JSONResponse{
+		Data: map[string]interface{}{
+			"book":   book,
+			"source": "db",
+		},
+	})
 }
 
 
@@ -366,25 +462,51 @@ func (h *BookHandlers) HandleGetBooksByFormat(response http.ResponseWriter, requ
 	}
 	h.logger.Info("Valid user ID received from token", "userID", userID)
 
-	// Get books by format
+	// Attempt to fetch from Redis cache
+	cacheKey := fmt.Sprintf("%s%d", redis.PrefixBookFormat, userID)
+	if cachedData, err := h.redisClient.Get(request.Context(), cacheKey); err == nil {
+		var booksByFormat map[string][]repository.Book
+		if err := json.Unmarshal([]byte(cachedData), &booksByFormat); err == nil {
+			h.sendJSONResponse(response, JSONResponse{
+				Data: map[string]interface{}{
+					"booksByFormat": booksByFormat,
+					"source":        "cache",
+				},
+			})
+			return
+		}
+		h.logger.Error("Crud.go - HandleGetBooksByFormat - Failed to unmarshal cached data", "error", err)
+	}
+
+	// Cache miss - fetch books by format from db
 	booksByFormat, err := h.formatRepo.GetAllBooksByFormat(userID)
 	if err != nil {
 		h.logger.Error("Error fetching books by format", "error", err)
 		http.Error(response, "Error fetching books by format", http.StatusInternalServerError)
 		return
 	}
-	h.logger.Info("Books by format fetched successfully", "formatCount", len(booksByFormat))
 
+	// Apply reverse normalization to each book in each format
 	for format, books := range booksByFormat {
 		h.bookService.ReverseNormalizeBookData(&books)
 		booksByFormat[format] = books
 	}
 
-	response.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(response).Encode(booksByFormat); err != nil {
-		h.logger.Error("Error encoding response", "error", err)
-		http.Error(response, "Error encoding response", http.StatusInternalServerError)
+	// Cache normalized data
+	if booksByFormatJSON, err := json.Marshal(booksByFormat); err != nil {
+		cacheDuration := h.redisClient.GetConfig().CacheConfig.BooksByFormat
+		if err := h.redisClient.Set(request.Context(), cacheKey, booksByFormatJSON, cacheDuration); err != nil {
+			h.logger.Error("Crud.go - HandleGetBooksByFormat - Failed to cache books by format", "error", err)
+		}
 	}
+
+	// Send response
+	h.sendJSONResponse(response, JSONResponse{
+		Data: map[string]interface{}{
+			"booksByFormat": booksByFormat,
+			"source":        "db",
+		},
+	})
 	//h.logger.Info("HandleGetBooksByFormat completed successfully")
 }
 
@@ -404,7 +526,24 @@ func (h *BookHandlers) HandleGetBooksByGenres(response http.ResponseWriter, requ
 	}
 	h.logger.Info("Valid user ID received from token", "userID", userID)
 
-	// Get the request context and pass it to GetAllBooksByGenres
+	// Attempt to fetch from Redis cache
+	cacheKey := fmt.Sprintf("%s%d", redis.PrefixBookGenre, userID)
+	if cachedData, err := h.redisClient.Get(request.Context(), cacheKey); err == nil {
+		var booksByGenres map[string][]repository.Book
+		if err := json.Unmarshal([]byte(cachedData), &booksByGenres); err == nil {
+			h.logger.Info("Crud.go - HandleGetBooksByGenres - Cache hit: returning books from cache")
+			h.sendJSONResponse(response, JSONResponse{
+				Data: map[string]interface{}{
+					"booksByGenres": booksByGenres,
+					"source":        "cache",
+				},
+			})
+			return
+		}
+		h.logger.Error("Crud.go - HandleGetBooksByGenres - Failed to unmarshal cached data", "error", err)
+	}
+
+	// Cache miss - fetch books by genres from db
 	booksByGenres, err := h.genreRepo.GetAllBooksByGenres(request.Context(), userID)
 	if err != nil {
 		h.logger.Error("Error fetching books by genres", "error", err)
@@ -413,11 +552,22 @@ func (h *BookHandlers) HandleGetBooksByGenres(response http.ResponseWriter, requ
 	}
 	//h.logger.Info("Books by genres fetched successfully", "genreCount", len(booksByGenres))
 
-	response.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(response).Encode(booksByGenres); err != nil {
-		h.logger.Error("Error encoding response", "error", err)
-		http.Error(response, "Error encoding response", http.StatusInternalServerError)
+	// Cache the data
+	if booksByGenresJSON, err := json.Marshal(booksByGenres); err == nil {
+		cacheDuration := h.redisClient.GetConfig().CacheConfig.BooksByGenre
+		if err := h.redisClient.Set(request.Context(), cacheKey, booksByGenresJSON, cacheDuration); err != nil {
+			h.logger.Error("Crud.go - HandleGetBooksByGenres - Failed to cache books by authors", "error", err)
+		}
 	}
+
+	// Send response
+	h.sendJSONResponse(response, JSONResponse{
+		Data: map[string]interface{}{
+			"booksByGenres": booksByGenres,
+			"source":        "db",
+		},
+	})
+
 	//h.logger.Info("HandleGetBooksByGenres completed successfully")
 }
 
@@ -549,5 +699,28 @@ func (h *BookHandlers) HandleGetHomepageData(response http.ResponseWriter, reque
 	if err := json.NewEncoder(response).Encode(responseData); err != nil {
 		http.Error(response, "Error encoding response", http.StatusInternalServerError)
 		return
+	}
+}
+
+// Helper fn to send consistent JSON responses
+func (h *BookHandlers) sendJSONResponse(w http.ResponseWriter, response JSONResponse) {
+	// Set content type
+	w.Header().Set("Content-Type", "application/json")
+
+	// Set status code
+	if response.StatusCode == 0 {
+		response.StatusCode = http.StatusOK
+	}
+	w.WriteHeader(response.StatusCode)
+
+	// Encode and sense response
+	if err := json.NewEncoder(w).Encode(response.Data); err != nil {
+		h.logger.Error("Failed to encode JSON response", "error", err, "data", response.Data,)
+
+		// If fail to encode successful response, send error
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{
+			"error": "Internal server error",
+		})
 	}
 }

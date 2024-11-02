@@ -130,9 +130,14 @@ func NewRedisClient(cfg *RedisConfig, logger *slog.Logger, opts ...ClientOption)
 	return client, nil
 }
 
-// Return underlying Redis client for factory use
+// Redis client getter for factory use
 func (c *RedisClient) GetClient() *redis.Client {
 	return c.client
+}
+
+// Redis config getter for handler use
+func (c *RedisClient) GetConfig() *RedisConfig {
+	return c.config
 }
 
 // Establish connection to Redis
@@ -258,7 +263,6 @@ func (c *RedisClient) GetClientStatus() ClientStatus {
 	defer c.mu.RUnlock()
 	return c.status
 }
-
 
 // Return current client statistics
 func (c *RedisClient) GetStats() ClientStats {

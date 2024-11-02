@@ -9,10 +9,22 @@ import (
 
 
 type RedisConfig struct {
-
 	// Metadata
 	Name         string  // Instance name for logging
 	Environment  string  // dev/stg/prd
+
+	// Cache durations for different types of data
+	CacheConfig struct {
+		BookList        time.Duration
+		BookDetail      time.Duration
+		BooksByAuthor   time.Duration
+		BooksByFormat   time.Duration
+		BooksByGenre    time.Duration
+		BooksByTag      time.Duration
+		BookHomepage    time.Duration
+		UserData        time.Duration
+		DefaultTTL      time.Duration
+	}
 
 	// Connection
 	Host       string
@@ -32,13 +44,13 @@ type RedisConfig struct {
 		PoolTimeout       time.Duration
 	}
 
+	// Retry Config
 	RetryConfig struct {
 		MaxRetries        int
 		BackoffInitial    time.Duration
 		BackoffMax        time.Duration
 		BackoffFactor     float64
 	}
-
 
 	// Timeouts
 	TimeoutConfig struct {
@@ -134,7 +146,18 @@ func (c *RedisConfig) LoadFromEnv() error {
 				return fmt.Errorf("invalid REDIS_MIN_IDLE_CONNS: %w", err)
 		}
 		c.PoolConfig.MaxActiveConns = val
-}
+	}
+
+	// Cache durations
+	if ttl := os.Getenv("REDIS_CACHE_BOOKS_TTL"); ttl != "" {
+		duration, err := time.ParseDuration(ttl)
+		if err != nil {
+			return fmt.Errorf("invalid REDIS_CACHE_BOOKS_TTL: %w", err)
+		}
+		c.CacheConfig.DefaultTTL = duration
+	} else {
+		c.CacheConfig.DefaultTTL = 30 * time.Minute
+	}
 
 	return nil
 }
