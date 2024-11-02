@@ -140,6 +140,10 @@ func (c *RedisClient) Connect(ctx context.Context) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	if c.isReady {
+		return nil
+	}
+
 	if err := c.client.Ping(ctx).Err(); err != nil {
 		c.status = StatusError
 		c.lastError = err
@@ -218,39 +222,14 @@ func (c *RedisClient) Get(ctx context.Context, key string) (string, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	if !c.isReady {
-			return "", fmt.Errorf("get operation failed: redis client is not ready")
-	}
-
-	start := time.Now()
-
-	// Circuit breaker checks
 	var val string
-	err := c.withCircuitBreaker(ctx, "get", func() error {
-		var err error
-		val, err = c.client.Get(ctx, key).Result()
-		return err
+	err := c.executeWithRetry(ctx, "get", func() error {
+			var err error
+			val, err = c.client.Get(ctx, key).Result()
+			return err
 	})
 
-	duration := time.Since(start)
-
-	// Record metrics
-	if c.metrics != nil {
-			c.metrics.RecordOperationDuration("get", duration, err)
-	}
-
-	// Update health metrics
-	if c.health != nil {
-			c.health.latencyWindow.Add(float64(duration))
-			if err != nil {
-					c.health.errorWindow.Add(1.0)
-			}
-	}
-
-	// Update client Stats
-	c.updateStats(err)
-
-	return val, nil
+	return val, err
 }
 
 // Store value in Redis
@@ -258,36 +237,9 @@ func (c *RedisClient) Set(ctx context.Context, key string, value interface{}, ex
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	if !c.isReady {
-			return fmt.Errorf("set operation failed: redis client is not ready")
-	}
-
-	start := time.Now()
-
-	// Circuit breaker checks
-	err := c.withCircuitBreaker(ctx, "set", func() error {
-			return c.client.Set(ctx, key, value, expiration).Err()
+	return c.executeWithRetry(ctx, "set", func() error {
+		return c.client.Set(ctx, key, value, expiration).Err()
 	})
-
-	duration := time.Since(start)
-
-	// Record metrics
-	if c.metrics != nil {
-			c.metrics.RecordOperationDuration("set", duration, err)
-	}
-
-	// Update health metrics
-	if c.health != nil {
-			c.health.latencyWindow.Add(float64(duration))
-			if err != nil {
-					c.health.errorWindow.Add(1.0)
-			}
-	}
-
-	// Update client Stats
-	c.updateStats(err)
-
-	return nil
 }
 
 // Deletes key from Redis
@@ -295,36 +247,9 @@ func (c *RedisClient) Delete(ctx context.Context, key string) error {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	if !c.isReady {
-			return fmt.Errorf("delete operation failed: redis client is not ready")
-	}
-
-	start := time.Now()
-
-	// Circuit breaker checks
-	err := c.withCircuitBreaker(ctx, "delete", func() error {
+	return c.executeWithRetry(ctx, "delete", func() error {
 		return c.client.Del(ctx, key).Err()
 	})
-
-	duration := time.Since(start)
-
-	// Record metrics
-	if c.metrics != nil {
-			c.metrics.RecordOperationDuration("delete", duration, err)
-	}
-
-	// Update health metrics
-	if c.health != nil {
-			c.health.latencyWindow.Add(float64(duration))
-			if err != nil {
-					c.health.errorWindow.Add(1.0)
-			}
-	}
-
-	// Update client Stats
-	c.updateStats(err)
-
-	return nil
 }
 
 // Return client status
@@ -345,13 +270,15 @@ func (c *RedisClient) GetStats() ClientStats {
 
 	// Add connection stats from metrics
 	if c.metrics != nil {
-		stats.Connections = c.metrics.ActiveConnections
-		stats.Operations = c.metrics.GetTotalOperations()
-	}
+			c.metrics.mu.RLock()
+			stats.Connections = c.metrics.ActiveConnections
+			stats.Operations = c.metrics.GetTotalOperations()
 
-	// Sum all errors from metrics
-	for _, count := range c.metrics.ErrorCount {
-		stats.Errors += count
+			// Sum all errors from metrics
+			for _, count := range c.metrics.ErrorCount {
+					stats.Errors += count
+			}
+			c.metrics.mu.RUnlock()
 	}
 
 	return stats
@@ -363,30 +290,51 @@ func (c *RedisClient) PoolStats() *redis.PoolStats {
 }
 
 func (c *RedisClient) Ping(ctx context.Context) error {
-	start := time.Now()
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 
-	if c.breaker != nil {
-		if err := c.breaker.AllowWithContext(ctx); err != nil {
-			return fmt.Errorf("ping operation failed: circuit breaker rejected request: %w", err)
-		}
+	return c.executeWithRetry(ctx, "ping", func() error {
+			return c.client.Ping(ctx).Err()
+	})
+}
+
+// Wrap operations with retry logic, circuit breaker and metrics
+func (c *RedisClient) executeWithRetry(ctx context.Context, op string, fn func() error) error {
+	if !c.isReady {
+			return fmt.Errorf("%s operation failed: redis client is not ready", op)
 	}
 
-	err := c.client.Ping(ctx).Err()
+	start := time.Now()
+	var err error
+
+	operation := func() error {
+			return c.withCircuitBreaker(ctx, op, fn)
+	}
+
+	// Execute with retry if configured
+	if c.retrier != nil {
+			err = c.retrier.AttemptRetry(ctx, operation)
+	} else {
+			err = operation()
+	}
 
 	duration := time.Since(start)
 
 	// Record metrics
 	if c.metrics != nil {
-		c.metrics.RecordOperationDuration("ping", duration, err)
+			c.metrics.RecordOperationDuration(op, duration, err)
 	}
 
-	if c.breaker != nil {
-		if err != nil {
-			c.breaker.RecordFailure()
-		} else {
-			c.breaker.RecordSuccess()
-		}
+	// Update health metrics
+	if c.health != nil {
+			c.health.latencyWindow.Add(float64(duration))
+			if err != nil {
+					c.health.errorWindow.Add(1.0)
+			}
 	}
+
+	// Update client stats
+	c.updateStats(err)
 
 	return err
 }
@@ -420,13 +368,18 @@ func (c *RedisClient) updatePoolMetrics() {
 	c.metrics.mu.Lock()
 	defer c.metrics.mu.Unlock()
 
-	c.metrics.UpdateConnections(
-		int64(stats.TotalConns),
-		int64(stats.IdleConns),
-	)
+	// Update all pool metrics at once
+	c.metrics.ActiveConnections = int64(stats.TotalConns)
+	c.metrics.IdleConnections = int64(stats.IdleConns)
+	c.metrics.PoolHits = int64(stats.Hits)
+	c.metrics.PoolMisses = int64(stats.Misses)
+	c.metrics.PoolTimeout = int64(stats.Timeouts)
 }
 
 func (c *RedisClient) updateStats(err error) {
+	c.mu.Lock()  // Add mutex protection
+	defer c.mu.Unlock()
+
 	c.stats.Operations++
 	c.stats.LastOperation = time.Now()
 

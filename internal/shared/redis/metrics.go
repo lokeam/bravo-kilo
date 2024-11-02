@@ -118,14 +118,6 @@ func (m *Metrics) GetTotalOperations() int64 {
 	return totalOps
 }
 
-func (m *Metrics) UpdateConnections(active, idle int64) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	m.ActiveConnections = active
-	m.IdleConnections = idle
-}
-
 func (m *Metrics) Reset() {
 	m.mu.Lock()
 	defer m.mu.Unlock()

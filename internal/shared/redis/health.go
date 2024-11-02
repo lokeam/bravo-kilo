@@ -187,6 +187,8 @@ func (h *HealthChecker) healthCheckLoop(ctx context.Context) {
 
 	for {
 		select {
+			case <-ctx.Done():
+			return
 		case <-h.stopChan:
 			return
 		case <-ticker.C:
