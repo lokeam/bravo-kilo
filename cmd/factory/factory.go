@@ -3,6 +3,7 @@ package init
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"log/slog"
 	"os"
 	"time"
@@ -20,14 +21,25 @@ import (
 
 // Factory initializes all components and returns them
 type Factory struct {
+	RedisClient     *redis.RedisClient
 	BookHandlers    *handlers.BookHandlers
 	SearchHandlers  *handlers.SearchHandlers
 	AuthHandlers    *authhandlers.AuthHandlers
 	DeletionWorker  *workers.DeletionWorker
+	CacheWorker     *workers.CacheWorker
 }
 
 // NewFactory initializes repositories, services, and handlers
-func NewFactory(ctx context.Context,db *sql.DB, redisClient *redis.RedisClient,log *slog.Logger) (*Factory, error) {
+func NewFactory(ctx context.Context, db *sql.DB, redisClient *redis.RedisClient, log *slog.Logger) (*Factory, error) {
+	if redisClient == nil {
+		return nil, fmt.Errorf("error initializing factory: redis client is required")
+	}
+
+	cacheWorker := workers.NewCacheWorker(redisClient, log, 3)
+	if cacheWorker == nil {
+		return nil, fmt.Errorf("error initializing factory: cache worker is required")
+	}
+
 	// Initialize repositories
 	authorRepo, err := repository.NewAuthorRepository(db, log)
 	if err != nil {
@@ -167,6 +179,7 @@ func NewFactory(ctx context.Context,db *sql.DB, redisClient *redis.RedisClient,l
 		bookService,
 		exportService,
 		redisClient,
+		cacheWorker,
 	)
 	if err != nil {
 		return nil, err
@@ -186,9 +199,11 @@ func NewFactory(ctx context.Context,db *sql.DB, redisClient *redis.RedisClient,l
 
 	// Return all handlers and services inside the Factory
 	return &Factory{
+		RedisClient:  redisClient,
 		BookHandlers: bookHandlers,
 		AuthHandlers: authHandlers,
 		SearchHandlers: searchHandlers,
 		DeletionWorker: deletionWorker,
+		CacheWorker:    cacheWorker,
 	}, nil
 }

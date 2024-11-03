@@ -77,6 +77,7 @@ func main() {
 	// Start background workers
 	f.DeletionWorker.StartDeletionWorker()
 	defer f.DeletionWorker.StopDeletionWorker()
+	defer f.CacheWorker.Shutdown()
 
 	// Set up error and shutdown channels
 	serverErrors := make(chan error, 1)
@@ -190,18 +191,17 @@ func gracefulShutdown(ctx context.Context, srv *http.Server, f *factory.Factory,
 	// 2. Application resources (caches, workers)
 	// 3. Database connections (handled by defer in main)
 
-	// Shutdown server
+	// Stop accepting new requests, shutdown server
 	if err := srv.Shutdown(ctx); err != nil {
 		return fmt.Errorf("server shutdown error: %w", err)
 	}
 
-// Shut down Redis
-	if defaultRedisClient != nil {
-		if err := defaultRedisClient.Close(); err != nil {
-			log.Error("Error closing Redis connection", "error", err)
-		}
-	}
+	// Stop workers in reverse order of importance:
+	// Stop account deletion worker
+	f.DeletionWorker.StopDeletionWorker()
 
+	// Shutdown cache cleanup worker
+	f.CacheWorker.Shutdown()
 
 	// Stop book cache cleanup worker
 	f.BookHandlers.BookCache.StopCleanupWorker()
@@ -211,8 +211,12 @@ func gracefulShutdown(ctx context.Context, srv *http.Server, f *factory.Factory,
 		log.Error("Error cleaning prepared statements", "error", err)
 	}
 
-	// Stop deletion worker (already handled by defer in main)
-	f.DeletionWorker.StopDeletionWorker()
+	// Shut down Redis
+	if defaultRedisClient != nil {
+		if err := defaultRedisClient.Close(); err != nil {
+			log.Error("Error closing Redis connection", "error", err)
+		}
+	}
 
 	log.Info("Graceful shutdown completed")
 	return nil

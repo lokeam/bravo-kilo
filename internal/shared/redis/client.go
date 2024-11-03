@@ -248,12 +248,12 @@ func (c *RedisClient) Set(ctx context.Context, key string, value interface{}, ex
 }
 
 // Deletes key from Redis
-func (c *RedisClient) Delete(ctx context.Context, key string) error {
+func (c *RedisClient) Delete(ctx context.Context, keys ...string) error {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
 	return c.executeWithRetry(ctx, "delete", func() error {
-		return c.client.Del(ctx, key).Err()
+		return c.client.Del(ctx, keys...).Err()
 	})
 }
 

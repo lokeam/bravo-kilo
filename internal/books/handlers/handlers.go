@@ -9,6 +9,7 @@ import (
 	"github.com/lokeam/bravo-kilo/internal/books/repository"
 	"github.com/lokeam/bravo-kilo/internal/books/services"
 	"github.com/lokeam/bravo-kilo/internal/shared/redis"
+	"github.com/lokeam/bravo-kilo/internal/shared/workers"
 
 	"github.com/go-playground/validator/v10"
 	"github.com/microcosm-cc/bluemonday"
@@ -17,24 +18,25 @@ import (
 
 // Handlers struct to hold the logger, models, and new components
 type BookHandlers struct {
-	authorRepo        repository.AuthorRepository
-	bookRepo          repository.BookRepository
-	formatRepo        repository.FormatRepository
-	genreRepo         repository.GenreRepository
-	tagRepo           repository.TagRepository
-	BookCache         repository.BookCache
-	bookRedisCache    repository.BookRedisCache
-	bookDeleter       repository.BookDeleter
-	bookUpdater       services.BookUpdaterService
-	bookService       services.BookService
-	exportService     services.ExportService
-	exportLimiter     *rate.Limiter
-	logger            *slog.Logger
-	bookModels        books.Models
-	redisClient       *redis.RedisClient
-	sanitizer         *bluemonday.Policy
-	validate          *validator.Validate
-	DB                *sql.DB
+	authorRepo              repository.AuthorRepository
+	bookRepo                repository.BookRepository
+	formatRepo              repository.FormatRepository
+	genreRepo               repository.GenreRepository
+	tagRepo                 repository.TagRepository
+	BookCache               repository.BookCache
+	bookRedisCache          repository.BookRedisCache
+	bookDeleter             repository.BookDeleter
+	bookUpdater             services.BookUpdaterService
+	bookService             services.BookService
+	exportService           services.ExportService
+	exportLimiter           *rate.Limiter
+	logger                  *slog.Logger
+	bookModels              books.Models
+	redisClient             *redis.RedisClient
+	cacheWorker             *workers.CacheWorker
+	sanitizer               *bluemonday.Policy
+	validate                *validator.Validate
+	DB                      *sql.DB
 }
 
 // Create a new Handlers instance
@@ -55,6 +57,7 @@ func NewBookHandlers(
 	bookService services.BookService,
 	exportService services.ExportService,
 	redisClient *redis.RedisClient,
+	cacheWorker *workers.CacheWorker,
 	) (*BookHandlers, error) {
 	if logger == nil {
 		return nil, fmt.Errorf("logger cannot be nil")
@@ -102,6 +105,10 @@ func NewBookHandlers(
 		return nil, fmt.Errorf("redisClient cannot be nil")
 	}
 
+	if cacheWorker == nil {
+		return nil, fmt.Errorf("cacheWorker cannot be nil")
+	}
+
 
 	return &BookHandlers{
 		DB:                db,
@@ -122,5 +129,6 @@ func NewBookHandlers(
 		validate:          validate,
 		sanitizer:         sanitizer,
 		redisClient:       redisClient,
+		cacheWorker:       cacheWorker,
 	}, nil
 }
