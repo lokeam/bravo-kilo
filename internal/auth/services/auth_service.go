@@ -1,202 +1,257 @@
-package authservice
+package authservices
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"log/slog"
-	"strconv"
+	"net/http"
 	"time"
 
-	"github.com/lokeam/bravo-kilo/config"
-	"github.com/lokeam/bravo-kilo/internal/books/repository"
 	"github.com/lokeam/bravo-kilo/internal/shared/models"
 	"github.com/lokeam/bravo-kilo/internal/shared/transaction"
+	"github.com/lokeam/bravo-kilo/internal/shared/utils"
 )
 
 type AuthService interface {
-	DeleteUser(ctx context.Context, userID int) error
-	MarkUserForDeletion(ctx context.Context, userID int) error
-	ProcessDeletionQueue(ctx context.Context) error
-	ProcessAccountDeletion(ctx context.Context, userID int) error
+    ProcessGoogleAuth(ctx context.Context, code string) (*AuthResponse, error)
+    VerifyAndGetUserInfo(r *http.Request) (*models.User, error)
+    SignOut(ctx context.Context, userID int) error
+    ProcessAccountDeletion(ctx context.Context, userID int) error
+}
+
+type AuthResponse struct {
+    Token     string         `json:"token"`
+    ExpiresAt time.Time      `json:"expiresAt"`
+    User      *models.User   `json:"user"`
+}
+
+type UserSession struct {
+    User      *models.User
+    ExpiresAt time.Time
 }
 
 type AuthServiceImpl struct {
-	userRepo models.UserRepository
-	tokenRepo models.TokenModel
-	bookRedisCache repository.BookRedisCache
-	dbManager transaction.DBManager
-	models models.Models
-	logger *slog.Logger
+    logger              *slog.Logger
+    dbManager           transaction.DBManager
+    userRepo            models.UserRepository
+    tokenRepo           models.TokenModel
+    oauthService        OAuthService
+    tokenService        TokenService
+    userDeletionService UserDeletionService
 }
+
+var (
+    ErrInvalidToken = errors.New("invalid token")
+    ErrUserNotFound = errors.New("user not found")
+)
 
 func NewAuthService(
-	userRepo models.UserRepository,
-	tokenRepo models.TokenModel,
-	bookRedisCache repository.BookRedisCache,
-	dbManager transaction.DBManager,
-	logger *slog.Logger,
+    logger *slog.Logger,
+    dbManager transaction.DBManager,
+    userRepo models.UserRepository,
+    tokenRepo models.TokenModel,
+    oauthService OAuthService,
+    tokenService TokenService,
+    userDeletionService UserDeletionService,
 ) AuthService {
-	return &AuthServiceImpl{
-		userRepo: userRepo,
-		tokenRepo: tokenRepo,
-		bookRedisCache: bookRedisCache,
-		dbManager: dbManager,
-		logger: logger,
-	}
+    if logger == nil {
+        panic("logger is nil")
+    }
+    if dbManager == nil {
+        panic("dbManager is nil")
+    }
+    if userRepo == nil {
+        panic("userRepo is nil")
+    }
+    if oauthService == nil {
+        panic("oauthService is nil")
+    }
+    if tokenService == nil {
+        panic("tokenService is nil")
+    }
+    if userDeletionService == nil {
+        panic("userDeletionService is nil")
+    }
+
+    return &AuthServiceImpl{
+        logger:              logger.With("component", "auth_service"),
+        dbManager:           dbManager,
+        userRepo:            userRepo,
+        tokenRepo:           tokenRepo,
+        oauthService:        oauthService,
+        tokenService:        tokenService,
+        userDeletionService: userDeletionService,
+    }
 }
 
-func (s *AuthServiceImpl) MarkUserForDeletion(ctx context.Context, userID int) error {
-	s.logger.Info("Marking user for deletion", "userID", userID)
 
-	tx, err := s.dbManager.BeginTransaction(ctx)
-	if err != nil {
-		s.logger.Error("Error beginning transaction", "error", err)
-		return fmt.Errorf("error beginning transaction: %w", err)
-	}
-	defer s.dbManager.RollbackTransaction(tx)
+func (as *AuthServiceImpl) ProcessGoogleAuth(ctx context.Context, code string) (*AuthResponse, error) {
+    // 1. Exchange code for token
+    token, err := as.oauthService.ExchangeCode(ctx, code)
+    if err != nil {
+        return nil, fmt.Errorf("code exchange failed: %w", err)
+    }
 
-	deletionTime := time.Now()
-	err = s.userRepo.MarkForDeletion(ctx, tx, userID, deletionTime)
-	if err != nil {
-		return fmt.Errorf("error marking user for deletion: %w", err)
-	}
+    // 2. Get user info from token
+    userInfo, err := as.oauthService.GetUserInfo(ctx, token)
+    if err != nil {
+        return nil, fmt.Errorf("failed to get user info: %w", err)
+    }
 
-	err = s.tokenRepo.DeleteByUserID(userID)
-	if err != nil {
-		return fmt.Errorf("error deleting tokens: %w", err)
-	}
+    // Verify email is present and verified
+    if !userInfo.EmailVerified {
+        return nil, fmt.Errorf("email not verified")
+    }
 
-	err = s.bookRedisCache.SetUserDeletionMarker(ctx, strconv.Itoa(userID), config.AppConfig.UserDeletionMarkerExpiration)
-	if err != nil {
-		s.logger.Error("Error setting user deletion marker in Redis", "error", err)
-	}
+    // 3. Get or create user
+    firstName, lastName := utils.SplitFullName(userInfo.Name)
+    user, err := as.userRepo.GetByEmail(userInfo.Email)
+    if err == sql.ErrNoRows {
+        // Create new user
+        user = &models.User{
+            Email:     userInfo.Email,
+            FirstName: firstName,
+            LastName:  lastName,
+            Picture:   userInfo.Picture,
+        }
+        userID, err := as.userRepo.Insert(*user)
+        if err != nil {
+            return nil, fmt.Errorf("failed to create user: %w", err)
+        }
+        user.ID = userID
+    } else if err != nil {
+        return nil, fmt.Errorf("failed to check existing user: %w", err)
+    }
 
-	s.logger.Info("User successfully marked for deletion", "userID", userID)
-	return nil
+    // 4. Store refresh token
+    if token.RefreshToken != "" {
+        tokenRecord := models.Token{
+            UserID:       user.ID,
+            RefreshToken: token.RefreshToken,
+            TokenExpiry:  token.Expiry,
+        }
+        if err := as.tokenRepo.Insert(tokenRecord); err != nil {
+            return nil, fmt.Errorf("failed to store refresh token: %w", err)
+        }
+    }
+
+    // 5. Create JWT
+    expirationTime := time.Now().Add(60 * time.Minute)
+    jwtString, err := as.tokenService.CreateJWT(user.ID, expirationTime)
+    if err != nil {
+        return nil, fmt.Errorf("failed to create JWT: %w", err)
+    }
+
+    return &AuthResponse{
+        Token:     jwtString,
+        ExpiresAt: expirationTime,
+        User:      user,
+    }, nil
 }
 
-func (s *AuthServiceImpl) ProcessDeletionQueue(ctx context.Context) error {
-	userIDs, err := s.bookRedisCache.GetDeletionQueue(ctx)
-	if err != nil {
-		return fmt.Errorf("error getting deletion queue: %w", err)
-	}
+func (as *AuthServiceImpl) VerifyAndGetUserInfo(r *http.Request) (*models.User, error) {
+    // 1. Get and validate token from cookie
+    userID, err := as.tokenService.GetUserIDFromToken(r)
+    if err != nil {
+        as.logger.Error("Failed to get user ID from token", "error", err)
+        return nil, ErrInvalidToken
+    }
 
-	for _, userIDStr := range userIDs {
-		userID, err := strconv.Atoi(userIDStr)
-		if err != nil {
-			s.logger.Error("Error converting userID to int", "userID", userID, "error", err)
-			continue
-		}
+    // 2. Get user from database
+    user, err := as.userRepo.GetByID(userID)
+    if err != nil {
+        if err == sql.ErrNoRows {
+            as.logger.Error("User not found", "userID", userID)
+            return nil, ErrUserNotFound
+        }
+        as.logger.Error("Database error while fetching user",
+            "error", err,
+            "userID", userID,
+        )
+        return nil, fmt.Errorf("failed to fetch user: %w", err)
+    }
 
-		err = s.bookRedisCache.RemoveFromDeletionQueue(ctx, userIDStr)
-		if err != nil {
-			s.logger.Error("Error removing user from deletion queue", "userID", userIDStr, "error", err)
-		}
-	}
+    as.logger.Info("User verified and retrieved",
+        "userID", user.ID,
+        "email", user.Email,
+    )
 
-	return nil
+    return user, nil
 }
 
-func (s *AuthServiceImpl) DeleteUser(ctx context.Context, userID int) error {
-	// Start a transaction
-	tx, err := s.dbManager.BeginTransaction(ctx)
-	if err != nil {
-		return fmt.Errorf("error beginning transaction: %w", err)
-	}
-	defer s.dbManager.RollbackTransaction(tx)
+func (as *AuthServiceImpl) SignOut(ctx context.Context, userID int) error {
+    // Delete refresh token from database
+    if err := as.tokenRepo.DeleteByUserID(userID); err != nil {
+        as.logger.Error("Failed to delete refresh token",
+            "error", err,
+            "userID", userID,
+        )
+        return fmt.Errorf("failed to delete refresh token: %w", err)
+    }
 
+    as.logger.Info("User signed out successfully",
+        "userID", userID,
+    )
 
-	// Get a list of all bookIDs belonging to user
-	bookIDs, err := s.userRepo.GetUserBookIDs(userID)
-	if err != nil {
-		return fmt.Errorf("error getting user's book IDs: %w", err)
-	}
-
-	// Loop through list of bookIds and use the book_deleter to delete each book and its association
-	bookDeleter, err := repository.NewBookDeleter(s.dbManager.GetDB(), s.logger)
-	if err != nil {
-		return fmt.Errorf("error creating book deleter: %w", err)
-	}
-
-	for _, bookID := range bookIDs {
-		err = bookDeleter.Delete(bookID)
-		if err != nil {
-			return fmt.Errorf("error deleting book %d: %w", bookID, err)
-		}
-	}
-
-	// Delete all tokens associated with user
-	err = s.models.Token.DeleteByUserID(userID)
-	if err != nil {
-		return fmt.Errorf("error deleting user tokens: %w", err)
-	}
-
-
-	// Delete user from users table
-	err = s.userRepo.Delete(userID)
-	if err != nil {
-		return fmt.Errorf("error deleting user: %w", err)
-	}
-
-	// Commit transaction
-	err = s.dbManager.CommitTransaction(tx)
-	if err != nil {
-		return fmt.Errorf("error committing transaction: %w", err)
-	}
-
-	return nil
+    return nil
 }
 
-func (s *AuthServiceImpl) ProcessAccountDeletion(ctx context.Context, userID int) error {
-	s.logger.Info("Handling account deletion", "userID", userID)
+func (as *AuthServiceImpl) ProcessAccountDeletion(ctx context.Context, userID int) error {
+    // Start transaction with context
+    tx, err := as.dbManager.BeginTransaction(ctx)
+    if err != nil {
+        return fmt.Errorf("failed to begin transaction: %w", err)
+    }
+    defer as.dbManager.RollbackTransaction(tx)
 
-	// Begin transaction
-	tx, err := s.dbManager.BeginTransaction(ctx)
-	if err != nil {
-		s.logger.Error("Error beginning transaction", "error", err)
-		return fmt.Errorf("error beginning transaction: %w", err)
-	}
-	defer s.dbManager.RollbackTransaction(tx)
+    // Mark user for deletion with context and deletion time
+    deletionTime := time.Now().Add(24 * time.Hour) // Mark for deletion in 24 hours
+    if err := as.userRepo.MarkForDeletion(ctx, tx, userID, deletionTime); err != nil {
+        as.logger.Error("Failed to mark user for deletion",
+            "error", err,
+            "userID", userID,
+            "deletionTime", deletionTime,
+        )
+        return fmt.Errorf("failed to mark user for deletion: %w", err)
+    }
 
-	// Soft delete (mark for deletion)
-	deletionTime := time.Now()
-	err = s.userRepo.MarkForDeletion(ctx, tx, userID, deletionTime)
-	if err != nil {
-		s.logger.Error("Error marking user for deletion", "error", err)
-		return fmt.Errorf("error marking user for deletion: %w", err)
-	}
-	s.logger.Info("User successfully marked for deletion", "userID", userID)
+    // Rest of the method remains the same...
+    if err := as.tokenRepo.DeleteByUserID(userID); err != nil {
+        as.logger.Error("Failed to delete refresh token",
+            "error", err,
+            "userID", userID,
+        )
+        return fmt.Errorf("failed to delete refresh token: %w", err)
+    }
 
-	// Delete all refresh tokens
-	err = s.tokenRepo.DeleteByUserID(userID)
-	if err != nil {
-		s.logger.Error("Error deletion refresh tokens", "error", err)
-		return fmt.Errorf("error deleting refresh tokens: %w", err)
-	}
-	s.logger.Info("Refresh tokens successfully deleted", "userID", userID)
+    userIDStr := fmt.Sprintf("%d", userID)
+    if err := as.userDeletionService.SetUserDeletionMarker(ctx, userIDStr, 24*time.Hour); err != nil {
+        as.logger.Error("Failed to set user deletion marker",
+            "error", err,
+            "userID", userID,
+        )
+        // Continue execution as this is not critical
+    }
 
-	// Commit transaction
-	err = s.dbManager.CommitTransaction(tx)
-	if err != nil {
-		s.logger.Error("Error committing transaction", "error", err)
-		return fmt.Errorf("error processing request: %w", err)
-	}
-	s.logger.Info("Transaction comitted successfully")
+    if err := as.userDeletionService.AddToDeletionQueue(ctx, userIDStr); err != nil {
+        as.logger.Error("Failed to add user to deletion queue",
+            "error", err,
+            "userID", userID,
+        )
+        // Continue execution as this is not critical
+    }
 
-	// Set deletion marker in Redis
-	err = s.bookRedisCache.SetUserDeletionMarker(ctx, strconv.Itoa(userID), config.AppConfig.UserDeletionMarkerExpiration)
-	if err != nil {
-		s.logger.Error("Error setting user deletion marker in Redis", "error", err)
-	}
-	s.logger.Info("User deletion marker set in Redis", "userID", userID)
+    // Commit transaction
+    if err := as.dbManager.CommitTransaction(tx); err != nil {
+        return fmt.Errorf("failed to commit transaction: %w", err)
+    }
 
+    as.logger.Info("Account marked for deletion successfully",
+        "userID", userID,
+        "deletionTime", deletionTime,
+    )
 
-	// Add user to deletion queue in Redis
-	err = s.bookRedisCache.AddToDeletionQueue(ctx, strconv.Itoa(userID))
-	if err != nil {
-		s.logger.Error("Error adding user to deletion queue in Redis", "error", err)
-	}
-	s.logger.Info("User added to deletion queue in Redis", "userID", userID)
-
-	return nil
+    return nil
 }

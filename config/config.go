@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"log/slog"
 	"os"
 	"time"
@@ -38,45 +39,54 @@ func InitConfig(logger *slog.Logger) {
 
 	// Load RSA keys
 	privateKeyPath := os.Getenv("JWT_PRIVATE_KEY_PATH")
-	logger.Info("Loading RSA private key", "path", privateKeyPath)
-
-
-	// Set default cache expiration to 24 hours
-	AppConfig.DefaultBookCacheExpiration = 24 * time.Hour
-
-	// Set user deletion marker expiration to 7 days
-	AppConfig.UserDeletionMarkerExpiration = 7 * 24 * time.Hour
-
-	// Set auth token expiration to 1 hour (adjust as needed)
-	AppConfig.AuthTokenExpiration = 1 * time.Hour
-
+	logger.Info("Attempting to load private key",
+			"path", privateKeyPath,
+			"exists", fileExists(privateKeyPath))
 
 	privateKey, err := crypto.LoadRSAPrivateKey(privateKeyPath)
 	if err != nil {
-			logger.Error("Failed to load RSA private key", "error", err)
-			os.Exit(1)
-	} else if privateKey == nil {
-			logger.Error("RSA private key is nil after loading")
+			logger.Error("Failed to load RSA private key",
+					"error", err,
+					"path", privateKeyPath)
 			os.Exit(1)
 	}
 	logger.Info("RSA Private Key loaded successfully", "keySize", privateKey.Size())
 	AppConfig.JWTPrivateKey = privateKey
 
 	publicKeyPath := os.Getenv("JWT_PUBLIC_KEY_PATH")
-	logger.Info("Loading RSA public key", "path", publicKeyPath)
+	logger.Info("Attempting to load public key",
+			"path", publicKeyPath,
+			"exists", fileExists(publicKeyPath))
 
 	publicKey, err := crypto.LoadRSAPublicKey(publicKeyPath)
 	if err != nil {
-			logger.Error("Failed to load RSA public key", "error", err)
-			os.Exit(1)
-	} else if publicKey == nil {
-			logger.Error("RSA public key is nil after loading")
+			logger.Error("Failed to load RSA public key",
+					"error", err,
+					"path", publicKeyPath,
+					"keyContent", readFileContent(publicKeyPath))
 			os.Exit(1)
 	}
-
 	logger.Info("RSA Public Key loaded successfully", "keySize", publicKey.Size())
 	AppConfig.JWTPublicKey = publicKey
 
+	// Set cache expirations
+	AppConfig.DefaultBookCacheExpiration = 24 * time.Hour
+	AppConfig.UserDeletionMarkerExpiration = 7 * 24 * time.Hour
+	AppConfig.AuthTokenExpiration = 1 * time.Hour
+
 	// Log the entire AppConfig for debugging
 	logger.Info("AppConfig initialized", "config", AppConfig)
+}
+
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
+}
+
+func readFileContent(path string) string {
+	content, err := os.ReadFile(path)
+	if err != nil {
+			return fmt.Sprintf("Error reading file: %v", err)
+	}
+	return string(content)
 }

@@ -102,3 +102,38 @@ func VerifyToken(tokenString string, publicKey *rsa.PublicKey) (*jwt.Token, erro
 
 	return token, nil
 }
+
+// Parses a PEM encoded RSA public key
+func ParseRSAPublicKeyFromPEM(publicKeyPEM []byte) (*rsa.PublicKey, error) {
+	block, _ := pem.Decode(publicKeyPEM)
+	if block == nil {
+			return nil, fmt.Errorf("failed to parse PEM block containing the public key")
+	}
+
+	pub, err := x509.ParsePKIXPublicKey(block.Bytes)
+	if err != nil {
+			return nil, fmt.Errorf("failed to parse public key: %w", err)
+	}
+
+	switch pub := pub.(type) {
+	case *rsa.PublicKey:
+			return pub, nil
+	default:
+			return nil, fmt.Errorf("key type is not RSA")
+	}
+}
+
+// Parses a PEM encoded RSA private key
+func ParseRSAPrivateKeyFromPEM(privateKeyPEM []byte) (*rsa.PrivateKey, error) {
+	block, _ := pem.Decode(privateKeyPEM)
+	if block == nil {
+			return nil, fmt.Errorf("failed to parse PEM block containing the private key")
+	}
+
+	priv, err := x509.ParsePKCS1PrivateKey(block.Bytes)
+	if err != nil {
+			return nil, fmt.Errorf("failed to parse private key: %w", err)
+	}
+
+	return priv, nil
+}

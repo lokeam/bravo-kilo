@@ -702,8 +702,6 @@ func (h *BookHandlers) HandleGetHomepageData(response http.ResponseWriter, reque
 			h.logger.Error("Crud.go - HandleGetHomepageData - Failed to unmarshal cached data", "error", err)
 	}
 
-
-
 	// Cache miss - fetch data using goroutines
 	userTagsChan := make(chan map[string]interface{}, 1)
 	userLangChan := make(chan map[string]interface{}, 1)

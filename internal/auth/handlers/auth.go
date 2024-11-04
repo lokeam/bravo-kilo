@@ -1,668 +1,317 @@
 package authhandlers
 
 import (
-	"context"
-	"crypto/rand"
-	"database/sql"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"log"
 	"log/slog"
 	"net/http"
 	"os"
-	"strings"
-	"time"
 
 	"errors"
 
-	"github.com/lokeam/bravo-kilo/config"
 	authservice "github.com/lokeam/bravo-kilo/internal/auth/services"
-	"github.com/lokeam/bravo-kilo/internal/books/services"
-	"github.com/lokeam/bravo-kilo/internal/shared/crypto"
-	"github.com/lokeam/bravo-kilo/internal/shared/models"
-	"github.com/lokeam/bravo-kilo/internal/shared/transaction"
-	"github.com/lokeam/bravo-kilo/internal/shared/types"
-	"github.com/lokeam/bravo-kilo/internal/shared/utils"
 
-	"github.com/coreos/go-oidc/v3/oidc"
-	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/oauth2"
 )
 
 type AuthHandlers struct {
-	logger            *slog.Logger
-	models            models.Models
-	dbManager         transaction.DBManager
-	bookCacheService  services.BookCacheService
-	authService       authservice.AuthCacheService
-	db                *sql.DB
+	logger       *slog.Logger
+	authService  authservice.AuthService
+	oauthService authservice.OAuthService
+	tokenService authservice.TokenService
+	isProduction bool
 }
 
 type DeleteAccountResponse struct {
-	Message string `json:"message"`
-	RedirectURL string `json:"redirectURL"`
+	Message       string `json:"message"`
+	RedirectURL   string `json:"redirectURL"`
 }
 
-var (
-	oidcProvider *oidc.Provider
-	oidcVerifier *oidc.IDTokenVerifier
-	oauth2Config *oauth2.Config
-	isProduction bool
-)
 var ErrNoRefreshToken = errors.New("no valid refresh token found")
-func init() {
-	env := os.Getenv("ENV")
-	if env == "" {
-		env = "development"
-	}
-	isProduction = env == "production"
-}
+
+var (
+	ErrNoToken = errors.New("no token cookie found")
+	ErrInvalidToken = errors.New("invalid token")
+	ErrUserNotFound = errors.New("user not found")
+)
 
 func NewAuthHandlers(
 	logger *slog.Logger,
-	models models.Models,
-	dbManager transaction.DBManager,
-	bookCacheService services.BookCacheService,
-	db *sql.DB,
-) (*AuthHandlers, error) {
+	authService authservice.AuthService,
+	oauthService authservice.OAuthService,
+	tokenService authservice.TokenService,
+) *AuthHandlers {
 	if logger == nil {
-			return nil, fmt.Errorf("logger cannot be nil")
+			panic("logger cannot be nil")
+	}
+	if authService == nil {
+			panic("authService cannot be nil")
+	}
+	if oauthService == nil {
+			panic("oauthService cannot be nil")
+	}
+	if tokenService == nil {
+			panic("tokenService cannot be nil")
 	}
 
-	if models.User == nil || models.Token == nil {
-			return nil, fmt.Errorf("invalid models passed, user or token model is missing ")
-	}
-
-	if dbManager == nil {
-			return nil, fmt.Errorf("DB Manager cannot be nil")
-	}
-
-	if bookCacheService == nil {
-		return nil, fmt.Errorf("bookCacheService cannot be nil")
-	}
-
-	if db == nil {
-		return nil, fmt.Errorf("db cannot be nil")
-	}
-
-	// Initialize OIDC Provider + Verifier
-	ctx := context.Background()
-	var err error
-	oidcProvider, err = oidc.NewProvider(ctx, "https://accounts.google.com")
-	if err != nil {
-			logger.Error("Failed to get OIDC provider", "error", err)
-			return nil, fmt.Errorf("failed to get OIDC provider: %v", err)
-	}
-
-	oidcConfig := &oidc.Config{
-			ClientID: os.Getenv("GOOGLE_CLIENT_ID"),
-	}
-	oidcVerifier = oidcProvider.Verifier(oidcConfig)
-
-	// Initialize OAuth2 Config + OIDC scopes
-	oauth2Config = &oauth2.Config{
-			RedirectURL:  os.Getenv("GOOGLE_REDIRECT_URI"),
-			ClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
-			ClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
-			Scopes: []string{
-					oidc.ScopeOpenID,
-					"profile",
-					"email",
-					"https://www.googleapis.com/auth/books",
-			},
-			Endpoint: oidcProvider.Endpoint(),
-	}
+    // Get environment
+    env := os.Getenv("ENV")
+    if env == "" {
+        env = "development"
+    }
+    isProduction := env == "production"
 
 	return &AuthHandlers{
-			logger:    logger,
-			models:    models,
-			dbManager: dbManager,
-			bookCacheService: bookCacheService,
-			db: db,
-	}, nil
-}
-
-// Generate random state for CSRF protection
-func generateState() string {
-	byteSlice := make([]byte, 16)
-	_, err := rand.Read(byteSlice)
-	if err != nil {
-		log.Fatalf("Error generating random state: %s", err)
+			logger:       logger,
+			authService:  authService,
+			oauthService: oauthService,
+			tokenService: tokenService,
+			isProduction: isProduction,
 	}
-
-	return base64.URLEncoding.EncodeToString(byteSlice)
 }
 
-// Handle error redirects within GooglCallback
-func (h *AuthHandlers) redirectWithError(w http.ResponseWriter, r *http.Request, errorType string) {
-	frontendURL := os.Getenv("VITE_FRONTEND_URL")
-	if frontendURL == "" {
-			frontendURL = "http://localhost:5173" // Default to Vite's default port
-	}
-	redirectURL := fmt.Sprintf("%s/login?error=%s", frontendURL, errorType)
-	http.Redirect(w, r, redirectURL, http.StatusSeeOther)
-	h.logger.Info("Redirecting to frontend with error",
-			"url", redirectURL,
-			"error", errorType,
-			"statusCode", http.StatusSeeOther,
-	)
-}
-
-// Init OAuth with Google
-func (h *AuthHandlers) HandleGoogleSignIn(response http.ResponseWriter, request *http.Request) {
+// Init OAuth with Google - complete
+func (h *AuthHandlers) HandleGoogleSignIn(w http.ResponseWriter, r *http.Request) {
 	h.logger.Info("Handling Google OAuth callback")
 
-	randomState := generateState()
+	// Generate and set state cookie
+	state := h.tokenService.GenerateState()
+	h.tokenService.SetStateCookie(w, state)
 
-	// Set the state as a cookie
-	http.SetCookie(response, &http.Cookie{
-		Name:     "oauthstate",
-		Value:    randomState,
-		Expires:  time.Now().Add(10 * time.Minute),
-		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
-		Secure:   isProduction,
-		Path:     "/",
-	})
+	// Get authorization URL with state
+	authURL := h.oauthService.GetAuthURL(state)
 
-	url := oauth2Config.AuthCodeURL(
-		randomState,
-		oauth2.AccessTypeOffline,
+	// Redirect to Google for authorization
+	http.Redirect(w, r, authURL, http.StatusTemporaryRedirect)
+	h.logger.Info("Redirecting to Google OAuth",
+			"url", authURL,
+			"statusCode", http.StatusTemporaryRedirect,
 	)
-
-	http.Redirect(response, request, url, http.StatusSeeOther)
 }
 
-// Process Google OAuth callback
-func (h *AuthHandlers) HandleGoogleCallback(response http.ResponseWriter, request *http.Request) {
+// Process Google OAuth callback -
+func (h *AuthHandlers) HandleGoogleCallback(w http.ResponseWriter, r *http.Request) {
 	h.logger.Info("Handling Google OAuth callback")
 
-	// Verify state parameter
-	state := request.URL.Query().Get("state")
-	cookie, err := request.Cookie("oauthstate")
+	// 1. Verify state
+	state := r.URL.Query().Get("state")
+	if err := h.tokenService.VerifyStateCookie(r, state); err != nil {
+			h.handleOAuthError(w, r, "state_mismatch", err)
+			return
+	}
+
+	// 2. Process OAuth callback
+	code := r.URL.Query().Get("code")
+	authResponse, err := h.authService.ProcessGoogleAuth(r.Context(), code)
 	if err != nil {
-			h.logger.Error("Error: State cookie not found", "error", err)
-			h.redirectWithError(response, request, "no_state_cookie")
+			h.handleOAuthError(w, r, "auth_failed", err)
 			return
 	}
 
-	if state != cookie.Value {
-			h.logger.Error("Error: URL State and Cookie state don't match")
-			h.redirectWithError(response, request, "state_mismatch")
-			return
-	}
+	// 3. Set session cookie
+	h.tokenService.CreateSessionCookie(w, authResponse.Token, authResponse.ExpiresAt)
 
-	// Exchange the authorization code for tokens
-	code := request.URL.Query().Get("code")
-	ctx := request.Context()
-	token, err := oauth2Config.Exchange(ctx, code)
-	if err != nil {
-			h.logger.Error("Error exchanging code for token", "error", err)
-			h.redirectWithError(response, request, "token_exchange")
-			return
-	}
-
-	// Extract the ID Token from OAuth2 token
-	rawIDToken, ok := token.Extra("id_token").(string)
-	if !ok {
-			h.logger.Error("Error: No id_token field in oauth2 token")
-			h.redirectWithError(response, request, "missing_id_token")
-			return
-	}
-
-	// Verify ID Token
-	idToken, err := oidcVerifier.Verify(ctx, rawIDToken)
-	if err != nil {
-			h.logger.Error("Error verifying ID Token", "error", err)
-			h.redirectWithError(response, request, "invalid_id_token")
-			return
-	}
-
-	// Extract user info from ID Token
-	var userInfo struct {
-			Email         string `json:"email"`
-			EmailVerified bool   `json:"email_verified"`
-			Name          string `json:"name"`
-			Picture       string `json:"picture"`
-			Sub           string `json:"sub"`
-	}
-
-	if err := idToken.Claims(&userInfo); err != nil {
-			h.logger.Error("Error decoding ID Token claims", "error", err)
-			h.redirectWithError(response, request, "error_id_token_claims")
-			return
-	}
-
-	h.logger.Info("User info received!", "user", userInfo)
-
-	firstName, lastName := utils.SplitFullName(userInfo.Name)
-
-	// Check if the user already exists in the database
-	existingUser, err := h.models.User.GetByEmail(userInfo.Email)
-	if err != nil && err != sql.ErrNoRows {
-    // This is an actual database error, not just a "user not found" scenario
-    h.logger.Error("Error checking for existing user", "error", err)
-    h.redirectWithError(response, request, "database_error")
-    return
-	}
-
-	var userId int
-	if existingUser != nil {
-			userId = existingUser.ID
-	} else {
-			// Save user info in the database
-			user := models.User{
-					Email:     userInfo.Email,
-					FirstName: firstName,
-					LastName:  lastName,
-					Picture:   userInfo.Picture,
-			}
-
-			userId, err = h.models.User.Insert(user)
-			if err != nil {
-					h.logger.Error("Error adding user to db", "error", err)
-					h.redirectWithError(response, request, "error_adding_user")
-					return
-			}
-	}
-
-	// Store refresh token if available
-	if token.RefreshToken != "" {
-			tokenRecord := models.Token{
-					UserID:       userId,
-					RefreshToken: token.RefreshToken,
-					TokenExpiry:  token.Expiry,
-			}
-
-			if err := h.models.Token.Insert(tokenRecord); err != nil {
-					h.logger.Error("Error adding token to db", "error", err)
-					http.Error(response, "Error adding token to db", http.StatusInternalServerError)
-					h.redirectWithError(response, request, "error_adding_token")
-					return
-			}
-	} else {
-			h.logger.Warn("No refresh token received, re-authentication needed for offline access")
-	}
-
-	// Create a JWT for the session
-	expirationTime := time.Now().Add(60 * time.Minute)
-	claims := &types.Claims{
-			UserID: userId,
-			RegisteredClaims: jwt.RegisteredClaims{
-					ExpiresAt: jwt.NewNumericDate(expirationTime),
-			},
-	}
-
-	if config.AppConfig.JWTPrivateKey == nil {
-		h.logger.Error("JWT private key not found")
-		http.Error(response, "JWT private key not found", http.StatusInternalServerError)
-		h.redirectWithError(response, request, "missing_jwt_private_key")
-		return
-	}
-
-	jwtString, err := crypto.SignToken(claims, config.AppConfig.JWTPrivateKey)
-	if err != nil {
-			h.logger.Error("Error generating JWT", "error", err)
-			http.Error(response, "Error generating JWT", http.StatusInternalServerError)
-			h.redirectWithError(response, request, "error_generating_jwt")
-			return
-	}
-	h.logger.Info("Generated JWT")
-
-	// Send the JWT as a cookie
-	isProduction := os.Getenv("ENV") == "production"
-	http.SetCookie(response, &http.Cookie{
-			Name:     "token",
-			Value:    jwtString,
-			Expires:  expirationTime,
-			HttpOnly: true,
-			Secure:   isProduction,
-			SameSite: http.SameSiteLaxMode,
-			Path:     "/",
-			Domain: "",
-	})
-
-	// On successful login, redirect to the frontend dashboard
-	frontendURL := os.Getenv("VITE_FRONTEND_LOGIN_URL")
-	if frontendURL == "" {
-			frontendURL = "http://localhost:5173" // Default to Vite's default port
-	}
-
-
-	// Redirect to the frontend dashboard
-	dashboardURL := os.Getenv("VITE_FRONTEND_DASHBOARD_URL")
-	if dashboardURL == "" {
-			dashboardURL = "http://localhost:5173/library" // Default to Vite's default port
-	}
-	http.Redirect(response, request, dashboardURL, http.StatusSeeOther)
-	h.logger.Info("Redirecting to frontend",
-		"url", dashboardURL,
-		"statusCode", http.StatusSeeOther,
+	// 4. Redirect to dashboard
+	dashboardURL := h.getDashboardURL()
+	http.Redirect(w, r, dashboardURL, http.StatusSeeOther)
+	h.logger.Info("Auth successful, redirecting to dashboard",
+			"url", dashboardURL,
+			"userID", authResponse.User.ID,
 	)
-	h.logger.Info("JWT successfully sent to FE with status code: ", "info", http.StatusSeeOther)
 }
 
 // Refresh CSRF Token
-func (h *AuthHandlers) HandleRefreshCSRFToken(response http.ResponseWriter, request *http.Request) {
+func (h *AuthHandlers) HandleRefreshCSRFToken(w http.ResponseWriter, r *http.Request) {
 	h.logger.Info("HandleRefreshCSRFToken called")
 
 	// CSRF Gorilla automatically sets new token in response header
-	response.WriteHeader(http.StatusOK)
-	response.Write([]byte("CSRF token refreshed"))
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("CSRF token refreshed"))
 
 	h.logger.Info("CSRF token refreshed successfully")
 }
 
-// Retrieve JWT Token
-func (h *AuthHandlers) GetUserAccessToken(request *http.Request) (*oauth2.Token, error) {
-	// Get userID from JWT
-	cookie, err := request.Cookie("token")
+// Retrieve valid JWT access token for user
+func (h *AuthHandlers) GetUserAccessToken(r *http.Request) (*oauth2.Token, error) {
+	// 1. Get userID from JWT
+	userID, err := h.tokenService.GetUserIDFromToken(r)
 	if err != nil {
-			h.logger.Error("Error: No token cookie", "error", err)
-			return nil, fmt.Errorf("no token cookie")
+			h.logger.Error("Failed to get user ID from token", "error", err)
+			return nil, fmt.Errorf("invalid token: %w", err)
 	}
 
-	tokenStr := cookie.Value
-	token, err := crypto.VerifyToken(tokenStr, config.AppConfig.JWTPublicKey)
-	if err != nil || !token.Valid {
-			h.logger.Error("Error: Invalid token", "error", err)
-			return nil, fmt.Errorf("invalid token")
-	}
-
-	claims, ok := token.Claims.(*types.Claims)
-	if !ok {
-		h.logger.Error("Error: Claims are not of type *types.Claims", "error", err)
-		return nil, fmt.Errorf("invalid token claims")
-	}
-
-	// Get the refresh token for the user from the database
-	h.logger.Info("Attempting to retrieve refresh token", "userID", claims.UserID)
-
-	// Get refresh token from DB
-	refreshToken, err := h.models.Token.GetRefreshTokenByUserID(claims.UserID)
+	// 2. Get access token using userID
+	token, err := h.oauthService.GetAccessToken(r.Context(), userID)
 	if err != nil {
-		if strings.Contains(err.Error(), "No refresh token found") {
-			return nil, ErrNoRefreshToken
-		}
-
-			h.logger.Error("Error retrieving refresh token from DB", "error", err)
-			return nil, fmt.Errorf("could not retrieve refresh token from DB")
-	}
-	if refreshToken == "" {
-			h.logger.Error("No refresh token found for user", "userID", claims.UserID)
-			return nil, fmt.Errorf("no refresh token found for user")
-	}
-
-	// Use the refresh token to obtain a new access token
-	tokenSource := oauth2Config.TokenSource(context.Background(), &oauth2.Token{
-			RefreshToken: refreshToken,
-	})
-
-	// Get a new access token
-	newToken, err := tokenSource.Token()
-	if err != nil {
-			h.logger.Error("Error refreshing access token", "error", err)
-			return nil, fmt.Errorf("could not refresh access token")
+			if errors.Is(err, ErrNoRefreshToken) {
+					h.logger.Error("No refresh token found", "userID", userID)
+					return nil, ErrNoRefreshToken
+			}
+			h.logger.Error("Failed to get access token",
+					"error", err,
+					"userID", userID,
+			)
+			return nil, fmt.Errorf("failed to get access token: %w", err)
 	}
 
-	return newToken, nil
+	return token, nil
 }
 
 // Verify JWT Token
-func (h *AuthHandlers) HandleVerifyToken(response http.ResponseWriter, request *http.Request) {
+func (h *AuthHandlers) HandleVerifyToken(w http.ResponseWriter, r *http.Request) {
 	h.logger.Info("HandleVerifyToken called")
 
-  // Log all cookies
-  for _, cookie := range request.Cookies() {
-		h.logger.Info("Received cookie", "name", cookie.Name, "value", cookie.Value)
-	}
-
-	cookie, err := request.Cookie("token")
+	// 1. Verify token and get user info
+	userInfo, err := h.authService.VerifyAndGetUserInfo(r)
 	if err != nil {
-			h.logger.Error("Error: No token cookie", "error", err)
-			http.Error(response, "Error: No token cookie", http.StatusUnauthorized)
-			return
-	}
-	h.logger.Info("Token cookie found", "cookieValue", cookie.Value[:10]+"...")
-
-	tokenStr := cookie.Value
-
-	token, err := crypto.VerifyToken(tokenStr, config.AppConfig.JWTPublicKey)
-	if err != nil {
-			h.logger.Error("Error verifying token", "error", err)
-			http.Error(response, "Invalid token", http.StatusUnauthorized)
-			return
-	}
-
-	h.logger.Info("Token verified successfully")
-
-	claims, ok := token.Claims.(*types.Claims)
-	if !ok {
-			h.logger.Error("Error: Claims are not of type *types.Claims")
-			http.Error(response, "Invalid token claims", http.StatusUnauthorized)
+			switch {
+			case errors.Is(err, ErrNoToken):
+					h.handleTokenVerificationError(w, "no_token", err)
+			case errors.Is(err, ErrInvalidToken):
+					h.handleTokenVerificationError(w, "invalid_token", err)
+			case errors.Is(err, ErrUserNotFound):
+					h.handleTokenVerificationError(w, "user_not_found", err)
+			default:
+					h.handleTokenVerificationError(w, "internal_error", err)
+			}
 			return
 	}
 
-	// Log individual claims
-	h.logger.Info("Parsed claims", "userID", claims.UserID, "expiresAt", claims.ExpiresAt)
-
-	user, err := h.models.User.GetByID(claims.UserID)
-	if err != nil {
-			h.logger.Error("Error: User not found", "error", err, "userID", claims.UserID)
-			http.Error(response, "User not found", http.StatusInternalServerError)
+	// 2. Send successful response
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(map[string]interface{}{"user": userInfo}); err != nil {
+			h.logger.Error("Error encoding response", "error", err)
+			h.handleTokenVerificationError(w, "encoding_error", err)
 			return
 	}
 
-	h.logger.Info("User info retrieved", "userID", user.ID, "email", user.Email)
-
-	response.Header().Set("Content-Type", "application/json")
-	err = json.NewEncoder(response).Encode(map[string]interface{}{
-			"user": user,
-	})
-	if err != nil {
-			h.logger.Error("Error encoding user data to JSON", "error", err)
-			http.Error(response, "Error encoding response", http.StatusInternalServerError)
-			return
-	}
-
-	h.logger.Info("HandleVerifyToken completed successfully - text updated")
+	h.logger.Info("Token verification successful",
+			"userID", userInfo.ID,
+			"email", userInfo.Email,
+	)
 }
 
 // Refresh JWT Token
-func (h *AuthHandlers) HandleRefreshToken(response http.ResponseWriter, request *http.Request) {
+func (h *AuthHandlers) HandleRefreshToken(w http.ResponseWriter, r *http.Request) {
 	h.logger.Info("HandleRefreshToken called")
 
-	// Grab refresh token from request
-	cookie, err := request.Cookie("token")
-	if err != nil {
-		h.logger.Error("Error: No refresh token cookie", "error", err)
-		http.Error(response, "Error: No refresh token cookie", http.StatusUnauthorized)
-		return
-	}
+    // 1. Attempt to refresh token
+    newToken, err := h.tokenService.RefreshToken(r)
+    if err != nil {
+        switch {
+					case errors.Is(err, ErrNoToken):
+						h.handleTokenVerificationError(w, "no_token", err)
+					case errors.Is(err, ErrInvalidToken):
+							h.handleTokenVerificationError(w, "invalid_token", err)
+					default:
+							h.handleTokenVerificationError(w, "refresh_failed", err)
+        }
+        return
+    }
 
-	oldTokenStr := cookie.Value
+    // 2. Set new token cookie
+    h.tokenService.CreateSessionCookie(w, newToken.Token, newToken.ExpiresAt)
 
-	// Parse old token
-	claims := &types.Claims{}
-	token, err := crypto.VerifyToken(oldTokenStr, config.AppConfig.JWTPublicKey)
-	if err != nil || !token.Valid {
-		h.logger.Error("Error: Invalid refresh token", "error", err)
-		http.Error(response, "Invalid refresh token", http.StatusUnauthorized)
-		return
-	}
+    h.logger.Info("Token refreshed successfully",
+        "expiresAt", newToken.ExpiresAt,
+    )
 
-	// Extract claims from the token
-	claims, ok := token.Claims.(*types.Claims)
-	if !ok {
-		h.logger.Error("Error: Claims are not of type *types.Claims")
-		http.Error(response, "Invalid token claims", http.StatusUnauthorized)
-		return
-	}
-
-    // Check if the token is about to expire
-	if time.Until(claims.ExpiresAt.Time) > 5*time.Minute {
-		h.logger.Info("Token is not close to expiration, no need to refresh")
-		http.Error(response, "Token is not close to expiration", http.StatusBadRequest)
-		return
-	}
-
-	// Generate new token (1 week)
-	expirationTime := time.Now().Add(7 * 24 * time.Hour)
-	newClaims := &types.Claims{
-		UserID: claims.UserID,
-		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(expirationTime),
-		},
-	}
-	h.logger.Info("New token generated", "newClaims", newClaims)
-
-	newTokenStr, err := crypto.SignToken(newClaims, config.AppConfig.JWTPrivateKey)
-	if err != nil {
-		h.logger.Error("Error generating new JWT", "error", err)
-		http.Error(response, "Error generating new JWT", http.StatusInternalServerError)
-		return
-	}
-
-    // Log the values before calling Rotate
-    h.logger.Info("Rotating token",
-			"userID", claims.UserID,
-			"newToken", newTokenStr,
-			"oldToken", oldTokenStr,
-			"expiry", expirationTime)
-
-	// Rotate the refresh one
-	err = h.models.Token.Rotate(claims.UserID, newTokenStr, oldTokenStr, expirationTime)
-	if err != nil {
-		h.logger.Error("Error rotating refresh token", "error", err)
-		http.Error(response, "Error rotating refresh token", http.StatusInternalServerError)
-		return
-	}
-
-	// Set the new refresh as a cookie
-	http.SetCookie(response, &http.Cookie{
-		Name:     "token",
-		Value:    newTokenStr,
-		Expires:  expirationTime,
-		HttpOnly: true,
-		Secure:   isProduction,
-		SameSite: http.SameSiteLaxMode,
-		Path:     "/",
-	})
-	h.logger.Info("New token set as cookie", "newToken", newTokenStr[:10]+"...")
-	response.WriteHeader(http.StatusOK)
-	response.Write([]byte("Token refreshed successfully"))
+    w.WriteHeader(http.StatusOK)
 }
 
 // Process user sign out
-func (h *AuthHandlers) HandleSignOut(response http.ResponseWriter, request *http.Request) {
-	// Clear token cookie
-	http.SetCookie(response, &http.Cookie{
-		Name:     "token",
-		Value:    "",
-		Expires:  time.Now().Add(-1 * time.Hour),
-		HttpOnly: true,
-		Secure:   isProduction,
-		SameSite: http.SameSiteLaxMode,
-		Path:     "/",
-	})
+func (h *AuthHandlers) HandleSignOut(w http.ResponseWriter, r *http.Request) {
+	h.logger.Info("HandleSignOut called")
 
-	// Get the user ID from JWT token
-	cookie, err := request.Cookie("token")
+	// 1. Get userID from token
+	userID, err := h.tokenService.GetUserIDFromToken(r)
 	if err != nil {
-		h.logger.Error("Error: No token cookie", "error", err)
-		http.Error(response, "Error: No token cookie", http.StatusUnauthorized)
-		return
+			switch {
+			case errors.Is(err, ErrNoToken):
+					h.handleTokenVerificationError(w, "no_token", err)
+			case errors.Is(err, ErrInvalidToken):
+					h.handleTokenVerificationError(w, "invalid_token", err)
+			default:
+					h.handleTokenVerificationError(w, "internal_error", err)
+			}
+			return
 	}
 
-	tokenStr := cookie.Value
-	claims := &types.Claims{}
-
-	token, err := crypto.VerifyToken(tokenStr, config.AppConfig.JWTPublicKey)
-	if err != nil || !token.Valid {
-		h.logger.Error("Error: Invalid token", "error", err)
-		http.Error(response, "Error: Invalid token", http.StatusUnauthorized)
-		return
+	// 2. Process sign out in service layer
+	if err := h.authService.SignOut(r.Context(), userID); err != nil {
+			h.handleTokenVerificationError(w, "signout_failed", err)
+			return
 	}
 
-	// Delete the refresh token from db
-	if err := h.models.Token.DeleteByUserID(claims.UserID); err != nil {
-		h.logger.Error("Error deleting refresh token by user ID", "error", err)
-		http.Error(response, "Error deleting refresh token", http.StatusInternalServerError)
-		return
-	}
+	// 3. Clear session cookie
+	h.tokenService.ClearSessionCookie(w)
 
-	h.logger.Info("User logged out, token cookie cleared, token deleted")
-	response.WriteHeader(http.StatusOK)
-	response.Write([]byte("Logged out successfully"))
+	h.logger.Info("User signed out successfully",
+			"userID", userID,
+	)
+
+	w.WriteHeader(http.StatusOK)
 }
 
-func (h *AuthHandlers) HandleDeleteAccount(response http.ResponseWriter, request *http.Request) {
+func (h *AuthHandlers) HandleDeleteAccount(w http.ResponseWriter, r *http.Request) {
 	h.logger.Info("HandleDeleteAccount called")
 
-	// Get userID from JWT token
-	userID, err := h.getUserIDFromToken(request)
+	// 1. Get userID from token
+	userID, err := h.tokenService.GetUserIDFromToken(r)
 	if err != nil {
-			h.logger.Error("Error getting user ID from token", "error", err)
-			http.Error(response, "Unauthorized", http.StatusUnauthorized)
+			switch {
+			case errors.Is(err, ErrNoToken):
+					h.handleTokenVerificationError(w, "no_token", err)
+			case errors.Is(err, ErrInvalidToken):
+					h.handleTokenVerificationError(w, "invalid_token", err)
+			default:
+					h.handleTokenVerificationError(w, "internal_error", err)
+			}
 			return
 	}
 
-	// Delegate account deletion to service layer
-	err = h.authService.ProcessAccountDeletion(request.Context(), userID)
-	if err != nil {
-			h.logger.Error("Error processing account deletion", "error", err)
-			http.Error(response, "Error processing account deletion", http.StatusInternalServerError)
+	// 2. Process account deletion
+	if err := h.authService.ProcessAccountDeletion(r.Context(), userID); err != nil {
+			h.logger.Error("Failed to process account deletion",
+					"error", err,
+					"userID", userID,
+			)
+			h.handleTokenVerificationError(w, "deletion_failed", err)
 			return
 	}
 
-	// Clear the session cookie
-	h.clearSessionCookie(response)
+	// 3. Clear session cookie
+	h.tokenService.ClearSessionCookie(w)
 
-	// Prepare response
-	redirectURL := h.getLoginRedirectURL()
-	responseData := DeleteAccountResponse{
-			Message:     "User account marked for deletion and logged out",
-			RedirectURL: redirectURL,
+	// 4. Send response
+	response := DeleteAccountResponse{
+			Message:     "Account marked for deletion",
+			RedirectURL: h.getLoginRedirectURL(),
 	}
 
-	response.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(response).Encode(responseData)
-	h.logger.Info("User account marked for deletion and logged out", "userID", userID)
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+			h.logger.Error("Failed to encode response",
+					"error", err,
+					"userID", userID,
+			)
+			h.handleTokenVerificationError(w, "encoding_error", err)
+			return
+	}
+
+	h.logger.Info("Account deletion processed successfully",
+			"userID", userID,
+	)
 }
 
-// Todo: replace with crypto jwt helper
-func (h *AuthHandlers) getUserIDFromToken(request *http.Request) (int, error) {
-	cookie, err := request.Cookie("token")
-	if err != nil {
-		return 0, fmt.Errorf("no token cookie: %w", err)
+// URL Helper functions
+// Get the frontend redirect dashboard URL
+func (h *AuthHandlers) getDashboardURL() string {
+	dashboardURL := os.Getenv("VITE_FRONTEND_DASHBOARD_URL")
+	if dashboardURL == "" {
+			dashboardURL = "http://localhost:5173/library"
 	}
-
-	token, err := crypto.VerifyToken(cookie.Value, config.AppConfig.JWTPublicKey)
-	if err != nil || !token.Valid {
-		return 0, fmt.Errorf("invalid token: %w", err)
-	}
-
-	claims, ok := token.Claims.(*types.Claims)
-	if !ok {
-		return 0, fmt.Errorf("invalid token claims")
-	}
-
-	return claims.UserID, nil
-}
-
-
-
-func (h *AuthHandlers) clearSessionCookie(response http.ResponseWriter) {
-	http.SetCookie(response, &http.Cookie{
-		Name:     "token",
-		Value:    "",
-		Expires:  time.Now().Add(-1 * time.Hour),
-		HttpOnly: true,
-		Secure:   isProduction,
-		SameSite: http.SameSiteLaxMode,
-		Path:     "/",
-	})
+	return dashboardURL
 }
 
 func (h *AuthHandlers) getLoginRedirectURL() string {
@@ -671,4 +320,57 @@ func (h *AuthHandlers) getLoginRedirectURL() string {
 		redirectURL = "http://localhost:5173"
 	}
 	return redirectURL
+}
+
+// Error handling error helper functions
+// handleOAuthError logs the error and redirects to login page with error type
+func (h *AuthHandlers) handleOAuthError(w http.ResponseWriter, r *http.Request, errorType string, err error) {
+	h.logger.Error("OAuth callback error",
+			"errorType", errorType,
+			"error", err,
+	)
+
+	frontendURL := os.Getenv("VITE_FRONTEND_URL")
+	if frontendURL == "" {
+			frontendURL = "http://localhost:5173"
+	}
+
+	redirectURL := fmt.Sprintf("%s/login?error=%s", frontendURL, errorType)
+	http.Redirect(w, r, redirectURL, http.StatusSeeOther)
+
+	h.logger.Info("Redirecting to login with error",
+			"url", redirectURL,
+			"errorType", errorType,
+			"statusCode", http.StatusSeeOther,
+	)
+}
+
+// handleTokenVerificationError logs the error and sends appropriate HTTP response
+func (h *AuthHandlers) handleTokenVerificationError(w http.ResponseWriter, errorType string, err error) {
+	h.logger.Error("Token verification error",
+			"errorType", errorType,
+			"error", err,
+	)
+
+	var statusCode int
+	var message string
+
+	switch errorType {
+	case "no_token":
+			statusCode = http.StatusUnauthorized
+			message = "No token cookie found"
+	case "invalid_token":
+			statusCode = http.StatusUnauthorized
+			message = "Invalid token"
+	case "user_not_found":
+			statusCode = http.StatusNotFound
+			message = "User not found"
+	default:
+			statusCode = http.StatusInternalServerError
+			message = "Internal server error"
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+	json.NewEncoder(w).Encode(map[string]string{"error": message})
 }

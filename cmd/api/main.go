@@ -207,7 +207,7 @@ func gracefulShutdown(ctx context.Context, srv *http.Server, f *factory.Factory,
 	f.BookHandlers.BookCache.StopCleanupWorker()
 
 	metrics := f.CacheManager.GetMetrics()
-	log.Info("Final cache metrics", "metrics",
+	log.Info("Final cache metrics",
 		"totalOps", metrics.TotalOps,
 		"l1Failures", metrics.L1Failures,
 		"l2Failures", metrics.L2Failures,

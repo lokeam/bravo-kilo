@@ -25,7 +25,6 @@ type BookHandlers struct {
 	genreRepo               repository.GenreRepository
 	tagRepo                 repository.TagRepository
 	BookCache               repository.BookCache
-	bookRedisCache          repository.BookRedisCache
 	bookDeleter             repository.BookDeleter
 	bookUpdater             services.BookUpdaterService
 	bookService             services.BookService
@@ -53,7 +52,7 @@ func NewBookHandlers(
 	genreRepo repository.GenreRepository,
 	tagRepo repository.TagRepository,
 	userBooksRepo repository.UserBooksRepository,
-	bookCache repository.BookCache,
+	BookCache repository.BookCache,
 	bookDeleter repository.BookDeleter,
 	bookUpdater services.BookUpdaterService,
 	bookService services.BookService,
@@ -87,7 +86,7 @@ func NewBookHandlers(
 		return nil, fmt.Errorf("exportService cannot be nil")
 	}
 
-	if bookCache == nil {
+	if BookCache == nil {
 		return nil, fmt.Errorf("bookCache cannot be nil")
 	}
 
@@ -131,7 +130,7 @@ func NewBookHandlers(
 		formatRepo:        formatRepo,
 		genreRepo:         genreRepo,
 		tagRepo:           tagRepo,
-		BookCache:         bookCache,
+		BookCache:         BookCache,
 		bookDeleter:       bookDeleter,
 		bookService:       bookService,
 		bookCacheService:  bookCacheService,
