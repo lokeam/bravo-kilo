@@ -241,3 +241,11 @@ func UnmarshalRichTextJSON(data []byte, book *repository.Book) error {
 
 	return nil
 }
+
+func CopyMap[KEY comparable, VAL any](m map[KEY]VAL) map[KEY]VAL {
+	result := make(map[KEY]VAL, len(m))
+	for key, val := range m {
+		result[key] = val
+	}
+	return result
+}

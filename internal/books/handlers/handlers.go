@@ -8,6 +8,7 @@ import (
 	"github.com/lokeam/bravo-kilo/internal/books"
 	"github.com/lokeam/bravo-kilo/internal/books/repository"
 	"github.com/lokeam/bravo-kilo/internal/books/services"
+	"github.com/lokeam/bravo-kilo/internal/shared/cache"
 	"github.com/lokeam/bravo-kilo/internal/shared/redis"
 	"github.com/lokeam/bravo-kilo/internal/shared/workers"
 
@@ -28,11 +29,13 @@ type BookHandlers struct {
 	bookDeleter             repository.BookDeleter
 	bookUpdater             services.BookUpdaterService
 	bookService             services.BookService
+	bookCacheService        services.BookCacheService
 	exportService           services.ExportService
 	exportLimiter           *rate.Limiter
 	logger                  *slog.Logger
 	bookModels              books.Models
 	redisClient             *redis.RedisClient
+	cacheManager            *cache.CacheManager
 	cacheWorker             *workers.CacheWorker
 	sanitizer               *bluemonday.Policy
 	validate                *validator.Validate
@@ -51,12 +54,13 @@ func NewBookHandlers(
 	tagRepo repository.TagRepository,
 	userBooksRepo repository.UserBooksRepository,
 	bookCache repository.BookCache,
-	bookRedisCache repository.BookRedisCache,
 	bookDeleter repository.BookDeleter,
 	bookUpdater services.BookUpdaterService,
 	bookService services.BookService,
+	bookCacheService services.BookCacheService,
 	exportService services.ExportService,
 	redisClient *redis.RedisClient,
+	cacheManager *cache.CacheManager,
 	cacheWorker *workers.CacheWorker,
 	) (*BookHandlers, error) {
 	if logger == nil {
@@ -87,6 +91,10 @@ func NewBookHandlers(
 		return nil, fmt.Errorf("bookCache cannot be nil")
 	}
 
+	if bookCacheService == nil {
+		return nil, fmt.Errorf("bookCacheService cannot be nil")
+	}
+
 	if bookDeleter == nil {
 		return nil, fmt.Errorf("bookDeleter cannot be nil")
 	}
@@ -105,6 +113,10 @@ func NewBookHandlers(
 		return nil, fmt.Errorf("redisClient cannot be nil")
 	}
 
+	if cacheManager == nil {
+		return nil, fmt.Errorf("cacheManager cannot be nil")
+	}
+
 	if cacheWorker == nil {
 		return nil, fmt.Errorf("cacheWorker cannot be nil")
 	}
@@ -120,15 +132,17 @@ func NewBookHandlers(
 		genreRepo:         genreRepo,
 		tagRepo:           tagRepo,
 		BookCache:         bookCache,
-		bookRedisCache:    bookRedisCache,
 		bookDeleter:       bookDeleter,
 		bookService:       bookService,
+		bookCacheService:  bookCacheService,
 		bookUpdater:       bookUpdater,
 		exportService:     exportService,
 		exportLimiter:     rate.NewLimiter(rate.Limit(1), 3),
 		validate:          validate,
 		sanitizer:         sanitizer,
 		redisClient:       redisClient,
+		cacheManager:      cacheManager,
 		cacheWorker:       cacheWorker,
 	}, nil
 }
+

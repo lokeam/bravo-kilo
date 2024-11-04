@@ -10,9 +10,11 @@ import (
 
 	authhandlers "github.com/lokeam/bravo-kilo/internal/auth/handlers"
 	"github.com/lokeam/bravo-kilo/internal/books"
+	bookcache "github.com/lokeam/bravo-kilo/internal/books/cache"
 	"github.com/lokeam/bravo-kilo/internal/books/handlers"
 	"github.com/lokeam/bravo-kilo/internal/books/repository"
 	"github.com/lokeam/bravo-kilo/internal/books/services"
+	"github.com/lokeam/bravo-kilo/internal/shared/cache"
 	"github.com/lokeam/bravo-kilo/internal/shared/models"
 	"github.com/lokeam/bravo-kilo/internal/shared/redis"
 	"github.com/lokeam/bravo-kilo/internal/shared/transaction"
@@ -27,6 +29,7 @@ type Factory struct {
 	AuthHandlers    *authhandlers.AuthHandlers
 	DeletionWorker  *workers.DeletionWorker
 	CacheWorker     *workers.CacheWorker
+	CacheManager    *cache.CacheManager
 }
 
 // NewFactory initializes repositories, services, and handlers
@@ -77,11 +80,6 @@ func NewFactory(ctx context.Context, db *sql.DB, redisClient *redis.RedisClient,
 		return nil, err
 	}
 
-	bookRedisCache, err := repository.NewBookRedisCache(redisClient.GetClient(), log)
-	if err != nil {
-		log.Error("Error initializing book redis cache", "error", err)
-	}
-
 	bookDeleter, err := repository.NewBookDeleter(db, log)
 	if err != nil {
 		log.Error("Error initializing book deleter", "error", err)
@@ -93,6 +91,17 @@ func NewFactory(ctx context.Context, db *sql.DB, redisClient *redis.RedisClient,
 		log.Error("Error initializing user books repository", "error", err)
 		return nil, err
 	}
+
+	bookCacheInvalidator := bookcache.NewBookCacheInvalidator(
+		bookCache,   // L1 cache
+		redisClient, // L2 cache
+		log.With("component", "book_cache_invalidator"),
+	)
+
+	cacheManager := cache.NewCacheManager(
+		bookCacheInvalidator,
+		log,
+	)
 
 	// Initialize transaction manager
 	transactionManager, err := transaction.NewDBManager(db, log)
@@ -142,6 +151,10 @@ func NewFactory(ctx context.Context, db *sql.DB, redisClient *redis.RedisClient,
 		os.Exit(1)
 	}
 
+	bookCacheService := services.NewBookCacheService(
+		redisClient,
+		log.With("service", "book_cache"),
+	)
 
 	// Initialize models
 	bookModels, err := books.New(db, log)
@@ -163,29 +176,36 @@ func NewFactory(ctx context.Context, db *sql.DB, redisClient *redis.RedisClient,
 
 	// Initialize handlers
 	bookHandlers, err := handlers.NewBookHandlers(
-		db,
-		log,
-		bookModels,
-		authorRepo,
-		bookRepo,
-		formatRepo,
-		genreRepo,
-		tagRepo,
-		userBooksRepo,
-		bookCache,
-		bookRedisCache,
-		bookDeleter,
-		bookUpdaterService,
-		bookService,
-		exportService,
-		redisClient,
-		cacheWorker,
+    db,
+    log,
+    bookModels,
+    authorRepo,
+    bookRepo,
+    formatRepo,
+    genreRepo,
+    tagRepo,
+    userBooksRepo,
+    bookCache,
+    bookDeleter,
+    bookUpdaterService,
+    bookService,
+    bookCacheService,      // Changed
+    exportService,         // Changed
+    redisClient,
+    cacheManager,         // Changed
+    cacheWorker,          // Changed
 	)
 	if err != nil {
 		return nil, err
 	}
 
-	authHandlers, err := authhandlers.NewAuthHandlers(log, authModels, transactionManager, bookRedisCache, db)
+	authHandlers, err := authhandlers.NewAuthHandlers(
+		log,
+		authModels,
+		transactionManager,
+		bookCacheService,
+		db,
+	)
 	if err != nil {
 			return nil, err
 	}
@@ -197,13 +217,14 @@ func NewFactory(ctx context.Context, db *sql.DB, redisClient *redis.RedisClient,
 
 	deletionWorker := workers.NewDeletionWorker(24*time.Hour, authHandlers)
 
-	// Return all handlers and services inside the Factory
+// Return all handlers and services inside the Factory
 	return &Factory{
-		RedisClient:  redisClient,
-		BookHandlers: bookHandlers,
-		AuthHandlers: authHandlers,
+		RedisClient:    redisClient,
+		BookHandlers:   bookHandlers,
+		AuthHandlers:   authHandlers,
 		SearchHandlers: searchHandlers,
 		DeletionWorker: deletionWorker,
 		CacheWorker:    cacheWorker,
+		CacheManager:   cacheManager,
 	}, nil
 }

@@ -206,6 +206,12 @@ func gracefulShutdown(ctx context.Context, srv *http.Server, f *factory.Factory,
 	// Stop book cache cleanup worker
 	f.BookHandlers.BookCache.StopCleanupWorker()
 
+	metrics := f.CacheManager.GetMetrics()
+	log.Info("Final cache metrics", "metrics",
+		"totalOps", metrics.TotalOps,
+		"l1Failures", metrics.L1Failures,
+		"l2Failures", metrics.L2Failures,
+	)
 	// Cleanup prepared statements
 	if err := f.BookHandlers.BookCache.CleanupPreparedStatements(); err != nil {
 		log.Error("Error cleaning prepared statements", "error", err)

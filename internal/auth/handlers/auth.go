@@ -11,7 +11,6 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 
@@ -19,7 +18,7 @@ import (
 
 	"github.com/lokeam/bravo-kilo/config"
 	authservice "github.com/lokeam/bravo-kilo/internal/auth/services"
-	"github.com/lokeam/bravo-kilo/internal/books/repository"
+	"github.com/lokeam/bravo-kilo/internal/books/services"
 	"github.com/lokeam/bravo-kilo/internal/shared/crypto"
 	"github.com/lokeam/bravo-kilo/internal/shared/models"
 	"github.com/lokeam/bravo-kilo/internal/shared/transaction"
@@ -32,12 +31,12 @@ import (
 )
 
 type AuthHandlers struct {
-	logger          *slog.Logger
-	models          models.Models
-	dbManager       transaction.DBManager
-	bookRedisCache  repository.BookRedisCache
-	authService     authservice.AuthService
-	db              *sql.DB
+	logger            *slog.Logger
+	models            models.Models
+	dbManager         transaction.DBManager
+	bookCacheService  services.BookCacheService
+	authService       authservice.AuthCacheService
+	db                *sql.DB
 }
 
 type DeleteAccountResponse struct {
@@ -64,7 +63,7 @@ func NewAuthHandlers(
 	logger *slog.Logger,
 	models models.Models,
 	dbManager transaction.DBManager,
-	bookRedisCache repository.BookRedisCache,
+	bookCacheService services.BookCacheService,
 	db *sql.DB,
 ) (*AuthHandlers, error) {
 	if logger == nil {
@@ -79,8 +78,8 @@ func NewAuthHandlers(
 			return nil, fmt.Errorf("DB Manager cannot be nil")
 	}
 
-	if bookRedisCache == nil {
-		return nil, fmt.Errorf("bookRedisCache cannot be nil")
+	if bookCacheService == nil {
+		return nil, fmt.Errorf("bookCacheService cannot be nil")
 	}
 
 	if db == nil {
@@ -119,7 +118,7 @@ func NewAuthHandlers(
 			logger:    logger,
 			models:    models,
 			dbManager: dbManager,
-			bookRedisCache: bookRedisCache,
+			bookCacheService: bookCacheService,
 			db: db,
 	}, nil
 }
@@ -246,7 +245,7 @@ func (h *AuthHandlers) HandleGoogleCallback(response http.ResponseWriter, reques
     h.logger.Error("Error checking for existing user", "error", err)
     h.redirectWithError(response, request, "database_error")
     return
-}
+	}
 
 	var userId int
 	if existingUser != nil {
@@ -599,58 +598,62 @@ func (h *AuthHandlers) HandleSignOut(response http.ResponseWriter, request *http
 }
 
 func (h *AuthHandlers) HandleDeleteAccount(response http.ResponseWriter, request *http.Request) {
-	h.logger.Info("********************************")
 	h.logger.Info("HandleDeleteAccount called")
 
-	// Log request details
-	h.logger.Info("Request details",
-		"method", request.Method,
-		"url", request.URL.String(),
-		"headers", request.Header,
-	)
+	// Get userID from JWT token
+	userID, err := h.getUserIDFromToken(request)
+	if err != nil {
+			h.logger.Error("Error getting user ID from token", "error", err)
+			http.Error(response, "Unauthorized", http.StatusUnauthorized)
+			return
+	}
 
-	// Get the user ID from JWT token
+	// Delegate account deletion to service layer
+	err = h.authService.ProcessAccountDeletion(request.Context(), userID)
+	if err != nil {
+			h.logger.Error("Error processing account deletion", "error", err)
+			http.Error(response, "Error processing account deletion", http.StatusInternalServerError)
+			return
+	}
+
+	// Clear the session cookie
+	h.clearSessionCookie(response)
+
+	// Prepare response
+	redirectURL := h.getLoginRedirectURL()
+	responseData := DeleteAccountResponse{
+			Message:     "User account marked for deletion and logged out",
+			RedirectURL: redirectURL,
+	}
+
+	response.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(response).Encode(responseData)
+	h.logger.Info("User account marked for deletion and logged out", "userID", userID)
+}
+
+// Todo: replace with crypto jwt helper
+func (h *AuthHandlers) getUserIDFromToken(request *http.Request) (int, error) {
 	cookie, err := request.Cookie("token")
 	if err != nil {
-		h.logger.Error("Error: No token cookie", "error", err)
-		http.Error(response, "Error: No token cookie", http.StatusUnauthorized)
-		return
+		return 0, fmt.Errorf("no token cookie: %w", err)
 	}
 
-	// Log the token value
-	h.logger.Info("Token value", "token", cookie.Value[:10]+"...")
-
-	tokenStr := cookie.Value
-	claims := &types.Claims{}
-
-	token, err := crypto.VerifyToken(tokenStr, config.AppConfig.JWTPublicKey)
+	token, err := crypto.VerifyToken(cookie.Value, config.AppConfig.JWTPublicKey)
 	if err != nil || !token.Valid {
-		h.logger.Error("Error: Invalid token", "error", err)
-		http.Error(response, "Error: Invalid token", http.StatusUnauthorized)
-		return
+		return 0, fmt.Errorf("invalid token: %w", err)
 	}
-	h.logger.Info("Token verified successfully")
 
 	claims, ok := token.Claims.(*types.Claims)
 	if !ok {
-		h.logger.Error("Error: Claims are not of type *types.Claims")
-		http.Error(response, "Error: Invalid token claims", http.StatusUnauthorized)
-
-		return
+		return 0, fmt.Errorf("invalid token claims")
 	}
 
-	// Get the user ID from JWT token
-	userID := claims.UserID
-	h.logger.Info("User ID extracted from token", "userID", userID)
+	return claims.UserID, nil
+}
 
-	err = h.authService.ProcessAccountDeletion(request.Context(), userID)
-	if err != nil {
-		h.logger.Error("Error processing account deletion", "error", err)
-		http.Error(response, "Error processing account deletion", http.StatusInternalServerError)
-		return
-	}
 
-	// Invalidate JWT session cookie
+
+func (h *AuthHandlers) clearSessionCookie(response http.ResponseWriter) {
 	http.SetCookie(response, &http.Cookie{
 		Name:     "token",
 		Value:    "",
@@ -660,95 +663,12 @@ func (h *AuthHandlers) HandleDeleteAccount(response http.ResponseWriter, request
 		SameSite: http.SameSiteLaxMode,
 		Path:     "/",
 	})
+}
 
+func (h *AuthHandlers) getLoginRedirectURL() string {
 	redirectURL := os.Getenv("VITE_FRONTEND_LOGIN_URL")
 	if redirectURL == "" {
 		redirectURL = "http://localhost:5173"
 	}
-
-	responseData := DeleteAccountResponse{
-		Message: "User account marked for deletion and logged out",
-		RedirectURL: redirectURL,
-	}
-	response.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(response).Encode(responseData)
-
-	h.logger.Info("User account marked for deletion and logged out", "userID", userID)
-}
-
-func (h *AuthHandlers) ProcessDeletionQueue() {
-	ctx := context.Background()
-	userIDs, err := h.bookRedisCache.GetDeletionQueue(ctx)
-	if err != nil {
-			h.logger.Error("Error getting deletion queue", "error", err)
-			return
-	}
-
-	for _, userIDStr := range userIDs {
-			userID, err := strconv.Atoi(userIDStr)
-			if err != nil {
-					h.logger.Error("Error converting user ID to int", "userID", userIDStr, "error", err)
-					continue
-			}
-
-			err = h.deleteUser(ctx, userID)
-			if err != nil {
-					h.logger.Error("Error deleting user", "userID", userID, "error", err)
-					continue
-			}
-
-			err = h.bookRedisCache.RemoveFromDeletionQueue(ctx, userIDStr)
-			if err != nil {
-					h.logger.Error("Error removing user from deletion queue", "userID", userID, "error", err)
-			}
-	}
-}
-
-func (h *AuthHandlers) deleteUser(ctx context.Context, userID int) error {
-	// Start a transaction
-	tx, err := h.dbManager.BeginTransaction(ctx)
-	if err != nil {
-			return fmt.Errorf("error starting transaction: %w", err)
-	}
-	defer h.dbManager.RollbackTransaction(tx)
-
-	// A. Get the user ID (we already have it as a parameter)
-
-	// B. Get a list of all bookIDs belonging to the user
-	bookIDs, err := h.models.User.GetUserBookIDs(userID)
-	if err != nil {
-			return fmt.Errorf("error getting user's book IDs: %w", err)
-	}
-
-	// C. Loop through list of bookIDs and use the book_deleter to delete each book and its association
-	bookDeleter, err := repository.NewBookDeleter(h.db, h.logger)
-	if err != nil {
-			return fmt.Errorf("error creating book deleter: %w", err)
-	}
-	for _, bookID := range bookIDs {
-			err = bookDeleter.Delete(bookID)
-			if err != nil {
-					return fmt.Errorf("error deleting book %d: %w", bookID, err)
-			}
-	}
-
-	// D. Delete all tokens associated with the user
-	err = h.models.Token.DeleteByUserID(userID)
-	if err != nil {
-			return fmt.Errorf("error deleting user tokens: %w", err)
-	}
-
-	// E. Delete the user from the users table
-	err = h.models.User.Delete(userID)
-	if err != nil {
-			return fmt.Errorf("error deleting user: %w", err)
-	}
-
-	// Commit the transaction
-	err = h.dbManager.CommitTransaction(tx)
-	if err != nil {
-			return fmt.Errorf("error committing transaction: %w", err)
-	}
-
-	return nil
+	return redirectURL
 }

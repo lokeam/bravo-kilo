@@ -9,6 +9,7 @@ type Metrics struct {
 	mu sync.RWMutex
 
 	// Operation metrics
+	Operations             map[string]string
 	OperationLatency       map[string]time.Duration
 	OperationCount         map[string]int64
 	ErrorCount             map[string]int64

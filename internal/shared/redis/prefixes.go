@@ -12,4 +12,7 @@ const (
 	PrefixBookGenre = "book:genre:"              // for HandleGetBooksByGenres
 	PrefixBookTag = "book:tag:"                  // for HandleGetBooksByTags
 	PrefixBookHomepage = "book:homepage"         // for HandleGetHomepageData
+	PrefixBookMetadata = "book:metadata:"        // for HandleGetBookMetadata
+	PrefixBookList = "book:list:"                // for HandleGetBookList
+	PrefixGemini = "gemini:"                     // for HandleGetGeminiBookSummary
 )

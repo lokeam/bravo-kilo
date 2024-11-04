@@ -15,15 +15,19 @@ type RedisConfig struct {
 
 	// Cache durations for different types of data
 	CacheConfig struct {
-		BookList        time.Duration
-		BookDetail      time.Duration
-		BooksByAuthor   time.Duration
-		BooksByFormat   time.Duration
-		BooksByGenre    time.Duration
-		BooksByTag      time.Duration
-		BookHomepage    time.Duration
-		UserData        time.Duration
-		DefaultTTL      time.Duration
+		BookList                       time.Duration      // 30min
+		BookDetail                     time.Duration
+		BooksByAuthor                  time.Duration
+		BooksByFormat                  time.Duration
+		BooksByGenre                   time.Duration
+		BooksByTag                     time.Duration
+		BookHomepage                   time.Duration
+		UserData                       time.Duration
+		DefaultTTL                     time.Duration
+		DefaultBookCacheExpiration     time.Duration
+		AuthTokenExpiration            time.Duration
+		UserDeletionMarkerExpiration   time.Duration
+		GeminiResponse                 time.Duration
 	}
 
 	// Connection
@@ -98,6 +102,21 @@ func NewRedisConfig() *RedisConfig {
 	config.HealthConfig.MaxRetries = 3                    // Standard 3 retry pattern
 	config.HealthConfig.RetryInterval = 1 * time.Second   // Allow temporary network issues to resolve
 
+	// Cache duration defaults
+	config.CacheConfig.BookList = 30 * time.Minute                         // List of books changes infrequently
+	config.CacheConfig.BookDetail = 1 * time.Hour                         // Individual book details are very stable
+	config.CacheConfig.BooksByAuthor = 1 * time.Hour                      // Author collections change rarely
+	config.CacheConfig.BooksByFormat = 2 * time.Hour                      // Format groupings are very stable
+	config.CacheConfig.BooksByGenre = 2 * time.Hour                       // Genre groupings are very stable
+	config.CacheConfig.BooksByTag = 1 * time.Hour                         // Tags might change more frequently
+	config.CacheConfig.BookHomepage = 15 * time.Minute                    // Homepage needs fresher data
+	config.CacheConfig.UserData = 15 * time.Minute                        // User preferences/settings
+	config.CacheConfig.DefaultBookCacheExpiration = 30 * time.Minute
+	config.CacheConfig.AuthTokenExpiration = 24 * time.Hour
+	config.CacheConfig.UserDeletionMarkerExpiration = 24 * time.Hour
+	config.CacheConfig.DefaultTTL = 10 * time.Minute                      // Conservative default
+  config.CacheConfig.GeminiResponse = 5 * time.Minute
+
 	return config
 }
 
@@ -131,6 +150,31 @@ func (c *RedisConfig) LoadFromEnv() error {
 			c.DB = dbInt
 	}
 
+	// Cache durations
+	if ttl := os.Getenv("REDIS_DEFAULT_BOOK_CACHE_TTL"); ttl != "" {
+		duration, err := time.ParseDuration(ttl)
+		if err != nil {
+				return fmt.Errorf("invalid REDIS_DEFAULT_BOOK_CACHE_TTL: %w", err)
+		}
+		c.CacheConfig.DefaultBookCacheExpiration = duration
+	}
+
+	if ttl := os.Getenv("REDIS_AUTH_TOKEN_TTL"); ttl != "" {
+			duration, err := time.ParseDuration(ttl)
+			if err != nil {
+					return fmt.Errorf("invalid REDIS_AUTH_TOKEN_TTL: %w", err)
+			}
+			c.CacheConfig.AuthTokenExpiration = duration
+	}
+
+	if ttl := os.Getenv("REDIS_USER_DELETION_MARKER_TTL"); ttl != "" {
+			duration, err := time.ParseDuration(ttl)
+			if err != nil {
+					return fmt.Errorf("invalid REDIS_USER_DELETION_MARKER_TTL: %w", err)
+			}
+			c.CacheConfig.UserDeletionMarkerExpiration = duration
+	}
+
 	// Pool settings
 	if maxConns := os.Getenv("REDIS_MAX_ACTIVE_CONNS"); maxConns != "" {
 			val, err := strconv.Atoi(maxConns)
@@ -157,6 +201,14 @@ func (c *RedisConfig) LoadFromEnv() error {
 		c.CacheConfig.DefaultTTL = duration
 	} else {
 		c.CacheConfig.DefaultTTL = 30 * time.Minute
+	}
+
+	if ttl := os.Getenv("REDIS_GEMINI_CACHE_TTL"); ttl != "" {
+		duration, err := time.ParseDuration(ttl)
+		if err != nil {
+				return fmt.Errorf("invalid REDIS_GEMINI_CACHE_TTL: %w", err)
+		}
+		c.CacheConfig.GeminiResponse = duration
 	}
 
 	return nil

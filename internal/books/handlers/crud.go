@@ -337,7 +337,7 @@ func (h *BookHandlers) HandleInsertBook(response http.ResponseWriter, request *h
 	}
 
 	// Attempt immediate cache invalidation
-	ctx, cancel := context.WithTimeout(request.Context(), 2*time.Second)
+	ctx, cancel := context.WithTimeout(request.Context(), h.redisClient.GetConfig().TimeoutConfig.Write)
 	defer cancel()
 
 	if err := h.redisClient.Delete(ctx, cacheKeys...); err != nil {
@@ -360,7 +360,7 @@ func (h *BookHandlers) HandleInsertBook(response http.ResponseWriter, request *h
 						"bookID", bookID,
 				)
 		}
-}
+	}
 
 	// Send response back to FE
 	response.Header().Set("Content-Type", "application/json")
@@ -448,8 +448,12 @@ func (h *BookHandlers) HandleUpdateBook(response http.ResponseWriter, request *h
 			return
 	}
 
-	// Invalidate caches after successful update
+	// Invalidate L1 cache
 	h.BookCache.InvalidateCaches(bookID, userID)
+
+	// Invalidate L2 cache
+
+
 
 	response.WriteHeader(http.StatusOK)
 	json.NewEncoder(response).Encode(map[string]string{"message": "Book updated successfully"})

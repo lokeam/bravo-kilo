@@ -302,6 +302,40 @@ func (c *RedisClient) Ping(ctx context.Context) error {
 	})
 }
 
+// User deletion queue operations
+func (c *RedisClient) AddToDeletionQueue(ctx context.Context, key string, value interface{}) error {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	return c.executeWithRetry(ctx, "add_to_deletion_queue", func() error{
+		return c.client.RPush(ctx, key, value).Err()
+	})
+}
+
+func (c *RedisClient) GetDeletionQueueItems(ctx context.Context, key string, start, stop int64) ([]string, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	var values []string
+	err := c.executeWithRetry(ctx, "get_deletion_queue_items", func() error {
+		var err error
+		values, err = c.client.LRange(ctx, key, start, stop).Result()
+		return err
+	})
+
+	return values, err
+}
+
+func (c *RedisClient) RemoveFromDeletionQueue(ctx context.Context, key string, count int64, value interface{}) error {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	return c.executeWithRetry(ctx, "remove_from_deletion_queue", func() error {
+		return c.client.LRem(ctx, key, count, value).Err()
+	})
+}
+
+// Helper fns
 // Wrap operations with retry logic, circuit breaker and metrics
 func (c *RedisClient) executeWithRetry(ctx context.Context, op string, fn func() error) error {
 	if !c.isReady {
