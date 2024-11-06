@@ -7,6 +7,11 @@ import (
 	"time"
 )
 
+type CircuitBreakerConfig struct {
+	MaxFailures      int           `json:"maxFailures"`
+	ResetTimeout     time.Duration `json:"resetTimeout"`
+	HalfOpenRequests int           `json:"halfOpenRequests"`
+}
 
 type RedisConfig struct {
 	// Metadata
@@ -71,6 +76,9 @@ type RedisConfig struct {
 		MaxRetries     int
 		RetryInterval  time.Duration
 	}
+
+	// Circuit Breaker Settings
+	CircuitBreakerConfig CircuitBreakerConfig
 }
 
 // Configuration validation and defaults
@@ -82,8 +90,8 @@ func NewRedisConfig() *RedisConfig {
 	}
 
 	// Pool defaults
-	config.PoolConfig.MinIdleConns = 3                   // Keeps a small set of connections ready, reducing latency for sudden traffic spikes
-	config.PoolConfig.MaxIdleConns = 10                  // Balances resource usage with performance (10% of MaxActiveConns is a common ratio)
+	config.PoolConfig.MinIdleConns = 10                   // Keeps a small set of connections ready, reducing latency for sudden traffic spikes
+	config.PoolConfig.MaxIdleConns = 20                  // Balances resource usage with performance (10% of MaxActiveConns is a common ratio)
 	config.PoolConfig.MaxActiveConns = 100               // Maximum number of connections total (active + idle)
 	config.PoolConfig.IdleTimeout = 5 * time.Minute      // Average cleanup interval for unused connections
 	config.PoolConfig.MaxConnLifetime = 1 * time.Hour    // Prevents connection staleness while not being too aggressive
@@ -116,6 +124,11 @@ func NewRedisConfig() *RedisConfig {
 	config.CacheConfig.UserDeletionMarkerExpiration = 24 * time.Hour
 	config.CacheConfig.DefaultTTL = 10 * time.Minute                      // Conservative default
   config.CacheConfig.GeminiResponse = 5 * time.Minute
+
+	// Circuit Breaker defaults
+	config.CircuitBreakerConfig.MaxFailures = 5
+	config.CircuitBreakerConfig.ResetTimeout = 10 * time.Second
+	config.CircuitBreakerConfig.HalfOpenRequests = 2
 
 	return config
 }
@@ -211,6 +224,32 @@ func (c *RedisConfig) LoadFromEnv() error {
 		c.CacheConfig.GeminiResponse = duration
 	}
 
+	// Circuit breaker settings
+	if maxFailures := os.Getenv("REDIS_CIRCUIT_MAX_FAILURES"); maxFailures != "" {
+		val, err := strconv.Atoi(maxFailures)
+		if err != nil {
+				return fmt.Errorf("invalid REDIS_CIRCUIT_MAX_FAILURES: %w", err)
+		}
+		c.CircuitBreakerConfig.MaxFailures = val
+	}
+
+	if resetTimeout := os.Getenv("REDIS_CIRCUIT_RESET_TIMEOUT"); resetTimeout != "" {
+		duration, err := time.ParseDuration(resetTimeout)
+		if err != nil {
+				return fmt.Errorf("invalid REDIS_CIRCUIT_RESET_TIMEOUT: %w", err)
+		}
+		c.CircuitBreakerConfig.ResetTimeout = duration
+	}
+
+	if halfOpen := os.Getenv("REDIS_CIRCUIT_HALF_OPEN_REQUESTS"); halfOpen != "" {
+		val, err := strconv.Atoi(halfOpen)
+		if err != nil {
+				return fmt.Errorf("invalid REDIS_CIRCUIT_HALF_OPEN_REQUESTS: %w", err)
+		}
+		c.CircuitBreakerConfig.HalfOpenRequests = val
+	}
+
+
 	return nil
 }
 
@@ -264,6 +303,17 @@ func (c *RedisConfig) Validate() error {
 			if c.HealthConfig.RetryInterval <= 0 {
 					return fmt.Errorf("health check retry interval must be positive")
 			}
+	}
+
+	// Validate circuit breaker config
+	if c.CircuitBreakerConfig.MaxFailures <= 0 {
+		return fmt.Errorf("circuit breaker max failures must be positive")
+	}
+	if c.CircuitBreakerConfig.ResetTimeout <= 0 {
+		return fmt.Errorf("circuit breaker reset timeout must be positive")
+	}
+	if c.CircuitBreakerConfig.HalfOpenRequests <= 0 {
+		return fmt.Errorf("circuit breaker half-open requests must be positive")
 	}
 
 	return nil

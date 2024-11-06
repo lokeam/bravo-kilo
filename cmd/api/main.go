@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime/debug"
 	"syscall"
 	"time"
 
@@ -18,6 +19,7 @@ import (
 	"github.com/lokeam/bravo-kilo/internal/shared/driver"
 	"github.com/lokeam/bravo-kilo/internal/shared/jwt"
 	"github.com/lokeam/bravo-kilo/internal/shared/logger"
+	"github.com/lokeam/bravo-kilo/internal/shared/pages"
 	"github.com/lokeam/bravo-kilo/internal/shared/redis"
 )
 
@@ -37,18 +39,24 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Ensure logs are flushed on exit
-	defer func() {
-		if err := recover(); err != nil {
-			logger.Log.Error("Panic occurred", "error", err)
-		}
-		os.Stdout.Sync()
-	}()
-
 	// Initialize environment and logging
 	if err := initializeEnvironment(); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to initialize environment: %v\n", err)
 		os.Exit(1)
 	}
+
+	// Ensure logs are flushed on exit
+	defer func() {
+		if r := recover(); r != nil {
+				// Now we can safely use logger.Log
+				logger.Log.Error("Panic occurred",
+						"error", r,
+						"stack", string(debug.Stack()))
+
+				// Ensure logs are flushed
+				os.Stdout.Sync()
+		}
+	}()
 
 	log := logger.Log
 
@@ -72,7 +80,12 @@ func main() {
 	}
 
 	// Create server with timeouts
-	srv := app.serve(f.BookHandlers, f.SearchHandlers, f.AuthHandlers)
+	srv := app.serve(
+		f.BookHandlers,
+		f.SearchHandlers,
+		f.AuthHandlers,
+		f.PageHandlers,
+	)
 
 	// Start background workers
 	f.DeletionWorker.StartDeletionWorker()
@@ -134,12 +147,13 @@ func (app *application) serve(
 	bookHandlers *handlers.BookHandlers,
 	searchHandlers *handlers.SearchHandlers,
 	authHandlers *authHandlers.AuthHandlers,
+	pageHandlers *pages.PageHandlers,
 ) *http.Server {
 	app.logger.Info("Initializing server", "port", app.config.port)
 
 	return &http.Server{
 		Addr:         fmt.Sprintf(":%d", app.config.port),
-		Handler:      app.routes(bookHandlers, searchHandlers, authHandlers),
+		Handler:      app.routes(bookHandlers, searchHandlers, authHandlers, pageHandlers),
 		IdleTimeout:  time.Minute,
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 30 * time.Second,

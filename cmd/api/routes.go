@@ -7,6 +7,7 @@ import (
 	"github.com/lokeam/bravo-kilo/cmd/middleware"
 	authhandlers "github.com/lokeam/bravo-kilo/internal/auth/handlers"
 	"github.com/lokeam/bravo-kilo/internal/books/handlers"
+	"github.com/lokeam/bravo-kilo/internal/shared/pages"
 
 	chimiddleware "github.com/go-chi/chi/middleware"
 	"github.com/go-chi/chi/v5"
@@ -28,6 +29,7 @@ func (app *application) routes(
 	bookHandlers *handlers.BookHandlers,
 	searchHandlers *handlers.SearchHandlers,
 	authHandlers *authhandlers.AuthHandlers,
+	pageHandlers *pages.PageHandlers,
 ) http.Handler {
 	mux := chi.NewRouter()
 
@@ -87,6 +89,11 @@ func (app *application) routes(
 			r.With(middleware.RateLimiter).Put("/{bookID}", bookHandlers.HandleUpdateBook)
 			r.With(middleware.RateLimiter).Post("/add", bookHandlers.HandleInsertBook)
 			r.With(middleware.RateLimiter).Delete("/{bookID}", bookHandlers.HandleDeleteBook)
+		})
+
+		r.Route("/api/v1/pages", func(r chi.Router) {
+			r.Use(middleware.VerifyJWT)
+			r.With(middleware.RateLimiter).Get("/library", pageHandlers.Library.HandleGet)
 		})
 	})
 

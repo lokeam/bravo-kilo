@@ -18,6 +18,8 @@ import (
 	"github.com/lokeam/bravo-kilo/internal/books/services"
 	"github.com/lokeam/bravo-kilo/internal/shared/cache"
 	"github.com/lokeam/bravo-kilo/internal/shared/models"
+	"github.com/lokeam/bravo-kilo/internal/shared/pages"
+	library "github.com/lokeam/bravo-kilo/internal/shared/pages/library"
 	"github.com/lokeam/bravo-kilo/internal/shared/redis"
 	"github.com/lokeam/bravo-kilo/internal/shared/transaction"
 	"github.com/lokeam/bravo-kilo/internal/shared/workers"
@@ -31,6 +33,8 @@ type Factory struct {
     DeletionWorker *workers.DeletionWorker
     CacheWorker    *workers.CacheWorker
     CacheManager   *cache.CacheManager
+    LibraryHandler *library.Handler
+    PageHandlers   *pages.PageHandlers
 }
 
 func NewFactory(ctx context.Context, db *sql.DB, redisClient *redis.RedisClient, log *slog.Logger) (*Factory, error) {
@@ -248,6 +252,13 @@ func NewFactory(ctx context.Context, db *sql.DB, redisClient *redis.RedisClient,
         return nil, err
     }
 
+    pageHandlers, err := pages.NewPageHandlers(
+        bookHandlers,
+        redisClient,
+        log.With("component", "page_handlers"),
+        cacheManager,
+    )
+
     // Initialize workers
     deletionWorker := workers.NewDeletionWorker(
         24*time.Hour,
@@ -263,5 +274,6 @@ func NewFactory(ctx context.Context, db *sql.DB, redisClient *redis.RedisClient,
         DeletionWorker: deletionWorker,
         CacheWorker:    cacheWorker,
         CacheManager:   cacheManager,
+        PageHandlers: pageHandlers,
     }, nil
 }

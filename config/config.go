@@ -13,6 +13,12 @@ import (
 	"golang.org/x/oauth2/google"
 )
 
+type CircuitBreakerConfig struct {
+	MaxFailures      int           `json:"maxFailures"`
+	ResetTimeout     time.Duration `json:"resetTimeout"`
+	HalfOpenRequests int           `json:"halfOpenRequests"`
+}
+
 type Config struct {
 	GoogleLoginConfig oauth2.Config
 	JWTPrivateKey     *rsa.PrivateKey

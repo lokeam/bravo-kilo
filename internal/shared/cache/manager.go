@@ -29,8 +29,16 @@ type CacheManager struct {
 
 type CacheMetrics struct {
 		mu             sync.RWMutex
-    L1Failures     int64
-    L2Failures     int64
+		Operations     map[string]int64
+
+		L1Failures     int64
+        L2Failures     int64
+
+		L2Hits         int64
+		L2Misses       int64
+		Errors         int64
+		UnmarshalErrs  int64
+
     TotalOps       int64
     LastError      error
     LastErrorTime  time.Time
@@ -46,6 +54,7 @@ func NewCacheMetrics() *CacheMetrics {
 		OperationLatency: make(map[string]time.Duration),
 		OperationCount:   make(map[string]int64),
 		ErrorCount:       make(map[string]int64),
+
 	}
 }
 

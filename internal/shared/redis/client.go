@@ -15,6 +15,7 @@ type ClientStatus int // Current state of Redis client
 const (
 	StatusInitializing ClientStatus = iota
 	StatusReady
+	StatusRecovering
 	StatusError
 	StatusClosed
 )
@@ -58,6 +59,23 @@ type RedisClient struct {
 
 // Functional options
 type ClientOption func(*RedisClient)
+
+func (s ClientStatus) String() string {
+	switch s {
+	case StatusInitializing:
+			return "INITIALIZING"
+	case StatusReady:
+			return "READY"
+	case StatusError:
+			return "ERROR"
+	case StatusRecovering:
+			return "RECOVERING"
+	case StatusClosed:
+			return "CLOSED"
+	default:
+			return "UNKNOWN"
+	}
+}
 
 // Add Metrics collection
 func WithMetrics(metrics *Metrics) ClientOption {
@@ -120,6 +138,13 @@ func NewRedisClient(cfg *RedisConfig, logger *slog.Logger, opts ...ClientOption)
 
 	client.client = redis.NewClient(redisOpts)
 
+    // Initialize circuit breaker with the config value (not a pointer)
+    breaker, err := NewCircuitBreaker(cfg.CircuitBreakerConfig)  // Remove the & operator
+    if err != nil {
+        return nil, fmt.Errorf("failed to initialize circuit breaker: %w", err)
+    }
+    client.breaker = breaker
+
 	// Initialize health checker
 	health, err := NewHealthChecker(client, cfg, logger)
 	if err != nil {
@@ -145,6 +170,14 @@ func (c *RedisClient) Connect(ctx context.Context) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	// Set initial status before attempting connection
+	c.updateStatus(StatusInitializing)
+
+	c.logger.Info("Attempting Redis connection",
+		"host", c.config.Host,
+		"port", c.config.Port,
+		"currentStatus", c.status)
+
 	if c.isReady {
 		return nil
 	}
@@ -152,11 +185,16 @@ func (c *RedisClient) Connect(ctx context.Context) error {
 	if err := c.client.Ping(ctx).Err(); err != nil {
 		c.status = StatusError
 		c.lastError = err
+		slog.Error("Redis connection failed",
+				"error", err,
+				"host", c.config.Host,
+				"port", c.config.Port)
 		return fmt.Errorf("failed to connect to Redis: %w", err)
-	}
+}
 
 	c.status = StatusReady
 	c.isReady = true
+	c.updateStatus(StatusReady)
 
 	// Start health check
 	if err := c.health.Start(ctx); err != nil {
@@ -191,9 +229,11 @@ func (c *RedisClient) Close() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if c.status == StatusClosed {
-		return nil
-	}
+	if err := c.client.Close(); err != nil {
+		c.lastError = err
+		c.updateStatus(StatusError)
+		return err
+}
 
 	// Signal shutdown
 	close(c.shutdown)
@@ -217,6 +257,8 @@ func (c *RedisClient) Close() error {
 	close(c.done)
 
 	c.logger.Info("Redis client closed successfully")
+	c.isReady = false
+	c.updateStatus(StatusClosed)
 	return nil
 }
 
@@ -224,15 +266,53 @@ func (c *RedisClient) Close() error {
 // CRUD operations
 // Retrieve value from Redis
 func (c *RedisClient) Get(ctx context.Context, key string) (string, error) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
+	start := time.Now()
+	slog.Info("Redis operation starting",
+		"operation", "GET",
+		"key", key,
+		"clientStatus", c.status,
+		"circuitState", c.breaker.GetState())
 
-	var val string
-	err := c.executeWithRetry(ctx, "get", func() error {
-			var err error
-			val, err = c.client.Get(ctx, key).Result()
-			return err
-	})
+
+	if !c.IsReady() {
+		slog.Error("Redis client not ready for GET operation",
+				"status", c.status,
+				"isReady", c.isReady,
+		)
+		return "", fmt.Errorf("redis client not ready")
+	}
+
+	// Add logging for debugging
+	slog.Info("@@@@@@@@@@@@@@ REDIS CLIENT GET @@@@@@@@@@@@@@")
+	slog.Info("Redis Get operation starting",
+			"key", key,
+			"clientStatus", c.status,
+			"isReady", c.IsReady(),
+	)
+	val, err := c.client.Get(ctx, key).Result()
+
+	// Log the result of the GET operation
+	if err != nil {
+			if err == redis.Nil {
+					slog.Info("Cache miss for key",
+							"key", key,
+							"error", "key not found")
+			} else {
+					slog.Error("Redis GET operation failed",
+							"key", key,
+							"error", err)
+			}
+	} else {
+			slog.Info("Cache hit for key",
+					"key", key,
+					"valueLength", len(val))
+	}
+
+	slog.Info("Redis operation completed",
+	"operation", "GET",
+	"key", key,
+	"duration", time.Since(start),
+	"status", "success")
 
 	return val, err
 }
@@ -339,8 +419,12 @@ func (c *RedisClient) RemoveFromDeletionQueue(ctx context.Context, key string, c
 // Wrap operations with retry logic, circuit breaker and metrics
 func (c *RedisClient) executeWithRetry(ctx context.Context, op string, fn func() error) error {
 	if !c.isReady {
-			return fmt.Errorf("%s operation failed: redis client is not ready", op)
-	}
+		slog.Error("Redis client not ready for operation",
+				"operation", op,
+				"status", c.status,
+				"isReady", c.isReady)
+		return fmt.Errorf("%s operation failed: redis client is not ready", op)
+}
 
 	start := time.Now()
 	var err error
@@ -358,6 +442,13 @@ func (c *RedisClient) executeWithRetry(ctx context.Context, op string, fn func()
 
 	duration := time.Since(start)
 
+    // Handle operation result
+    if err != nil {
+			c.handleOperationError(err)
+		} else {
+				c.handleOperationSuccess()
+		}
+
 	// Record metrics
 	if c.metrics != nil {
 			c.metrics.RecordOperationDuration(op, duration, err)
@@ -374,12 +465,23 @@ func (c *RedisClient) executeWithRetry(ctx context.Context, op string, fn func()
 	// Update client stats
 	c.updateStats(err)
 
+
+	c.logger.Info("Redis operation completed",
+	"operation", op,
+	"duration", duration,
+	"error", err,
+	"circuitBreakerState", c.breaker.GetState().String())
+
 	return err
 }
 
 func (c *RedisClient) withCircuitBreaker(ctx context.Context, op string, fn func() error) error {
 	if c.breaker != nil {
 		if err := c.breaker.AllowWithContext(ctx); err != nil {
+			slog.Info("Circuit breaker rejected request",
+			"operation", op,
+			"circuitState", c.breaker.GetState(),
+			"error", err)
 			return fmt.Errorf("%s operation failed: circuit breaker rejected request: %w", op, err)
 		}
 	}
@@ -388,8 +490,16 @@ func (c *RedisClient) withCircuitBreaker(ctx context.Context, op string, fn func
 
 	if c.breaker != nil {
 		if err != nil {
+			slog.Info("Circuit breaker operation failed, recording failure",
+			"operation", op,
+			"error", err,
+			"circuitState", c.breaker.GetState())
 			c.breaker.RecordFailure()
 		} else {
+			slog.Info("Circuit breaker operation success",
+			"operation", op,
+			"circuitState", c.breaker.GetState())
+
 			c.breaker.RecordSuccess()
 		}
 	}
@@ -415,13 +525,98 @@ func (c *RedisClient) updatePoolMetrics() {
 }
 
 func (c *RedisClient) updateStats(err error) {
-	c.mu.Lock()  // Add mutex protection
+	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	c.stats.Operations++
 	c.stats.LastOperation = time.Now()
 
-	if err != nil {
-		c.stats.Errors++
+	if err != nil && err != redis.Nil { // Don't count cache misses as errors
+			c.stats.Errors++
+			slog.Error("Redis operation error recorded",
+					"totalErrors", c.stats.Errors,
+					"error", err,
+			)
 	}
+}
+
+// Check if Redis client is ready
+func (c *RedisClient) IsReady() bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.isReady && c.status == StatusReady
+}
+
+func (c *RedisClient) GetStatus() ClientStatus {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.status
+}
+
+func (c *RedisClient) updateStatus(newStatus ClientStatus) {
+	prevStatus := c.status
+
+	// Build log fields dynamically to handle nil circuit breaker
+	logFields := []any{
+		"prevStatus", prevStatus,
+		"newStatus", newStatus,
+	}
+
+	// Add error info if exists
+	if c.lastError != nil {
+		logFields = append(logFields, "lastError", c.lastError)
+	}
+
+	// Only add circuit breaker state if it exists
+	if c.breaker != nil {
+		logFields = append(logFields, "circuitState", c.breaker.GetState())
+	}
+
+	// Add metrics if they exist
+	if c.stats != nil {
+		logFields = append(logFields,
+				"totalOperations", c.stats.Operations,
+				"totalErrors", c.stats.Errors,
+				"uptime", time.Since(c.stats.StartTime),
+		)
+	}
+
+	// Add connection status change logging
+	slog.Info("Redis connection status changed",
+		"prevStatus", prevStatus,
+		"newStatus", newStatus,
+		"circuitState", c.breaker.GetState(),
+		"lastError", c.lastError,
+		"totalOperations", c.stats.Operations,
+		"totalErrors", c.stats.Errors,
+		"uptime", time.Since(c.stats.StartTime))
+
+
+	c.status = newStatus
+}
+
+func (c *RedisClient) GetCircuitBreaker() *CircuitBreaker {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.breaker
+}
+
+// In error handling for operations (e.g., Get, Set)
+func (c *RedisClient) handleOperationError(err error) {
+	if err != nil && err != redis.Nil { // Don't count cache misses
+			c.lastError = err
+			c.updateStatus(StatusError)
+			c.breaker.RecordFailure()
+	}
+}
+
+// After successful recovery
+func (c *RedisClient) handleOperationSuccess() {
+	if c.status != StatusReady {
+		c.updateStatus(StatusReady)
+	}
+	c.breaker.RecordSuccess()
+	slog.Info("Redis operation completed successfully",
+			"clientStatus", c.status,
+			"circuitState", c.breaker.GetState())
 }

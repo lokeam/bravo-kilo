@@ -3,6 +3,7 @@ package redis
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"sync"
 	"time"
 )
@@ -52,12 +53,6 @@ type CircuitBreaker struct {
 	consecutiveFailures   int
 	totalSuccesses        int64
 	lastStateChange       time.Time
-}
-
-type CircuitBreakerConfig struct {
-	MaxFailures       int              // Max number of failures that will trip circuit
-	ResetTimeout      time.Duration    // Idle duration before attempting to reset circuit
-	HalfOpenRequests  int              // Number of requets allowed through testing if system has recovered
 }
 
 func NewCircuitBreaker(config CircuitBreakerConfig) (*CircuitBreaker, error) {
@@ -136,13 +131,27 @@ func (cb *CircuitBreaker) RecordFailure() {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
 
+	now := time.Now()
+
+	// Add enhanced failure pattern logging
+	slog.Info("Circuit breaker failure recorded",
+			"currentState", cb.state.String(),
+			"consecutiveFailures", cb.consecutiveFailures + 1,
+			"totalFailures", cb.totalFailures + 1,
+			"maxFailures", cb.maxFailures,
+			"timeSinceLastFailure", now.Sub(cb.lastFailure),
+			"timeSinceLastSuccess", now.Sub(cb.lastSuccess))
+
 	cb.failures++
 	cb.consecutiveFailures++
 	cb.totalFailures++
-	cb.lastFailure = time.Now()
+	cb.lastFailure = now
 
 	if cb.state == StateClosed && cb.failures >= cb.maxFailures {
-		cb.transitionTo(StateOpen)
+			slog.Warn("Circuit breaker threshold reached - transitioning to open",
+					"failures", cb.failures,
+					"maxFailures", cb.maxFailures)
+			cb.transitionTo(StateOpen)
 	}
 }
 
@@ -213,14 +222,24 @@ func (cb *CircuitBreaker) Reset() {
 }
 
 func (cb *CircuitBreaker) transitionTo(newState CircuitState) {
+	prevState := cb.state
+
+	// Add detailed state transition logging
+	slog.Info("Circuit breaker state transition",
+			"prevState", prevState.String(),
+			"newState", newState.String(),
+			"consecutiveFailures", cb.consecutiveFailures,
+			"totalFailures", cb.totalFailures,
+			"lastStateChange", cb.lastStateChange)
+
 	if cb.onStateChange != nil {
-		cb.onStateChange(cb.state, newState)
+			cb.onStateChange(cb.state, newState)
 	}
 
 	cb.state = newState
 	cb.lastStateChange = time.Now()
 
 	if newState == StateHalfOpen {
-		cb.halfOpenCount = 0
+			cb.halfOpenCount = 0
 	}
 }
