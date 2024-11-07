@@ -86,20 +86,20 @@ func (h *Handler) HandleGet(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 2. Get domain from query param
-	domain := DomainType(r.URL.Query().Get("domain"))
-	if domain == "" {
-			domain = BooksDomain // Default to books if not specified
+	domainType := DomainType(r.URL.Query().Get("domain"))
+	if domainType == "" {
+		domainType = BooksDomain // Default to books if not specified
 	}
 
 	// 3. Validate domain
-	domainHandler, exists := h.domains[string(domain)]
+	domainHandler, exists := h.domains[string(domainType)]
 	if !exists {
-			h.respondWithError(w, fmt.Errorf("invalid domain: %s", domain), http.StatusBadRequest)
+			h.respondWithError(w, fmt.Errorf("invalid domain: %s", domainType), http.StatusBadRequest)
 			return
 	}
 
 	// 4. Check cache
-	cacheKey := fmt.Sprintf("page:library:%d:domain:%s", userID, domain)
+	cacheKey := fmt.Sprintf("page:library:%d:domain:%s", userID, domainType)
 	if cached, err := h.redisClient.Get(ctx, cacheKey); err == nil {
 			// Add metrics for cache hits/misses
 			atomic.AddInt64(&h.metrics.CacheHits, 1)
@@ -121,7 +121,7 @@ func (h *Handler) HandleGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 5. Get domain data
+	// 5. Get domain data, call various domain handler methods (BookDomainHandler is default)
 	data, err := domainHandler.GetLibraryItems(ctx, userID)
 	if err != nil {
 			h.respondWithError(w, err, http.StatusInternalServerError)
@@ -151,6 +151,11 @@ func (h *Handler) HandleGet(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) RegisterDomain(domain types.DomainHandler) {
 	if domain == nil {
 		h.logger.Error("library handler attempted to register nil domain handler")
+		return
+	}
+
+	if domain.GetType() == "" {
+		h.logger.Error("domain type cannot be empty")
 		return
 	}
 

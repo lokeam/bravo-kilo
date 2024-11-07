@@ -188,6 +188,25 @@ func (h *BookHandlers) HandleGetAllUserBooks(response http.ResponseWriter, reque
 	})
 }
 
+// Domain refactor - GetAllUserBooks
+func (h *BookHandlers) GetAllUserBooksDomain(ctx context.Context, userID int) ([]repository.Book, error) {
+	// Database fetch
+	books, err := h.bookRepo.GetAllBooksByUserID(userID)
+	if err != nil {
+		h.logger.Error(
+			"GetAllUserBooksDomain - Database fetch failed",
+			"error", err,
+			"errorType", fmt.Errorf("error fetching books %w", err))
+		return nil, fmt.Errorf("error fetching books: %w", err)
+	}
+
+	// Reverse normalize book data
+	h.bookService.ReverseNormalizeBookData(&books)
+
+	return books, nil
+}
+
+
 // Retrieve books by a specific author
 func (h *BookHandlers) HandleGetBooksByAuthors(response http.ResponseWriter, request *http.Request) {
 	requestID := uuid.New().String()
@@ -274,6 +293,28 @@ func (h *BookHandlers) HandleGetBooksByAuthors(response http.ResponseWriter, req
 	})
 	h.logger.Info("Response sent successfully", "requestID", requestID)
 }
+
+// Domain refactor - GetBooksByAuthors
+func (h *BookHandlers) GetBooksByAuthorsDomain(ctx context.Context, userID int) (map[string]interface{}, error) {
+	h.logger.Info("GetBooksByAuthorsDomain called",
+			"userID", userID)
+
+	// Database fetch
+	booksByAuthors, err := h.authorRepo.GetAllBooksByAuthors(userID)
+	if err != nil {
+			h.logger.Error("Database fetch failed",
+					"error", err,
+					"errorType", fmt.Sprintf("%T", err))
+			return nil, fmt.Errorf("error fetching books by authors: %w", err)
+	}
+
+	// Apply any necessary data transformations here
+	// Note: Based on the original handler, no transformations were needed
+
+	return booksByAuthors, nil
+}
+
+
 
 // Get Single Book by ID
 func (h *BookHandlers) HandleGetBookByID(response http.ResponseWriter, request *http.Request) {
@@ -641,6 +682,28 @@ func (h *BookHandlers) HandleGetBooksByFormat(response http.ResponseWriter, requ
 	//h.logger.Info("HandleGetBooksByFormat completed successfully")
 }
 
+// Domain refactor - GetBooksByFormatDomain
+func (h *BookHandlers) GetBooksByFormatDomain(ctx context.Context, userID int) (map[string]interface{}, error) {
+	// Fetch original data
+	booksByFormat, err := h.formatRepo.GetAllBooksByFormat(userID)
+	if err != nil {
+		h.logger.Error("Database fetch failed",
+			"error", err,
+			"errorType", fmt.Sprintf("%T", err))
+		return nil, fmt.Errorf("error fetching books by format: %w", err	)
+	}
+
+	// Transform data
+	result := make(map[string]interface{})
+	for format, books := range booksByFormat {
+		h.bookService.ReverseNormalizeBookData(&books)
+		booksByFormat[format] = books
+	}
+
+	return result, nil
+}
+
+
 // Sorting - Get Books by Genre
 func (h *BookHandlers) HandleGetBooksByGenres(response http.ResponseWriter, request *http.Request) {
 	h.logger.Info("HandleGetBooksByGenres called")
@@ -702,6 +765,21 @@ func (h *BookHandlers) HandleGetBooksByGenres(response http.ResponseWriter, requ
 	//h.logger.Info("HandleGetBooksByGenres completed successfully")
 }
 
+// Domain refactor - GetBooksByGenresDomain
+func (h *BookHandlers) GetBooksByGenreDomain(ctx context.Context, userID int) (map[string]interface{}, error) {
+	// Fetch original data
+	booksByGenre, err := h.genreRepo.GetAllBooksByGenres(ctx, userID)
+	if err != nil {
+		h.logger.Error("Database fetch failed",
+			"error", err,
+			"errorType", fmt.Sprintf("%T", err))
+		return nil, fmt.Errorf("error fetching books by genre: %w", err)
+	}
+
+	return booksByGenre, nil
+}
+
+
 // Sorting - Get Books by Tag
 func (h *BookHandlers) HandleGetBooksByTags(response http.ResponseWriter, request *http.Request) {
 	h.logger.Info("HandleGetBooksByTags called")
@@ -760,6 +838,21 @@ func (h *BookHandlers) HandleGetBooksByTags(response http.ResponseWriter, reques
 		},
 	})
 }
+
+// Domain refactor - GetBooksByTagsDomain
+func (h *BookHandlers) GetBooksByTagsDomain(ctx context.Context, userID int) (map[string]interface{}, error) {
+	// Fetch original data
+	booksByTags, err := h.tagRepo.GetAllBooksByTags(ctx, userID)
+	if err != nil {
+		h.logger.Error("Database fetch failed",
+			"error", err,
+			"errorType", fmt.Sprintf("%T", err))
+		return nil, fmt.Errorf("error fetching books by tags: %w", err)
+	}
+
+	return booksByTags, nil
+}
+
 
 // Build Homepage Analytics Data Response
 func (h *BookHandlers) HandleGetHomepageData(response http.ResponseWriter, request *http.Request) {

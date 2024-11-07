@@ -27,6 +27,37 @@ func init() {
 	logger = slog.New(slog.NewJSONHandler(os.Stdout, nil))
 }
 
+// RateLimiter creates a new rate limiting middleware with configurable limits
+func CreateRateLimiter(config RateLimitConfig) func(http.Handler) http.Handler {
+	limiterService := NewRateLimiterService(config)
+
+	return func(next http.Handler) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					// Get user identifier (IP + UserID if authenticated)
+					identifier := r.RemoteAddr
+					if userID, ok := GetUserID(r.Context()); ok {
+							identifier = fmt.Sprintf("%s-%d", identifier, userID)
+					}
+
+					// Check rate limit
+					if !limiterService.Allow(identifier) {
+							logger.Warn("Rate limit exceeded",
+									"path", r.URL.Path,
+									"method", r.Method,
+									"identifier", identifier,
+									"limit", config.RequestsPerMinute,
+							)
+
+							w.Header().Set("Retry-After", "60")
+							http.Error(w, "Rate limit exceeded. Please try again later.", http.StatusTooManyRequests)
+							return
+					}
+
+					next.ServeHTTP(w, r)
+			})
+	}
+}
+
 // Set limiter to 1 req/second w/ burst of 5
 func RateLimiter(next http.Handler) http.Handler {
     return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -1,8 +1,10 @@
 package pages
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/lokeam/bravo-kilo/internal/books/handlers"
 	"github.com/lokeam/bravo-kilo/internal/shared/cache"
@@ -70,10 +72,21 @@ func NewPageHandlers(
 
 // Handle graceful shutdown + metrics reporting
 func (h *PageHandlers) Cleanup() error {
-	if err := h.Library.Cleanup(); err != nil {
-		h.logger.Error("error cleaning up library handler", "error", err)
-		return fmt.Errorf("library handler cleanup failed: %w", err)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 
+
+	// Add cleanup channels
+	done := make(chan error)
+	go func() {
+		done <- h.Library.Cleanup()
+	}()
+
+	select {
+	case err := <-done:
+		return err
+	case <-ctx.Done():
+		return fmt.Errorf("cleanup timed out")
 	}
 
 	h.logger.Info("page handlers cleanup successful")
