@@ -4,14 +4,14 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import PageWithErrorBoundary from '../ErrorMessages/PageWithErrorBoundary';
 import { TAILWIND_FORM_CLASSES } from '../../consts/styleConsts';
 import { languages } from '../../consts/languages';
-import { BookFormData, Book, StringifiedBookFormData } from '../../types/api';
+import { BookFormData, Book } from '../../types/api';
 import { bookSchema } from '../../utils/bookSchema';
 import { IoClose, IoAddOutline } from 'react-icons/io5';
 import { useFormatPublishDate } from '../../utils/formatPublishDate';
 import _ from 'lodash';
 import Delta from 'quill-delta';
 import QuillEditor from '../Quill/QuillEditor';
-import { transformBookData, transformFormData } from '../../utils/bookFormHelpers';
+import { transformBookData } from '../../utils/bookFormHelpers';
 import 'quill/dist/quill.snow.css';
 
 interface BookFormProps {

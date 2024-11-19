@@ -12,8 +12,6 @@ import { IoIosWarning } from "react-icons/io";
 import { TbEdit } from "react-icons/tb";
 import QuillContent from '../components/Quill/QuillContent';
 
-import Delta from 'quill-delta';
-
 interface MissingInfoWarningProps {
   emptyFields: string[]
 }
@@ -92,10 +90,6 @@ const BookDetail = () => {
 
   const bookCover = book?.imageLink;
   console.log('testing bookCover: ', bookCover);
-
-  // const description = book.description?.Valid ? JSON.parse(book.description.String) : 'No book description available';
-  // const notes = book.notes?.Valid ? JSON.parse(book.notes.String) : 'No personal notes available';
-
 
   const parseRichTextContent = (content: any) => {
     if (!content) return null;
@@ -258,12 +252,12 @@ const BookDetail = () => {
               </div>
             </div>
             <div className="bk_description text-left mb-4">
-              <h3 className="text-2xl font-bold pb-2 text-black dark:text-white">Book Description</h3>
+              <h3 className="text-2xl font-bold mb-4 pb-2 text-black dark:text-white">Book Description</h3>
               { description && <QuillContent content={description} /> }
             </div>
             {hasNotes && (
               <div className="bk_description text-left mb-4">
-                <h3 className="text-2xl font-bold mb-2 text-black dark:text-white">Personal Notes</h3>
+                <h3 className="text-2xl font-bold mb-4 text-black dark:text-white">Personal Notes</h3>
                 { notes && <QuillContent content={notes} />}
               </div>
             )}

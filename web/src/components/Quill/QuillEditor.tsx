@@ -23,6 +23,15 @@ function hasOps(obj: any): obj is { ops: any[] } {
   return obj && typeof obj === 'object' && 'ops' in obj;
 }
 
+// Additional typeguard for nested ops
+function hasNestedOps(obj: any): obj is { insert: { ops: any[] } } {
+  return obj && typeof obj === 'object' &&
+         'insert' in obj &&
+         typeof obj.insert === 'object' &&
+         obj.insert !== null &&
+         'ops' in obj.insert;
+}
+
 
 const QuillEditor: React.FC<QuillEditorProps> = ({
   value,
@@ -45,30 +54,10 @@ const QuillEditor: React.FC<QuillEditorProps> = ({
       if (val instanceof Delta) {
         console.log('Value is Delta instance:', val);
 
-        // Handle nested Delta structure
-        const insert = val.ops?.[0].insert;
-        if (
-          insert &&
-          typeof insert === 'object' &&
-          hasOps(insert)
-        ) {
+        // Handle nested Delta structure using typeguard
+        if (val.ops?.[0] && hasNestedOps(val.ops[0])) {
           console.log('Found nested Delta structure');
-          const nestedOps = insert.ops;
-
-          // Handle stringified content in nested ops
-          if (typeof nestedOps[0]?.insert === 'string') {
-            try {
-              const parsed = JSON.parse(nestedOps[0].insert);
-              if (parsed.ops === null) {
-                return new Delta([{ insert: '\n' }]);
-              }
-              return new Delta(parsed.ops || []);
-            } catch {
-              return new Delta([{ insert: nestedOps[0].insert }]);
-            }
-          }
-
-          return new Delta(nestedOps);
+          return new Delta(val.ops[0].insert.ops);
         }
 
         // If ops is null or empty, return empty Delta
@@ -99,8 +88,12 @@ const QuillEditor: React.FC<QuillEditorProps> = ({
 
         // Handle nested Delta structure
         if (val.ops?.[0]?.insert?.ops) {
-          const nestedOps = val.ops[0].insert.ops;
-          return new Delta(nestedOps);
+          return new Delta(val.ops[0].insert.ops);
+        }
+
+        // Handle nested Delta structure using typeguard
+        if (val.ops[0] && hasNestedOps(val.ops[0])) {
+          return new Delta(val.ops[0].insert.ops);
         }
 
         // If ops is null or empty string, return empty Delta
@@ -124,7 +117,6 @@ const QuillEditor: React.FC<QuillEditorProps> = ({
 
         // Handle normal ops array
         if (Array.isArray(val.ops)) {
-          console.log('Handling ops array:', val.ops);
           return new Delta(val.ops);
         }
 
