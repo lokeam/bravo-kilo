@@ -15,10 +15,8 @@ type BookInfo struct {
 	PublishDate string
 }
 
-type RichText struct {
-	Ops []DeltaOp `json:"ops"`
-}
-
+// DeltaOp represents a single operation in a Quill Delta format.
+// Each operation can have an Insert value and optional formatting Attributes.
 type DeltaOp struct {
 	Insert     interface{}            `json:"insert,omitempty"`     // Changed from *string to interface{}
 	Attributes map[string]interface{} `json:"attributes,omitempty"`

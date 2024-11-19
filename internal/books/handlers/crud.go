@@ -65,9 +65,11 @@ func (h *BookHandlers) HandleGetAllUserBooks(response http.ResponseWriter, reque
 	startTime := time.Now()
 
 	h.logger.Info("=== HandleGetAllUserBooks Trace Start ===", "requestID", requestID)
-	defer h.logger.Info("=== HandleGetAllUserBooks Trace End ===",
+	defer func() {
+		h.logger.Info("=== HandleGetAllUserBooks Trace End ===",
 			"requestID", requestID,
 			"duration", time.Since(startTime))
+	}()
 
 	// Set Content Security Policy headers
 	utils.SetCSPHeaders(response)
@@ -840,17 +842,26 @@ func (h *BookHandlers) HandleGetBooksByTags(response http.ResponseWriter, reques
 }
 
 // Domain refactor - GetBooksByTagsDomain
-func (h *BookHandlers) GetBooksByTagsDomain(ctx context.Context, userID int) (map[string]interface{}, error) {
-	// Fetch original data
+func (h *BookHandlers) GetBooksByTagsDomain(ctx context.Context, userID int) (map[string][]repository.Book, error) {
 	booksByTags, err := h.tagRepo.GetAllBooksByTags(ctx, userID)
 	if err != nil {
-		h.logger.Error("Database fetch failed",
-			"error", err,
-			"errorType", fmt.Sprintf("%T", err))
-		return nil, fmt.Errorf("error fetching books by tags: %w", err)
+			h.logger.Error("Database fetch failed",
+					"error", err,
+					"errorType", fmt.Sprintf("%T", err))
+			return nil, fmt.Errorf("error fetching books by tags: %w", err)
 	}
 
-	return booksByTags, nil
+	// Type assertion to ensure correct type
+	result := make(map[string][]repository.Book)
+	for tag, books := range booksByTags {
+			if booksSlice, ok := books.([]repository.Book); ok {
+					result[tag] = booksSlice
+			} else {
+					return nil, fmt.Errorf("invalid data structure for tag %s", tag)
+			}
+	}
+
+	return result, nil
 }
 
 
