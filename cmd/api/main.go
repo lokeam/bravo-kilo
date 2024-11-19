@@ -19,8 +19,9 @@ import (
 	"github.com/lokeam/bravo-kilo/internal/shared/driver"
 	"github.com/lokeam/bravo-kilo/internal/shared/jwt"
 	"github.com/lokeam/bravo-kilo/internal/shared/logger"
-	"github.com/lokeam/bravo-kilo/internal/shared/pages"
+	"github.com/lokeam/bravo-kilo/internal/shared/pages/library"
 	"github.com/lokeam/bravo-kilo/internal/shared/redis"
+	"github.com/lokeam/bravo-kilo/internal/shared/validator"
 )
 
 var defaultRedisClient *redis.RedisClient
@@ -84,7 +85,8 @@ func main() {
 		f.BookHandlers,
 		f.SearchHandlers,
 		f.AuthHandlers,
-		f.PageHandlers,
+		f.LibraryPageHandler,
+		f.BaseValidator,
 	)
 
 	// Start background workers
@@ -147,13 +149,14 @@ func (app *application) serve(
 	bookHandlers *handlers.BookHandlers,
 	searchHandlers *handlers.SearchHandlers,
 	authHandlers *authHandlers.AuthHandlers,
-	pageHandlers *pages.PageHandlers,
+	libraryPageHandler *library.LibraryPageHandler,
+	baseValidator *validator.BaseValidator,
 ) *http.Server {
 	app.logger.Info("Initializing server", "port", app.config.port)
 
 	return &http.Server{
 		Addr:         fmt.Sprintf(":%d", app.config.port),
-		Handler:      app.routes(bookHandlers, searchHandlers, authHandlers, pageHandlers),
+		Handler:      app.routes(bookHandlers, searchHandlers, authHandlers, libraryPageHandler, baseValidator),
 		IdleTimeout:  time.Minute,
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 30 * time.Second,
@@ -220,15 +223,15 @@ func gracefulShutdown(ctx context.Context, srv *http.Server, f *factory.Factory,
 	// Stop book cache cleanup worker
 	f.BookHandlers.BookCache.StopCleanupWorker()
 
-	metrics := f.CacheManager.GetMetrics()
-	log.Info("Final cache metrics",
-		"totalOps", metrics.TotalOps,
-		"l1Failures", metrics.L1Failures,
-		"l2Failures", metrics.L2Failures,
-	)
 	// Cleanup prepared statements
 	if err := f.BookHandlers.BookCache.CleanupPreparedStatements(); err != nil {
 		log.Error("Error cleaning prepared statements", "error", err)
+	}
+
+	if f.LibraryPageHandler != nil {
+		if err := f.LibraryPageHandler.Cleanup(); err != nil {
+			log.Error("Error during library page cleanup", "error", err)
+		}
 	}
 
 	// Shut down Redis
@@ -237,6 +240,13 @@ func gracefulShutdown(ctx context.Context, srv *http.Server, f *factory.Factory,
 			log.Error("Error closing Redis connection", "error", err)
 		}
 	}
+
+	metrics := f.CacheManager.GetMetrics()
+	log.Info("Final cache metrics",
+		"totalOps", metrics.TotalOps,
+		"l1Failures", metrics.L1Failures,
+		"l2Failures", metrics.L2Failures,
+	)
 
 	log.Info("Graceful shutdown completed")
 	return nil

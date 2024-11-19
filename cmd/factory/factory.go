@@ -18,23 +18,24 @@ import (
 	"github.com/lokeam/bravo-kilo/internal/books/services"
 	"github.com/lokeam/bravo-kilo/internal/shared/cache"
 	"github.com/lokeam/bravo-kilo/internal/shared/models"
-	"github.com/lokeam/bravo-kilo/internal/shared/pages"
-	library "github.com/lokeam/bravo-kilo/internal/shared/pages/library"
+	"github.com/lokeam/bravo-kilo/internal/shared/pages/library"
+	"github.com/lokeam/bravo-kilo/internal/shared/pages/library/domains"
 	"github.com/lokeam/bravo-kilo/internal/shared/redis"
 	"github.com/lokeam/bravo-kilo/internal/shared/transaction"
+	"github.com/lokeam/bravo-kilo/internal/shared/validator"
 	"github.com/lokeam/bravo-kilo/internal/shared/workers"
 )
 
 type Factory struct {
-    RedisClient    *redis.RedisClient
-    BookHandlers   *handlers.BookHandlers
-    SearchHandlers *handlers.SearchHandlers
-    AuthHandlers   *authhandlers.AuthHandlers
-    DeletionWorker *workers.DeletionWorker
-    CacheWorker    *workers.CacheWorker
-    CacheManager   *cache.CacheManager
-    LibraryHandler *library.Handler
-    PageHandlers   *pages.PageHandlers
+    RedisClient           *redis.RedisClient
+    BookHandlers          *handlers.BookHandlers
+    SearchHandlers        *handlers.SearchHandlers
+    AuthHandlers          *authhandlers.AuthHandlers
+    DeletionWorker        *workers.DeletionWorker
+    CacheWorker           *workers.CacheWorker
+    CacheManager          *cache.CacheManager
+    LibraryPageHandler    *library.LibraryPageHandler
+    BaseValidator         *validator.BaseValidator
 }
 
 func NewFactory(ctx context.Context, db *sql.DB, redisClient *redis.RedisClient, log *slog.Logger) (*Factory, error) {
@@ -252,12 +253,26 @@ func NewFactory(ctx context.Context, db *sql.DB, redisClient *redis.RedisClient,
         return nil, err
     }
 
-    pageHandlers, err := pages.NewPageHandlers(
+    baseValidator, err := validator.NewBaseValidator(log.With("component", "validator"), validator.BookDomain)
+    if err != nil {
+        return nil, err
+    }
+
+    libraryHandler, err := library.NewLibraryPageHandler(
         bookHandlers,
         redisClient,
-        log.With("component", "page_handlers"),
+        log,
         cacheManager,
+        baseValidator,
     )
+    if err != nil {
+        return nil, fmt.Errorf("failed to initialize library handler: %w", err)
+    }
+
+    bookDomainHandler := domains.NewBookDomainHandler(bookHandlers, log.With("domain", "books"))
+    if err := libraryHandler.RegisterDomain(bookDomainHandler); err != nil {
+        return nil, fmt.Errorf("failed to register book domain handler: %w", err)
+    }
 
     // Initialize workers
     deletionWorker := workers.NewDeletionWorker(
@@ -267,13 +282,14 @@ func NewFactory(ctx context.Context, db *sql.DB, redisClient *redis.RedisClient,
     )
 
     return &Factory{
-        RedisClient:    redisClient,
-        BookHandlers:   bookHandlers,
-        AuthHandlers:   authHandlers,
-        SearchHandlers: searchHandlers,
-        DeletionWorker: deletionWorker,
-        CacheWorker:    cacheWorker,
-        CacheManager:   cacheManager,
-        PageHandlers: pageHandlers,
+        RedisClient:           redisClient,
+        BookHandlers:          bookHandlers,
+        AuthHandlers:          authHandlers,
+        SearchHandlers:        searchHandlers,
+        DeletionWorker:        deletionWorker,
+        CacheWorker:           cacheWorker,
+        CacheManager:          cacheManager,
+        LibraryPageHandler:    libraryHandler,
+        BaseValidator:         baseValidator,
     }, nil
 }
