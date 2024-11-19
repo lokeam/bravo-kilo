@@ -10,6 +10,8 @@ const useLibraryData = () => {
   const userID = user?.id;
   const enabled = !!userID && isAuthenticated;
 
+  console.log('useLibraryData - userID: ', userID);
+
   const queryOptions = {
     enabled,
     staleTime: 0,
@@ -80,6 +82,13 @@ const useLibraryData = () => {
     if (errorTags) return errorTags;
     return null;
   }, [errorBooks, errorAuthors, errorGenres, errorFormats, errorTags]);
+
+
+  console.log('useLibraryData return - books: ', books);
+  console.log('useLibraryData return - authors: ', authors);
+  console.log('useLibraryData return - genres: ', genres);
+  console.log('useLibraryData return - formats: ', formats);
+  console.log('useLibraryData return - tags: ', tags);
 
   return {
     user,

@@ -1,4 +1,7 @@
 import { useMemo } from 'react';
+import { useUser } from '../hooks/useUser';
+import { useGetLibraryPageData } from '../queries/hooks/pages/library/useGetLibraryPageData';
+
 import LibraryNav from '../components/LibraryNav/LibraryNav';
 import CardList from '../components/CardList/CardList';
 import CardListSortHeader from '../components/CardList/CardListSortHeader';
@@ -14,28 +17,44 @@ import {
   defaultBookTags,
   isBookTagsData,
   TagData,
-
 } from '../types/api';
 import useStore from '../store/useStore';
-import useLibraryData from '../hooks/useLibraryData';
 
 
 function Library() {
+  const { data: user, isLoading: isUserLoading } = useUser();
   const {
     activeTab,
     sortCriteria,
     sortOrder,
   } = useStore();
 
+  // Early return if no user ID to satisfy TypeScript
+  if (!user?.id) {
+    return (
+      <div className="bk_lib flex flex-col items-center px-5 pt-12 antialiased mdTablet:pl-1 pr-5 mdTablet:ml-24 h-screen">
+        <Loading />
+      </div>
+    );
+  }
+
   const {
-    books,
-    authors:
-    bookAuthors,
-    genres: bookGenres,
-    formats: bookFormats,
-    tags: bookTags,
-    isLoading,
-  } = useLibraryData();
+    data: libraryData,
+    isLoading: isLibraryLoading,
+    error: libraryError
+  } = useGetLibraryPageData({
+    userID: user.id,
+    domain: 'books'
+  });
+
+  // Destructure and provide type-safe defaults
+  const {
+    books = [],
+    booksByAuthors: bookAuthors = { allAuthors: [] },
+    booksByGenres: bookGenres = defaultBookGenres,
+    booksByFormat: bookFormats = { audioBook: [], eBook: [], physical: [] },
+    booksByTags: bookTags = defaultBookTags,
+  } = libraryData?.data || {};
 
   const sortedBooks = useMemo(() => {
     if (!books || books.length === 0) {
@@ -47,13 +66,13 @@ function Library() {
     // Determine which books to sort based on the activeTab
     switch (activeTab) {
       case 'Audiobooks':
-        booksToSort = bookFormats?.audioBook || [];
+        booksToSort = Array.isArray(bookFormats?.audioBook) ? bookFormats.audioBook : [];
         break;
       case 'eBooks':
-        booksToSort = bookFormats?.eBook || [];
+        booksToSort = Array.isArray(bookFormats?.eBook) ? bookFormats.eBook : [];
         break;
       case 'Printed Books':
-        booksToSort = bookFormats?.physical || [];
+        booksToSort = Array.isArray(bookFormats?.physical) ? bookFormats.physical : [];
         break;
       default:
         booksToSort = books;
@@ -67,7 +86,7 @@ function Library() {
   const { allGenres, ...remainingGenres } = safeBookGenres;
   const genreBooks = remainingGenres as { [key: string]: GenreData };
 
-  const safeBookTags = isBookTagsData(bookTags) ?  bookTags : defaultBookTags;
+  const safeBookTags = isBookTagsData(bookTags) ? bookTags : defaultBookTags;
   console.log('testing safeBookTags: ', safeBookTags);
 
   const { allTags, ...remainingTags } = safeBookTags;
@@ -100,6 +119,7 @@ function Library() {
     );
   }, [books, bookAuthors, bookGenres, bookFormats]);
 
+  const isLoading = isUserLoading || isLibraryLoading;
   if (isLoading) {
     return (
       <div className="bk_lib flex flex-col items-center px-5 pt-12 antialiased mdTablet:pl-1 pr-5 mdTablet:ml-24 h-screen">
@@ -108,24 +128,39 @@ function Library() {
     );
   }
 
-  console.log('bookTags: ', bookTags);
+  console.log('sortedBooks: ', sortedBooks);
+
+  // Handle error states
+  if (libraryError) {
+    console.error('Library data fetch error:', {
+      error: libraryError,
+      userID: user?.id
+    });
+
+    return (
+      <PageWithErrorBoundary fallbackMessage={libraryError.message || "Error loading library"}>
+        <div className="bk_lib flex flex-col items-center px-5 pt-12">
+          Error occurred while loading library data
+        </div>
+      </PageWithErrorBoundary>
+    );
+  }
 
   return (
     <PageWithErrorBoundary fallbackMessage="Error loading library">
       <div className="bk_lib min-h-screen bg-white bg-cover flex flex-col items-center px-5 antialiased mdTablet:pl-1 pr-5 pt-5 mdTablet:ml-24 dark:bg-black">
-        { isEmptyLibrary ?
-          <EmptyLibraryCard /> :
-          (
-            <>
-              <LibraryNav />
-              <CardListSortHeader sortedBooksCount={sortedBooks.length} />
-              {renderCardList()}
-            </>
-          )
-        }
+        {isEmptyLibrary ? (
+          <EmptyLibraryCard />
+        ) : (
+          <>
+            <LibraryNav />
+            <CardListSortHeader sortedBooksCount={sortedBooks.length} />
+            {renderCardList()}
+          </>
+        )}
       </div>
     </PageWithErrorBoundary>
-  )
+  );
 }
 
 export default Library;
