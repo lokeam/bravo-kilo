@@ -1,5 +1,6 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { Book, BookAPIPayload } from '../types/api';
+import { LibraryPageResponse } from '../queries/types/responses';
 
 interface RetryConfig extends InternalAxiosRequestConfig {
   _retry?: boolean;
@@ -10,6 +11,7 @@ let csrfToken: string | null = null;
 const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_ENDPOINT,
   withCredentials: true,
+  timeout: 5000
 });
 
 export const refreshCSRFToken = async () => {
@@ -36,8 +38,17 @@ export const refreshCSRFToken = async () => {
 };
 
 apiClient.interceptors.response.use(
-  // Success handler remains the same
   response => {
+    console.group(`✅ [${response.status}] Response: ${response.config.url}`);
+    console.log('Response Data:', {
+      status: response.status,
+      statusText: response.statusText,
+      headers: response.headers, // Optionally mask headers here
+      data: response.data,
+      timing: response.headers['x-response-time']
+    });
+    console.groupEnd();
+
     const csrfTokenFromHeader = response.headers['x-csrf-token'];
     if (csrfTokenFromHeader) {
       csrfToken = csrfTokenFromHeader;
@@ -45,14 +56,28 @@ apiClient.interceptors.response.use(
       console.log('CSRF token captured:', csrfToken);
       console.log('Full response headers:', response.headers);
       console.log('*********************');
+      // Set the CSRF token in the axios defaults
+      // apiClient.defaults.headers.common['X-CSRF-Token'] = csrfTokenFromHeader;
     }
     return response;
   },
   // Error handler with proper typing
   async (error: AxiosError) => {
-    console.error('Response error:', error);
-    const originalRequest = error.config as RetryConfig;
+    console.group('❌ Response Error');
+    console.error('Response error:', {
+      message: error.message,
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      data: error.response?.data,
+      config: {
+        url: error.config?.url,
+        method: error.config?.method,
+        params: error.config?.params
+      }
+    });
+    console.groupEnd();
 
+    const originalRequest = error.config as RetryConfig;
     if (!originalRequest) {
       return Promise.reject(error);
     }
@@ -92,15 +117,29 @@ apiClient.interceptors.response.use(
       }
     }
 
+    if (error.code === 'ECONNABORTED' && !originalRequest._retry) {
+      originalRequest._retry = true;
+      console.log(`Retrying ${originalRequest.method} request to ${originalRequest.url}`);
+      return apiClient(originalRequest);
+    }
+
     return Promise.reject(error);
   }
 );
 
 apiClient.interceptors.request.use(
   async config => {
+    console.group(`🚀 [${config.method?.toUpperCase()}] Request: ${config.url}`);
+    console.log('Request Config:', {
+      url: config.url,
+      params: config.params,
+      headers: config.headers, // Optionally mask sensitive headers here
+      baseURL: config.baseURL
+    });
+    console.groupEnd();
+
     // For POST, PUT, DELETE requests
     if (['post', 'put', 'delete'].includes(config.method?.toLowerCase() || '')) {
-      // If we don't have a CSRF token, try to get one
       if (!csrfToken) {
         await refreshCSRFToken();
       }
@@ -119,19 +158,53 @@ apiClient.interceptors.request.use(
     return config;
   },
   error => {
-    if (error.response && error.response.status === 403 && error.response.data.includes('CSRF')) {
+    console.group('❌ Request Error');
+    if (error.response?.status === 403 && error.response.data.includes('CSRF')) {
       console.error('CSRF Error:', error.response.data);
       console.error('Current CSRF Token:', csrfToken);
     }
+    console.error('Request interceptor error:', {
+      message: error.message,
+      config: error.config,
+      stack: error.stack
+    });
     console.error('Request interceptor error:', error);
+    console.groupEnd();
     return Promise.reject(error);
   }
 );
 
-export const fetchUserBooks = async (userID?: number) => {
-  if (userID === undefined) return [];
-  const { data } = await apiClient.get(`/api/v1/user/books?userID=${userID}`);
-  return data.books || [];
+export const fetchUserBooks = async (userID: number): Promise<Book[]> => {
+  console.log('apiClient.service - fetchUserBooks called');
+  console.log('apiClient.service - fetchUserBooks called with userID: ', userID);
+
+  try {
+    const response = await apiClient.get('/api/v1/user/books', {
+      params: { userID },
+    });
+    console.log('apiClient.service - fetchUserBooks full response: ', response);
+    console.log('apiClient.service - fetchUserBooks status: ', response.status);
+    console.log('apiClient.service - fetchUserBooks headers: ', response.headers);
+    return response.data.data || [];
+  } catch (error) {
+    if (error instanceof AxiosError) {
+      console.error('Error fetching books:', {
+        message: error.message,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        headers: error.response?.headers,
+        config: {
+          url: error.config?.url,
+          method: error.config?.method,
+          params: error.config?.params
+        }
+      });
+    } else {
+      console.error('Unknown error fetching books:', error);
+    }
+    throw error;
+  }
 };
 
 export const fetchBooksFormat = async (userID: number) => {
@@ -208,6 +281,61 @@ export const fetchHomepageData = async (userID: number) => {
   const { data } = await apiClient.get(`/api/v1/user/books/homepage?userID=${userID}`);
   return data || [];
 };
+
+export const fetchLibraryPageData = async (userID: number): Promise<LibraryPageResponse> => {
+  try {
+    console.log('Fetching library page data:', {
+      userID,
+      endpoint: '/api/v1/pages/library',
+      domain: 'books' // Log domain parameter
+    });
+
+    // Add request validation
+    if (!userID) {
+      throw new Error('UserID is required');
+    }
+
+    const response = await apiClient.get<LibraryPageResponse>('/api/v1/pages/library', {
+      params: {
+        userID,
+        domain: 'books' // Explicitly send domain parameter
+      }
+    });
+
+    // Enhanced response validation
+    if (!response.data) {
+      throw new Error('No data received from library endpoint');
+    }
+
+    // Log response structure for debugging
+    console.log('Library response structure:', {
+      hasRequestId: !!response.data.requestId,
+      dataKeys: Object.keys(response.data),
+      status: response.status
+    });
+
+    // Type guard
+    if (!response.data || typeof response.data.requestId !== 'string') {
+      console.error('Invalid response format:', response.data);
+      throw new Error('Invalid response format');
+    }
+
+    return response.data;
+  } catch (error) {
+    if (error instanceof AxiosError) {
+      // Enhanced error logging
+      console.error('Library page data fetch failed:', {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        params: error.config?.params,
+        headers: error.response?.headers
+      });
+    }
+    throw error;
+  }
+}
+
 
 export const exportUserBooks = async (userID: number) => {
   try {
