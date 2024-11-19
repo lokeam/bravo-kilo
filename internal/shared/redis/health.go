@@ -103,7 +103,22 @@ func (h *HealthChecker) performHealthCheck(ctx context.Context) error {
 		return h.handleHealthCheckError(err, metrics)
 	}
 
-	// 5. Update status based on metrics
+	// 5. Check circuit breaker state
+	if h.client.GetCircuitBreaker() != nil {
+		cbMetrics := h.client.GetCircuitBreaker().GetMetrics()
+
+		// Update circuit breaker state
+		metrics.CircuitBreaker.State = cbMetrics.CurrentState
+		metrics.CircuitBreaker.LastStateChange = cbMetrics.LastStateChange
+
+		// Determine failure rate
+		totalOperations := cbMetrics.TotalSuccesses + cbMetrics.TotalFailures
+		if totalOperations > 0 {
+			metrics.CircuitBreaker.FailureRate = float64(cbMetrics.TotalFailures) / float64(totalOperations)
+		}
+	}
+
+	// 6. Update status based on metrics
 	h.updateHealthStatus(metrics)
 	return nil
 }

@@ -8,6 +8,18 @@ import (
 	"time"
 )
 
+const (
+	StateClosed CircuitState = iota
+	StateOpen
+	StateHalfOpen
+)
+
+type CircuitBreakerConfig struct {
+	MaxFailures      int           `json:"maxFailures"`
+	ResetTimeout     time.Duration `json:"resetTimeout"`
+	HalfOpenRequests int           `json:"halfOpenRequests"`
+}
+
 type CircuitState int
 
 // Operational Statistics for Circuit Breaker
@@ -20,12 +32,6 @@ type CircuitBreakerMetrics struct {
 	LastFailure          time.Time
 	LastSuccess          time.Time
 }
-
-const (
-	StateClosed CircuitState = iota
-	StateOpen
-	StateHalfOpen
-)
 
 // Implements Circuit Breaker pattern to prevent cascading failures
 // Maintains three states:
@@ -55,9 +61,12 @@ type CircuitBreaker struct {
 	lastStateChange       time.Time
 }
 
-func NewCircuitBreaker(config CircuitBreakerConfig) (*CircuitBreaker, error) {
-
+func NewCircuitBreaker(config *CircuitBreakerConfig) (*CircuitBreaker, error) {
 	// Validate config
+	if config == nil {
+
+	}
+
 	if config.MaxFailures <= 0 {
 		return nil, fmt.Errorf("max failures must be greater than 0")
 	}

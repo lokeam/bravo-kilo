@@ -11,6 +11,12 @@ type HealthMetrics struct {
 	ErrorRate        float64
 	ConnectionPool   PoolMetrics
 	LastPingTime     time.Time
+
+	CircuitBreaker struct {
+		State            CircuitState
+		FailureRate      float64
+		LastStateChange  time.Time
+	}
 }
 
 // Connection Pool Health

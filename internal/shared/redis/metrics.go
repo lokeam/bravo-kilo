@@ -9,19 +9,25 @@ type Metrics struct {
 	mu sync.RWMutex
 
 	// Operation metrics
-	Operations             map[string]string
-	OperationLatency       map[string]time.Duration
-	OperationCount         map[string]int64
-	ErrorCount             map[string]int64
+	Operations              map[string]string
+	OperationLatency        map[string]time.Duration
+	OperationCount          map[string]int64
+	ErrorCount              map[string]int64
+
+	// Circuit breaker metrics
+	CircuitBreakerState     CircuitState
+	CircuitBreakerFailures  int64
+	CircuitBreakerSuccesses int64
+	LastStateChange         time.Time
 
 	// Connection metrics
-	ActiveConnections      int64
-	IdleConnections        int64
+	ActiveConnections       int64
+	IdleConnections         int64
 
 	// Pool metrics
-	PoolHits               int64
-	PoolMisses             int64
-	PoolTimeout            int64
+	PoolHits                int64
+	PoolMisses              int64
+	PoolTimeout             int64
 }
 
 func NewMetrics() *Metrics {
@@ -131,6 +137,16 @@ func (m *Metrics) Reset() {
 	m.PoolHits = 0
 	m.PoolMisses = 0
 	m.PoolTimeout = 0
+}
+
+func (m *Metrics) UpdateCircuitBreakerMetrics(state CircuitState, failures, successes int64, lastStateChange time.Time) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.CircuitBreakerState = state
+	m.CircuitBreakerFailures = failures
+	m.CircuitBreakerSuccesses = successes
+	m.LastStateChange = lastStateChange
 }
 
 // Helper fn to copy maps

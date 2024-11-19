@@ -7,12 +7,6 @@ import (
 	"time"
 )
 
-type CircuitBreakerConfig struct {
-	MaxFailures      int           `json:"maxFailures"`
-	ResetTimeout     time.Duration `json:"resetTimeout"`
-	HalfOpenRequests int           `json:"halfOpenRequests"`
-}
-
 type RedisConfig struct {
 	// Metadata
 	Name         string  // Instance name for logging
@@ -77,8 +71,13 @@ type RedisConfig struct {
 		RetryInterval  time.Duration
 	}
 
-	// Circuit Breaker Settings
-	CircuitBreakerConfig CircuitBreakerConfig
+	// Circuit Breaker config for Redis
+	CircuitBreaker struct {
+		Enabled          bool          `env:"REDIS_CIRCUIT_BREAKER_ENABLED" envDefault:"true"`
+		MaxFailures      int           `env:"REDIS_CIRCUIT_BREAKER_MAX_FAILURES" envDefault:"5"`
+		ResetTimeout     time.Duration `env:"REDIS_CIRCUIT_BREAKER_RESET_TIMEOUT" envDefault:"10s"`
+		HalfOpenRequests int           `env:"REDIS_CIRCUIT_BREAKER_HALF_OPEN_REQUESTS" envDefault:"2"`
+	}
 }
 
 // Configuration validation and defaults
@@ -126,9 +125,10 @@ func NewRedisConfig() *RedisConfig {
   config.CacheConfig.GeminiResponse = 5 * time.Minute
 
 	// Circuit Breaker defaults
-	config.CircuitBreakerConfig.MaxFailures = 5
-	config.CircuitBreakerConfig.ResetTimeout = 10 * time.Second
-	config.CircuitBreakerConfig.HalfOpenRequests = 2
+	config.CircuitBreaker.Enabled = true
+	config.CircuitBreaker.MaxFailures = 5
+	config.CircuitBreaker.ResetTimeout = 10 * time.Second
+	config.CircuitBreaker.HalfOpenRequests = 2
 
 	return config
 }
@@ -225,12 +225,20 @@ func (c *RedisConfig) LoadFromEnv() error {
 	}
 
 	// Circuit breaker settings
+	if enabled := os.Getenv("REDIS_CIRCUIT_BREAKER_ENABLED"); enabled != "" {
+		val, err := strconv.ParseBool(enabled)
+		if err != nil {
+			return fmt.Errorf("invalid REDIS_CIRCUIT_BREAKER_ENABLED: %w", err)
+		}
+		c.CircuitBreaker.Enabled = val
+	}
+
 	if maxFailures := os.Getenv("REDIS_CIRCUIT_MAX_FAILURES"); maxFailures != "" {
 		val, err := strconv.Atoi(maxFailures)
 		if err != nil {
 				return fmt.Errorf("invalid REDIS_CIRCUIT_MAX_FAILURES: %w", err)
 		}
-		c.CircuitBreakerConfig.MaxFailures = val
+		c.CircuitBreaker.MaxFailures = val
 	}
 
 	if resetTimeout := os.Getenv("REDIS_CIRCUIT_RESET_TIMEOUT"); resetTimeout != "" {
@@ -238,7 +246,7 @@ func (c *RedisConfig) LoadFromEnv() error {
 		if err != nil {
 				return fmt.Errorf("invalid REDIS_CIRCUIT_RESET_TIMEOUT: %w", err)
 		}
-		c.CircuitBreakerConfig.ResetTimeout = duration
+		c.CircuitBreaker.ResetTimeout = duration
 	}
 
 	if halfOpen := os.Getenv("REDIS_CIRCUIT_HALF_OPEN_REQUESTS"); halfOpen != "" {
@@ -246,7 +254,7 @@ func (c *RedisConfig) LoadFromEnv() error {
 		if err != nil {
 				return fmt.Errorf("invalid REDIS_CIRCUIT_HALF_OPEN_REQUESTS: %w", err)
 		}
-		c.CircuitBreakerConfig.HalfOpenRequests = val
+		c.CircuitBreaker.HalfOpenRequests = val
 	}
 
 
@@ -306,13 +314,13 @@ func (c *RedisConfig) Validate() error {
 	}
 
 	// Validate circuit breaker config
-	if c.CircuitBreakerConfig.MaxFailures <= 0 {
+	if c.CircuitBreaker.MaxFailures <= 0 {
 		return fmt.Errorf("circuit breaker max failures must be positive")
 	}
-	if c.CircuitBreakerConfig.ResetTimeout <= 0 {
+	if c.CircuitBreaker.ResetTimeout <= 0 {
 		return fmt.Errorf("circuit breaker reset timeout must be positive")
 	}
-	if c.CircuitBreakerConfig.HalfOpenRequests <= 0 {
+	if c.CircuitBreaker.HalfOpenRequests <= 0 {
 		return fmt.Errorf("circuit breaker half-open requests must be positive")
 	}
 
