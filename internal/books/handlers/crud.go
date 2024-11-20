@@ -994,6 +994,9 @@ func (h *BookHandlers) sendJSONResponse(w http.ResponseWriter, response JSONResp
 	// Set content type
 	w.Header().Set("Content-Type", "application/json")
 
+	// Help caches handle compressed/uncompressed content
+	w.Header().Set("Vary", "Accept-Encoding")
+
 	// Set status code
 	if response.StatusCode == 0 {
 			response.StatusCode = http.StatusOK

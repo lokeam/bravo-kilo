@@ -6,8 +6,11 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"os"
 	"regexp"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/lokeam/bravo-kilo/internal/books/repository"
@@ -248,4 +251,30 @@ func CopyMap[KEY comparable, VAL any](m map[KEY]VAL) map[KEY]VAL {
 		result[key] = val
 	}
 	return result
+}
+
+func GetEnvIntWithFallback(key string, fallback int) int {
+	if val := os.Getenv(key); val != "" {
+		if parsed, err := strconv.Atoi(val); err == nil {
+				return parsed
+		}
+		logger.Warn("Invalid environment value",
+					"key", key,
+					"value", val,
+					"fallback", fallback)
+	}
+	return fallback
+}
+
+func GetEnvDurationWithFallback(key string, fallback time.Duration) time.Duration {
+	if val := os.Getenv(key); val != "" {
+		if parsed, err := time.ParseDuration(val); err == nil {
+			return parsed
+		}
+		logger.Warn("Invalid duration value",
+		"key", key,
+		"value", val,
+		"fallback", fallback)
+	}
+	return fallback
 }

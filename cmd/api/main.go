@@ -13,6 +13,7 @@ import (
 
 	"github.com/joho/godotenv"
 	factory "github.com/lokeam/bravo-kilo/cmd/factory"
+	"github.com/lokeam/bravo-kilo/cmd/middleware"
 	"github.com/lokeam/bravo-kilo/config"
 	authHandlers "github.com/lokeam/bravo-kilo/internal/auth/handlers"
 	"github.com/lokeam/bravo-kilo/internal/books/handlers"
@@ -33,6 +34,7 @@ type appConfig struct {
 type application struct {
 	config appConfig
 	logger *slog.Logger
+	compressionMonitor *middleware.CompressionMonitor
 }
 
 func main() {
@@ -78,10 +80,12 @@ func main() {
 	app := &application{
 		config: cfg,
 		logger: log,
+		compressionMonitor: middleware.NewCompressionMonitor(ctx, log),
 	}
 
 	// Create server with timeouts
 	srv := app.serve(
+		ctx,
 		f.BookHandlers,
 		f.SearchHandlers,
 		f.AuthHandlers,
@@ -117,7 +121,7 @@ func main() {
 		defer shutdownCancel()
 
 		// Perform graceful shutdown
-		if err := gracefulShutdown(shutdownCtx, srv, f, log); err != nil {
+		if err := gracefulShutdown(shutdownCtx, srv, f, app, log); err != nil {
 			log.Error("Shutdown error", "error", err)
 			// Force shutdown if graceful shutdown fails
 			srv.Close()
@@ -146,6 +150,7 @@ func initializeEnvironment() error {
 }
 
 func (app *application) serve(
+	ctx context.Context,
 	bookHandlers *handlers.BookHandlers,
 	searchHandlers *handlers.SearchHandlers,
 	authHandlers *authHandlers.AuthHandlers,
@@ -156,7 +161,7 @@ func (app *application) serve(
 
 	return &http.Server{
 		Addr:         fmt.Sprintf(":%d", app.config.port),
-		Handler:      app.routes(bookHandlers, searchHandlers, authHandlers, libraryPageHandler, baseValidator),
+		Handler:      app.routes(ctx,bookHandlers, searchHandlers, authHandlers, libraryPageHandler, baseValidator),
 		IdleTimeout:  time.Minute,
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 30 * time.Second,
@@ -202,18 +207,47 @@ func initializeResources(ctx context.Context, log *slog.Logger) (*driver.DB, *fa
 	return db, f, nil
 }
 
-func gracefulShutdown(ctx context.Context, srv *http.Server, f *factory.Factory, log *slog.Logger) error {
+func gracefulShutdown(ctx context.Context, srv *http.Server, f *factory.Factory, app *application, log *slog.Logger) error {
 	// Cleanup order:
 	// 1. Server (stop accepting new requests)
 	// 2. Application resources (caches, workers)
 	// 3. Database connections (handled by defer in main)
+
+	// Create shutdown context with timeout
+	shutdownCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	log.Info("Starting graceful shutdown sequence")
 
 	// Stop accepting new requests, shutdown server
 	if err := srv.Shutdown(ctx); err != nil {
 		return fmt.Errorf("server shutdown error: %w", err)
 	}
 
+	// Cleanup compression monitor
+	if app.compressionMonitor != nil {
+		log.Info("Stopping compression monitor")
+
+		// Create context for compression monitor shutdown
+		monitorCtx, monitorCancel := context.WithTimeout(shutdownCtx, 5 * time.Second)
+		defer monitorCancel()
+
+		if err := app.compressionMonitor.Shutdown(monitorCtx); err != nil {
+			log.Error("Compression monitor shutdown error", "error", err)
+		}
+
+		// Log final compression metrics
+		stats := app.compressionMonitor.GetStats()
+		log.Info("Final compression metrics",
+			"totalRequests", stats.RequestCount,
+			"failureCount", stats.FailureCount,
+			"averageLatency", stats.AverageLatency,
+		)
+	}
+
 	// Stop workers in reverse order of importance:
+	log.Info("Stopping background workers")
+
 	// Stop account deletion worker
 	f.DeletionWorker.StopDeletionWorker()
 
@@ -228,6 +262,7 @@ func gracefulShutdown(ctx context.Context, srv *http.Server, f *factory.Factory,
 		log.Error("Error cleaning prepared statements", "error", err)
 	}
 
+	// Library page cleanup
 	if f.LibraryPageHandler != nil {
 		if err := f.LibraryPageHandler.Cleanup(); err != nil {
 			log.Error("Error during library page cleanup", "error", err)
@@ -241,6 +276,7 @@ func gracefulShutdown(ctx context.Context, srv *http.Server, f *factory.Factory,
 		}
 	}
 
+	// Log final metrics
 	metrics := f.CacheManager.GetMetrics()
 	log.Info("Final cache metrics",
 		"totalOps", metrics.TotalOps,

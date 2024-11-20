@@ -26,28 +26,28 @@ type RateLimiterService struct {
 }
 
 // Define rate limits for different endpoint types
-var endpointLimits = map[string]RateLimitConfig{
-    "read": {
-        RequestsPerMinute: 300,  // Higher limit for read operations
-        BurstSize:        50,
-        TokenExpiration:  24 * time.Hour,
-    },
-    "write": {
-        RequestsPerMinute: 60,   // Stricter limit for write operations
-        BurstSize:        10,
-        TokenExpiration:  24 * time.Hour,
-    },
-    "export": {
-        RequestsPerMinute: 10,   // Very strict for resource-intensive operations
-        BurstSize:        2,
-        TokenExpiration:  24 * time.Hour,
-    },
-    "auth": {
-        RequestsPerMinute: 30,   // Strict for auth operations
-        BurstSize:        5,
-        TokenExpiration:  15 * time.Minute,
-    },
-}
+// var endpointLimits = map[string]RateLimitConfig{
+//     "read": {
+//         RequestsPerMinute: 300,  // Higher limit for read operations
+//         BurstSize:        50,
+//         TokenExpiration:  24 * time.Hour,
+//     },
+//     "write": {
+//         RequestsPerMinute: 60,   // Stricter limit for write operations
+//         BurstSize:        10,
+//         TokenExpiration:  24 * time.Hour,
+//     },
+//     "export": {
+//         RequestsPerMinute: 10,   // Very strict for resource-intensive operations
+//         BurstSize:        2,
+//         TokenExpiration:  24 * time.Hour,
+//     },
+//     "auth": {
+//         RequestsPerMinute: 30,   // Strict for auth operations
+//         BurstSize:        5,
+//         TokenExpiration:  15 * time.Minute,
+//     },
+// }
 
 func NewRateLimiterService(config RateLimitConfig) *RateLimiterService {
   service := &RateLimiterService{

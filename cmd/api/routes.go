@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"net/http"
 	"os"
 	"time"
@@ -28,6 +29,7 @@ func init() {
 }
 
 func (app *application) routes(
+	ctx context.Context,
 	bookHandlers *handlers.BookHandlers,
 	searchHandlers *handlers.SearchHandlers,
 	authHandlers *authhandlers.AuthHandlers,
@@ -36,8 +38,13 @@ func (app *application) routes(
 ) http.Handler {
 	mux := chi.NewRouter()
 
+	// Panic Recovery
 	mux.Use(chimiddleware.Recoverer)
+
+	// Logging
 	mux.Use(middleware.LogHeaders)
+
+	// CORS
 	mux.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   []string{"http://localhost:5173"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
@@ -46,6 +53,7 @@ func (app *application) routes(
 		AllowCredentials: true,
 	}))
 
+	// CSRF protection
 	csrfMiddleware := csrf.Protect(
 		[]byte(os.Getenv("CSRF_AUTH_KEY")),
 		csrf.Secure(isProduction),
@@ -104,6 +112,9 @@ func (app *application) routes(
 				Domain: validator.BookDomain,
 				Timeout: 30 * time.Second,
 			}))
+
+			r.Use(middleware.NewAdaptiveCompression(app.compressionMonitor))
+
 			r.With(middleware.RateLimiter).Get("/library", libraryPageHandler.HandleGetLibraryPageData)
 		})
 	})
