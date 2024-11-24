@@ -23,6 +23,7 @@ type RedisConfig struct {
 		BookHomepage                   time.Duration
 		UserData                       time.Duration
 		DefaultTTL                     time.Duration
+		OperationTimeout               time.Duration
 		DefaultBookCacheExpiration     time.Duration
 		AuthTokenExpiration            time.Duration
 		UserDeletionMarkerExpiration   time.Duration
@@ -74,9 +75,9 @@ type RedisConfig struct {
 	// Circuit Breaker config for Redis
 	CircuitBreaker struct {
 		Enabled          bool          `env:"REDIS_CIRCUIT_BREAKER_ENABLED" envDefault:"true"`
-		MaxFailures      int           `env:"REDIS_CIRCUIT_BREAKER_MAX_FAILURES" envDefault:"5"`
-		ResetTimeout     time.Duration `env:"REDIS_CIRCUIT_BREAKER_RESET_TIMEOUT" envDefault:"10s"`
-		HalfOpenRequests int           `env:"REDIS_CIRCUIT_BREAKER_HALF_OPEN_REQUESTS" envDefault:"2"`
+		MaxFailures      int           `env:"REDIS_CIRCUIT_BREAKER_MAX_FAILURES" envDefault:"15"`
+		ResetTimeout     time.Duration `env:"REDIS_CIRCUIT_BREAKER_RESET_TIMEOUT" envDefault:"30s"`
+		HalfOpenRequests int           `env:"REDIS_CIRCUIT_BREAKER_HALF_OPEN_REQUESTS" envDefault:"5"`
 	}
 }
 
@@ -89,46 +90,46 @@ func NewRedisConfig() *RedisConfig {
 	}
 
 	// Pool defaults
-	config.PoolConfig.MinIdleConns = 10                   // Keeps a small set of connections ready, reducing latency for sudden traffic spikes
-	config.PoolConfig.MaxIdleConns = 20                  // Balances resource usage with performance (10% of MaxActiveConns is a common ratio)
-	config.PoolConfig.MaxActiveConns = 100               // Maximum number of connections total (active + idle)
+	config.PoolConfig.MinIdleConns = 25                   // Keeps a small set of connections ready, reducing latency for sudden traffic spikes
+	config.PoolConfig.MaxIdleConns = 50                  // Balances resource usage with performance (10% of MaxActiveConns is a common ratio)
+	config.PoolConfig.MaxActiveConns = 500               // Maximum number of connections total (active + idle)
 	config.PoolConfig.IdleTimeout = 5 * time.Minute      // Average cleanup interval for unused connections
 	config.PoolConfig.MaxConnLifetime = 1 * time.Hour    // Prevents connection staleness while not being too aggressive
-	config.PoolConfig.WaitTimeout = 3 * time.Second      // Aligns w/ typical web request timeout expectations
-	config.PoolConfig.PoolTimeout = 4 * time.Second      // Slightly higher than WaitTimeout to allow for connection creation
+	config.PoolConfig.WaitTimeout = 5 * time.Second      // Aligns w/ typical web request timeout expectations
+	config.PoolConfig.PoolTimeout = 5 * time.Second      // Slightly higher than WaitTimeout to allow for connection creation
 
 	// Timeout defaults
-	config.TimeoutConfig.Dial = 5 * time.Second          // Allow for network latency + DNS resolution
-	config.TimeoutConfig.Read = 2 * time.Second          // Provide buffer for network issues while failing fast enough to avoid pile up
-	config.TimeoutConfig.Write = 2 * time.Second         // Provide buffer for network issues while failing fast enough to avoid pile up
+	config.TimeoutConfig.Dial = 10 * time.Second          // Allow for network latency + DNS resolution
+	config.TimeoutConfig.Read = 3 * time.Second          // Provide buffer for network issues while failing fast enough to avoid pile up
+	config.TimeoutConfig.Write = 3 * time.Second         // Provide buffer for network issues while failing fast enough to avoid pile up
 
 	// Health check defaults
 	config.HealthConfig.Enabled = true                    // Toggle health checks
-	config.HealthConfig.Interval = 30 * time.Second       // Frequent enough to detect issues but not too often to impact performance
-	config.HealthConfig.Timeout = 2 * time.Second         // Match operation timeout
-	config.HealthConfig.MaxRetries = 3                    // Standard 3 retry pattern
-	config.HealthConfig.RetryInterval = 1 * time.Second   // Allow temporary network issues to resolve
+	config.HealthConfig.Interval = 15 * time.Second       // Frequent enough to detect issues but not too often to impact performance
+	config.HealthConfig.Timeout = 3 * time.Second         // Match operation timeout
+	config.HealthConfig.MaxRetries = 5                    // Standard 3 retry pattern
+	config.HealthConfig.RetryInterval = 2 * time.Second   // Allow temporary network issues to resolve
 
 	// Cache duration defaults
-	config.CacheConfig.BookList = 30 * time.Minute                         // List of books changes infrequently
+	config.CacheConfig.BookList = 1 * time.Hour                         // List of books changes infrequently
 	config.CacheConfig.BookDetail = 1 * time.Hour                         // Individual book details are very stable
-	config.CacheConfig.BooksByAuthor = 1 * time.Hour                      // Author collections change rarely
-	config.CacheConfig.BooksByFormat = 2 * time.Hour                      // Format groupings are very stable
+	config.CacheConfig.BooksByAuthor = 3 * time.Hour                      // Author collections change rarely
+	config.CacheConfig.BooksByFormat = 3 * time.Hour                      // Format groupings are very stable
 	config.CacheConfig.BooksByGenre = 2 * time.Hour                       // Genre groupings are very stable
-	config.CacheConfig.BooksByTag = 1 * time.Hour                         // Tags might change more frequently
-	config.CacheConfig.BookHomepage = 15 * time.Minute                    // Homepage needs fresher data
-	config.CacheConfig.UserData = 15 * time.Minute                        // User preferences/settings
-	config.CacheConfig.DefaultBookCacheExpiration = 30 * time.Minute
+	config.CacheConfig.BooksByTag = 2 * time.Hour                         // Tags might change more frequently
+	config.CacheConfig.BookHomepage = 30 * time.Minute                    // Homepage needs fresher data
+	config.CacheConfig.UserData = 30 * time.Minute                        // User preferences/settings
+	config.CacheConfig.DefaultBookCacheExpiration = 1 * time.Hour
 	config.CacheConfig.AuthTokenExpiration = 24 * time.Hour
-	config.CacheConfig.UserDeletionMarkerExpiration = 24 * time.Hour
-	config.CacheConfig.DefaultTTL = 10 * time.Minute                      // Conservative default
-  config.CacheConfig.GeminiResponse = 5 * time.Minute
+	config.CacheConfig.UserDeletionMarkerExpiration = 48 * time.Hour
+	config.CacheConfig.DefaultTTL = 48 * time.Minute                      // Conservative default
+  config.CacheConfig.GeminiResponse = 15 * time.Minute
 
 	// Circuit Breaker defaults
 	config.CircuitBreaker.Enabled = true
-	config.CircuitBreaker.MaxFailures = 5
-	config.CircuitBreaker.ResetTimeout = 10 * time.Second
-	config.CircuitBreaker.HalfOpenRequests = 2
+	config.CircuitBreaker.MaxFailures = 25
+	config.CircuitBreaker.ResetTimeout = 45 * time.Second
+	config.CircuitBreaker.HalfOpenRequests = 10
 
 	return config
 }

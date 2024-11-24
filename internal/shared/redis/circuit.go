@@ -99,6 +99,11 @@ func (cb *CircuitBreaker) Allow() error {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
 
+	slog.Info("Circuit breaker check",
+	"state", cb.state.String(),
+	"failures", cb.failures,
+	"consecutiveFailures", cb.consecutiveFailures)
+
 	switch cb.state {
 	case StateClosed:
 		return nil

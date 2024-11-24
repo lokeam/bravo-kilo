@@ -28,6 +28,12 @@ type Metrics struct {
 	PoolHits                int64
 	PoolMisses              int64
 	PoolTimeout             int64
+
+	// Cache specific metrics
+	CacheHits               int64
+	CacheMisses             int64
+	CacheErrors             int64
+	CacheLatency            time.Duration
 }
 
 func NewMetrics() *Metrics {
@@ -156,4 +162,29 @@ func copyMap[KEY comparable, VAL any](m map[KEY]VAL) map[KEY]VAL {
 		result[key] = val
 	}
 	return result
+}
+
+
+// Cache metrics
+func (m *Metrics) IncrementCacheHits() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.CacheHits++
+}
+
+func (m *Metrics) IncrementCacheMisses() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.CacheMisses++
+}
+
+func (m *Metrics) RecordCacheOperation(duration time.Duration, err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.CacheLatency += duration
+	if err != nil {
+		m.CacheErrors++
+	}
 }

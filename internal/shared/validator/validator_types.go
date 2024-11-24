@@ -50,6 +50,6 @@ type QueryValidationRule struct {
 	Type           QueryParamType
 	Pattern        string // Regex pattern for validation
 }
-
-type QueryValidationRules map[string]QueryValidationRule
+type ValidationRuleKey string
+type QueryValidationRules map[ValidationRuleKey]QueryValidationRule
 type QueryParamType string

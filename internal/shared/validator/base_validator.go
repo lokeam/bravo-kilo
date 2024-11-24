@@ -173,15 +173,16 @@ func (bv *BaseValidator) BuildSingleErrorResponse(ctx context.Context, err Valid
 
 // Validates URL query parameters against define rules
 func (bv *BaseValidator) ValidateQueryParams(ctx context.Context, query url.Values, rules QueryValidationRules) []ValidationError {
+
 	var errors []ValidationError
 
 	for param, rule := range rules {
-			value := query.Get(param)
+			value := query.Get(param.String())
 
 			// Required check
 			if rule.Required && value == "" {
 					errors = append(errors, NewValidationError(
-							param,
+							param.String(),
 							ErrQueryRequired,
 							fmt.Sprintf("parameter '%s' is required", param),
 					))
@@ -291,13 +292,14 @@ func (bv *BaseValidator) formatValidationErrors(errors validator.ValidationError
 }
 
 // Query param validator helpers
-func (bv *BaseValidator) validateQueryParamLength(param, value string, minLen,maxLen int) *ValidationError {
+func (bv *BaseValidator) validateQueryParamLength(param ValidationRuleKey, value string, minLen,maxLen int) *ValidationError {
+	paramStr := param.String()
 	if maxLen == 0 {
 			maxLen = DefaultMaxQueryParamLength
 	}
 	if minLen > 0 && len(value) < minLen {
 		verr := NewValidationError(
-			param,
+			paramStr,
 			ErrQueryMinLength,
 			fmt.Sprintf("parameter '%s' is shorter than the minimum length of %d", param, minLen),
 		)
@@ -308,7 +310,7 @@ func (bv *BaseValidator) validateQueryParamLength(param, value string, minLen,ma
 	}
 	if len(value) > maxLen {
 			verr := NewValidationError(
-					param,
+				paramStr,
 					ErrQueryMaxLength,
 					fmt.Sprintf("parameter '%s' exceeds maximum length of %d", param, maxLen),
 			)
@@ -322,12 +324,13 @@ func (bv *BaseValidator) validateQueryParamLength(param, value string, minLen,ma
 	return nil
 }
 
-func (bv *BaseValidator) validateQueryParamType(param, value string, paramType QueryParamType) *ValidationError {
+func (bv *BaseValidator) validateQueryParamType(param ValidationRuleKey, value string, paramType QueryParamType) *ValidationError {
+	paramStr := param.String()
 	switch paramType {
 	case QueryTypeInt:
 			if _, err := strconv.Atoi(value); err != nil {
 					verr := NewValidationError(
-							param,
+						paramStr,
 							ErrQueryInvalidFormat,
 							fmt.Sprintf("parameter '%s' must be an integer", param),
 					)
@@ -338,7 +341,7 @@ func (bv *BaseValidator) validateQueryParamType(param, value string, paramType Q
 	case QueryTypeBool:
 			if value != "true" && value != "false" {
 					verr := NewValidationError(
-							param,
+						paramStr,
 							ErrQueryInvalidFormat,
 							fmt.Sprintf("parameter '%s' must be 'true' or 'false'", param),
 					)
@@ -349,7 +352,7 @@ func (bv *BaseValidator) validateQueryParamType(param, value string, paramType Q
 	case QueryTypeDate:
 		if _, err := time.Parse("2006-01-02", value); err != nil {
 			verr := NewValidationError(
-					param,
+				paramStr,
 					ErrQueryInvalidFormat,
 					fmt.Sprintf("parameter '%s' must be a valid date in the format YYYY-MM-DD", param),
 			)
@@ -360,7 +363,7 @@ func (bv *BaseValidator) validateQueryParamType(param, value string, paramType Q
 	case QueryTypeUUID:
 		if _, err := uuid.Parse(value); err != nil {
 			verr := NewValidationError(
-				param,
+				paramStr,
 				ErrQueryInvalidFormat,
 				fmt.Sprintf("parameter '%s' must be a valid UUID", param),
 			)
@@ -371,7 +374,7 @@ func (bv *BaseValidator) validateQueryParamType(param, value string, paramType Q
 	case QueryTypeEmail:
 		if !bv.commonPatterns.email.MatchString(value) {
 			verr := NewValidationError(
-				param,
+				paramStr,
 				ErrQueryInvalidFormat,
 				fmt.Sprintf("parameter '%s' must be a valid email address", param),
 			)
@@ -382,7 +385,7 @@ func (bv *BaseValidator) validateQueryParamType(param, value string, paramType Q
 	case QueryTypeURL:
 		if _, err := url.Parse(value); err != nil {
 			verr := NewValidationError(
-				param,
+				paramStr,
 				ErrQueryInvalidFormat,
 				fmt.Sprintf("parameter '%s' must be a valid URL", param),
 			)
@@ -394,7 +397,8 @@ func (bv *BaseValidator) validateQueryParamType(param, value string, paramType Q
 	return nil
 }
 
-func (bv *BaseValidator) validateQueryAllowedValues(param, value string, allowedValues []string) *ValidationError {
+func (bv *BaseValidator) validateQueryAllowedValues(param ValidationRuleKey, value string, allowedValues []string) *ValidationError {
+	paramStr := param.String()
 	if len(allowedValues) == 0 {
 			return nil
 	}
@@ -406,7 +410,7 @@ func (bv *BaseValidator) validateQueryAllowedValues(param, value string, allowed
 	}
 
 	verr := NewValidationError(
-			param,
+		paramStr,
 			ErrQueryInvalidValue,
 			fmt.Sprintf("parameter '%s' must be one of: %v", param, allowedValues),
 	)
@@ -416,7 +420,8 @@ func (bv *BaseValidator) validateQueryAllowedValues(param, value string, allowed
 	return verrPtr
 }
 
-func (bv *BaseValidator) validateRegexQueryPattern(param, value, pattern string) *ValidationError {
+func (bv *BaseValidator) validateRegexQueryPattern(param ValidationRuleKey, value, pattern string) *ValidationError {
+	paramStr := param.String()
 	if pattern == "" {
 		return nil
 	}
@@ -439,7 +444,7 @@ func (bv *BaseValidator) validateRegexQueryPattern(param, value, pattern string)
 					"error", err,
 			)
 			verr := NewValidationError(
-					param,
+				paramStr,
 					ErrQueryPattern,
 					"invalid pattern configuration",
 			)
@@ -448,7 +453,7 @@ func (bv *BaseValidator) validateRegexQueryPattern(param, value, pattern string)
 
 	if !regex.MatchString(value) {
 			verr := NewValidationError(
-					param,
+				paramStr,
 					ErrQueryInvalidFormat,
 					fmt.Sprintf("parameter '%s' does not match required pattern", param),
 			)
@@ -516,3 +521,6 @@ func (bv *BaseValidator) getCompiledPattern(ctx context.Context, pattern string)
 	}
 }
 
+func (v ValidationRuleKey) String() string {
+	return string(v)
+}

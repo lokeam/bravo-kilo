@@ -276,12 +276,15 @@ func (c *RedisClient) Close() error {
 // CRUD operations
 // Retrieve value from Redis
 func (c *RedisClient) Get(ctx context.Context, key string) (string, error) {
-	start := time.Now()
-	slog.Info("Redis operation starting",
-		"operation", "GET",
-		"key", key,
-		"clientStatus", c.status,
-		"circuitState", c.breaker.GetState())
+    // Log operation start
+    slog.Info("Redis operation starting",
+        "operation", "GET",
+        "key", key,
+        "clientStatus", c.status,
+        "circuitState", c.getCircuitBreakerStateString())
+
+    // Start timing
+    start := time.Now()
 
 
 	if !c.IsReady() {
@@ -292,13 +295,13 @@ func (c *RedisClient) Get(ctx context.Context, key string) (string, error) {
 		return "", fmt.Errorf("redis client not ready")
 	}
 
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, 5*time.Second) // Default timeout
+		defer cancel()
+	}
+
 	// Add logging for debugging
-	slog.Info("@@@@@@@@@@@@@@ REDIS CLIENT GET @@@@@@@@@@@@@@")
-	slog.Info("Redis Get operation starting",
-			"key", key,
-			"clientStatus", c.status,
-			"isReady", c.IsReady(),
-	)
 	val, err := c.client.Get(ctx, key).Result()
 
 	// Log the result of the GET operation
@@ -329,12 +332,80 @@ func (c *RedisClient) Get(ctx context.Context, key string) (string, error) {
 
 // Store value in Redis
 func (c *RedisClient) Set(ctx context.Context, key string, value interface{}, expiration time.Duration) error {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
+	start := time.Now()
 
-	return c.executeWithRetry(ctx, "set", func() error {
-		return c.client.Set(ctx, key, value, expiration).Err()
-	})
+	// Read lock for initial status check
+	c.mu.RLock()
+	initialStatus := c.status
+	retrier := c.retrier // Get retrier reference under read lock
+	c.mu.RUnlock()
+
+	c.logger.Info("Redis operation starting",
+			"operation", "SET",
+			"key", key,
+			"clientStatus", initialStatus,
+			"circuitState", c.getCircuitBreakerStateString(),
+	)
+
+	// Operation to retry
+	operation := func() error {
+			// Add context timeout for each attempt
+			opCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+			defer cancel()
+
+			err := c.client.Set(opCtx, key, value, expiration).Err()
+			if err != nil {
+					c.logger.Warn("Redis set attempt failed",
+							"operation", "SET",
+							"key", key,
+							"error", err,
+					)
+					return err // Return error to trigger retry
+			}
+			return nil
+	}
+
+	// Execute with retry logic if retrier exists
+	var err error
+	if retrier != nil {
+			err = retrier.AttemptRetry(ctx, operation)
+	} else {
+			err = operation()
+	}
+
+	// Write lock for stats update
+	c.mu.Lock()
+	c.updateStats(err)
+	c.mu.Unlock()
+
+	if err != nil {
+			// Write lock for error handling
+			c.mu.Lock()
+			c.handleOperationError(err)
+			c.mu.Unlock()
+
+			c.logger.Error("Redis set operation failed after retries",
+					"operation", "SET",
+					"key", key,
+					"error", err,
+					"duration", time.Since(start),
+			)
+			return fmt.Errorf("redis set failed after retries: %w", err)
+	}
+
+	// Write lock for success handling
+	c.mu.Lock()
+	c.handleOperationSuccess()
+	c.mu.Unlock()
+
+	c.logger.Info("Redis set operation completed",
+			"operation", "SET",
+			"key", key,
+			"duration", time.Since(start),
+			"status", "success",
+	)
+
+	return nil
 }
 
 // Deletes key from Redis

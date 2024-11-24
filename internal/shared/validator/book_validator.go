@@ -277,9 +277,7 @@ func (bv *BookValidator) validateBook(book repository.Book) error {
 			return err // Error type already incremented in validateArrayFields
 	}
 
-	if err == nil {
-			bv.metrics.IncrementValid()
-	}
+	bv.metrics.IncrementValid()
 	return nil
 }
 

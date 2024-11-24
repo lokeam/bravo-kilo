@@ -16,6 +16,7 @@ type DomainType string
 type DomainHandler interface {
 	GetType() DomainType
 	GetLibraryItems(ctx context.Context, userID int) ([]LibraryItem, error)
+    GetMetadata() (DomainMetadata, error)
 }
 
 // LibraryItem represents a generic item in the library
@@ -30,10 +31,8 @@ type LibraryItem struct {
 
 // DomainMetadata represents domain-specific metadata
 type DomainMetadata struct {
-    TotalItems     int                    `json:"totalItems"`
-    Categories     map[string]int         `json:"categories"`
-    Tags           []string               `json:"tags"`
-    CustomMetadata map[string]interface{} `json:"customMetadata"`
+    DomainType DomainType  // Field is DomainType, not Type
+    Label      string      // Field is Label, not Name
 }
 
 // DomainRegistry manages available domains
