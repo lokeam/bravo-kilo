@@ -25,4 +25,3 @@ type ProcessorMetrics struct {
 	ItemsProcessed   atomic.Int64
 	InvalidItems     atomic.Int64
 }
-

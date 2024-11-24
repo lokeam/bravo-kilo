@@ -30,7 +30,10 @@ func (bp *BookProcessor) GetDomainType() types.DomainType {
 	return types.BookDomainType
 }
 
-func (bp *BookProcessor) ProcessLibraryItems(ctx context.Context, items []types.LibraryItem) (interface{}, error) {
+func (bp *BookProcessor) ProcessLibraryItems(ctx context.Context, items []types.LibraryItem) (*types.LibraryPageData, error) {
+	if items == nil {
+		return nil, fmt.Errorf("items slice cannot be nil")
+	}
 
 	// 1. Guard clause: if no items, return nil and print warning
 	if len(items) == 0 {
@@ -42,61 +45,51 @@ func (bp *BookProcessor) ProcessLibraryItems(ctx context.Context, items []types.
 		return nil, fmt.Errorf("context cannot be nil")
 	}
 
-	// 2. Init new variable to hold books
-	books := make([]repository.Book, 0, len(items))
+	// Create a buffered channel for results
+	resultChan := make(chan repository.Book, len(items))
+	errorChan := make(chan error, 1)
 
-	// 3. Walk through slice of items
-	for i, item := range items {
-		// For each item:
-		select {
-			// A. If the context completes, return nill and print error if applicable
-		case <- ctx.Done():
-			return nil, ctx.Err()
-
-			// B. Else
-		default:
-				// a. Record in processor metrics
-			bp.metrics.ItemsProcessed.Add(1)
-
-				// b. If item has book metadata, add to books slice
-				if book, err := bp.processItem(item); err != nil {
-					bp.metrics.ProcessingErrors.Add(1)
-					bp.logger.Error("item processing failed",
-							"itemIndex", i,
-							"itemID", item.ID,
-							"error", err,
-							"metadata", fmt.Sprintf("%+v", item.Metadata),
-					)
-					continue
-			} else if book != nil {
-					books = append(books, *book)
+	// Process items in chunks of 50 (adjustable based on your needs)
+	const chunkSize = 50
+	for i := 0; i < len(items); i += chunkSize {
+			end := i + chunkSize
+			if end > len(items) {
+					end = len(items)
 			}
 
-				// c. If item is of an object (map) type, run convertMapToBook
-				if mapData, ok := item.Metadata.(map[string]interface{}); ok {
-					book, err := bp.convertMapToBook(mapData)
-
-					// i. If we encounter an error, record in processor metrics
-					if err != nil {
-						bp.metrics.ProcessingErrors.Add(1)
-						bp.logger.Error("failed to convert map to book",
-							"itemID", item.ID,
-							"error", err,
-						)
-						continue
+			// Process chunk
+			go func(chunk []types.LibraryItem) {
+					for _, item := range chunk {
+							select {
+							case <-ctx.Done():
+									errorChan <- ctx.Err()
+									return
+							default:
+									bp.metrics.ItemsProcessed.Add(1)
+									resultChan <- repository.Book{
+											ID:    item.ID,
+											Title: item.Title,
+									}
+							}
 					}
+			}(items[i:end])
+	}
 
-					// ii. Else append book to books slice
-					books = append(books, book)
-					continue
-				}
+	// 2. Init new variable to hold books
+	books := make([]repository.Book, 0, len(items))
+	remaining := len(items)
 
-				// d. If item is of an unexpected type, record in metrics
-			bp.metrics.InvalidItems.Add(1)
-				bp.logger.Error("unexpected metadata type",
-					"itemID", item.ID,
-					"type", fmt.Sprintf("%T", item.Metadata),
-				)
+
+	// 3. Walk through slice of items
+	for remaining > 0 {
+		select {
+		case <-ctx.Done():
+				return nil, fmt.Errorf("processing timed out: %w", ctx.Err())
+		case err := <-errorChan:
+				return nil, fmt.Errorf("processing error: %w", err)
+		case book := <-resultChan:
+				books = append(books, book)
+				remaining--
 		}
 	}
 
@@ -106,14 +99,101 @@ func (bp *BookProcessor) ProcessLibraryItems(ctx context.Context, items []types.
 	}
 	// 5. Return LibraryData
 
-	return types.LibraryPageData{
-		// Note: Organizer package will fill in the rest of the data
-		Books: books,
-		Authors: make(map[string][]repository.Book),
-		Genres:  make(map[string][]repository.Book),
-		Formats: make(map[string][]repository.Book),
-		Tags:    make(map[string][]repository.Book),
+	return &types.LibraryPageData{
+    Books: books,
+    BooksByAuthors: types.AuthorData{
+        AllAuthors: make([]string, 0),
+        ByAuthor:   make(map[string][]repository.Book),
+    },
+    BooksByGenres: types.GenreData{
+        AllGenres: make([]string, 0),
+        ByGenre:   make(map[string][]repository.Book),
+    },
+    BooksByFormat: types.FormatData{
+        AudioBook: make([]repository.Book, 0),
+        EBook:     make([]repository.Book, 0),
+        Physical:  make([]repository.Book, 0),
+    },
+    BooksByTags: types.TagData{
+        AllTags: make([]string, 0),
+        ByTag:   make(map[string][]repository.Book),
+    },
 	}, nil
+}
+
+func (bp *BookProcessor) ProcessBooks(books []repository.Book) (types.LibraryPageData, error) {
+	// Handle nil input
+	if books == nil {
+			return types.LibraryPageData{
+					Books: []repository.Book{},
+					BooksByAuthors: types.AuthorData{
+							AllAuthors: []string{},
+							ByAuthor:   make(map[string][]repository.Book),
+					},
+					BooksByGenres: types.GenreData{
+							AllGenres: []string{},
+							ByGenre:   make(map[string][]repository.Book),
+					},
+					BooksByFormat: types.FormatData{
+							AudioBook: []repository.Book{},
+							EBook:     []repository.Book{},
+							Physical:  []repository.Book{},
+					},
+					BooksByTags: types.TagData{
+							AllTags: []string{},
+							ByTag:   make(map[string][]repository.Book),
+					},
+			}, fmt.Errorf("books slice cannot be nil")
+	}
+
+	// Handle empty input
+	if len(books) == 0 {
+			return types.LibraryPageData{
+					Books: []repository.Book{},
+					BooksByAuthors: types.AuthorData{
+							AllAuthors: []string{},
+							ByAuthor:   make(map[string][]repository.Book),
+					},
+					BooksByGenres: types.GenreData{
+							AllGenres: []string{},
+							ByGenre:   make(map[string][]repository.Book),
+					},
+					BooksByFormat: types.FormatData{
+							AudioBook: []repository.Book{},
+							EBook:     []repository.Book{},
+							Physical:  []repository.Book{},
+					},
+					BooksByTags: types.TagData{
+							AllTags: []string{},
+							ByTag:   make(map[string][]repository.Book),
+					},
+			}, nil
+	}
+
+	// Process valid books
+	result := types.LibraryPageData{
+			Books: books,
+			BooksByAuthors: types.AuthorData{
+					AllAuthors: []string{},
+					ByAuthor:   make(map[string][]repository.Book),
+			},
+			BooksByGenres: types.GenreData{
+					AllGenres: []string{},
+					ByGenre:   make(map[string][]repository.Book),
+			},
+			BooksByFormat: types.FormatData{
+					AudioBook: []repository.Book{},
+					EBook:     []repository.Book{},
+					Physical:  []repository.Book{},
+			},
+			BooksByTags: types.TagData{
+					AllTags: []string{},
+					ByTag:   make(map[string][]repository.Book),
+			},
+	}
+
+	// Process the books...
+	return result, nil
 }
 
 func (bp *BookProcessor) GetMetrics() *processor.ProcessorMetrics {
@@ -125,70 +205,4 @@ func (bp *BookProcessor) GetMetrics() *processor.ProcessorMetrics {
 	metrics.InvalidItems.Store(bp.metrics.InvalidItems.Load())
 
 	return metrics
-}
-
-
-// Helper functions
-
-// Process individual Library Item
-func (bp *BookProcessor) processItem(item types.LibraryItem) (*repository.Book, error) {
-	// Guard clause for type assertion
-	if book, ok := item.Metadata.(repository.Book); ok {
-		return &book, nil
-	}
-
-	// Try as pointer
-	bookPtr, ok := item.Metadata.(*repository.Book)
-	if ok {
-			return bookPtr, nil
-	}
-
-	// Map conversion as fallback
-	if mapData, ok := item.Metadata.(map[string]interface{}); ok {
-		book, err := bp.convertMapToBook(mapData)
-		if err != nil {
-				return nil, fmt.Errorf("map conversion failed: %w", err)
-		}
-		return &book, nil
-	}
-
-	// Handle unknown type
-	bp.metrics.InvalidItems.Add(1)
-	return nil, fmt.Errorf("unexpected metadata type: %T", item.Metadata)
-}
-
-
-// Converts a map to Book type
-func (bp *BookProcessor) convertMapToBook(data map[string]interface{}) (repository.Book, error) {
-	// Init variable to hold book w/ default values
-	var book repository.Book
-
-	// Set required title field\
-	title, ok := data["title"].(string)
-	if !ok {
-		return book, fmt.Errorf("invalid or missing title")
-	}
-	book.Title = title
-
-	// If we have an array of authors, set this field
-
-	// Note: initial recommended type assertion returns an interface{},
-	//       we should be changing this on the front end, but adjust this value if needed
-	if authors, ok := data["authors"].([]string); ok {
-			book.Authors = append(book.Authors, authors...)
-	}
-
-	// Do same thing for genres, tags, etc
-	if genres, ok := data["genres"].([]string); ok {
-			book.Genres = append(book.Genres, genres...)
-	}
-
-	if tags, ok := data["tags"].([]string); ok {
-			book.Tags = append(book.Tags, tags...)
-	}
-
-	// Set other fields: description, publisher, published date, ISBN10, ISBN13, pages, language
-
-	// Return book and nil
-	return book, nil
 }
