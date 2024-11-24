@@ -1,12 +1,20 @@
 package organizer
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync/atomic"
 
 	"github.com/lokeam/bravo-kilo/internal/books/repository"
 	"github.com/lokeam/bravo-kilo/internal/shared/types"
+)
+
+const (
+	FormatAudioBook = "audioBook"
+	FormatEBook     = "eBook"
+	FormatPhysical  = "physical"
 )
 
 type BookOrganizer struct {
@@ -25,61 +33,95 @@ func NewBookOrganizer(logger *slog.Logger) (*BookOrganizer, error) {
 	}, nil
 }
 
-func (bo *BookOrganizer) OrganizeForLibrary(items interface{}) (types.LibraryPageData, error) {
+// Sort these books into different views (by author, genre, etc.)
+func (bo *BookOrganizer) OrganizeForLibrary(ctx context.Context, items *types.LibraryPageData) (*types.LibraryPageData, error) {
+	if ctx == nil {
+		return nil, fmt.Errorf("context cannot be nil")
+	}
+
+	if err := ctx.Err(); err != nil {
+		atomic.AddInt64(&bo.metrics.OrganizationErrors, 1)
+		return nil, fmt.Errorf("context error before organization: %w", err)
+	}
+
 	if items == nil {
 		atomic.AddInt64(&bo.metrics.OrganizationErrors, 1)
-		return types.LibraryPageData{}, fmt.Errorf("items cannot be nil")
+		return &types.LibraryPageData{}, fmt.Errorf("items cannot be nil")
 	}
 
-	pageData, ok := items.(*types.LibraryPageData)
-	if !ok {
-		return types.LibraryPageData{}, fmt.Errorf("expected types.LibraryPageData, got %T", items)
-	}
-
-	books := pageData.Books
+	books := items.Books
 
 	if len(books) == 0 {
-		return types.LibraryPageData{
-			Books:    []repository.Book{},
-			Authors:  make(map[string][]repository.Book),
-			Genres:   make(map[string][]repository.Book),
-			Formats:  make(map[string][]repository.Book),
-			Tags:     make(map[string][]repository.Book),
+		return &types.LibraryPageData{
+				Books:          books,
+				BooksByAuthors: types.AuthorData{
+						AllAuthors: make([]string, 0),
+						ByAuthor:   make(map[string][]repository.Book),
+				},
+				BooksByGenres: types.GenreData{
+						AllGenres: make([]string, 0),
+						ByGenre:   make(map[string][]repository.Book),
+				},
+				BooksByFormat: types.FormatData{
+						AudioBook: make([]repository.Book, 0),
+						EBook:     make([]repository.Book, 0),
+						Physical:  make([]repository.Book, 0),
+				},
+				BooksByTags: types.TagData{
+						AllTags: make([]string, 0),
+						ByTag:   make(map[string][]repository.Book),
+				},
 		}, nil
-	}
+}
 
 	atomic.AddInt64(&bo.metrics.ItemsOrganized, int64(len(books)))
 
-	authors, err := bo.organizeByAuthors(books)
+	authors, err := bo.organizeByAuthors(ctx, books)
 	if err != nil {
 			atomic.AddInt64(&bo.metrics.OrganizationErrors, 1)
-			return types.LibraryPageData{}, fmt.Errorf("author organization failed: %w", err)
+			return &types.LibraryPageData{}, fmt.Errorf("author organization failed: %w", err)
 	}
 
-	genres, err := bo.organizeByGenres(books)
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("context cancelled after author organization: %w", err)
+	}
+
+	genres, err := bo.organizeByGenres(ctx, books)
 	if err != nil {
 			atomic.AddInt64(&bo.metrics.OrganizationErrors, 1)
-			return types.LibraryPageData{}, fmt.Errorf("genre organization failed: %w", err)
+			return &types.LibraryPageData{}, fmt.Errorf("genre organization failed: %w", err)
 	}
 
-	formats, err := bo.organizeByFormats(books)
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("context cancelled after genre organization: %w", err)
+	}
+
+	formats, err := bo.organizeByFormats(ctx, books)
 	if err != nil {
 			atomic.AddInt64(&bo.metrics.OrganizationErrors, 1)
-			return types.LibraryPageData{}, fmt.Errorf("format organization failed: %w", err)
+			return &types.LibraryPageData{}, fmt.Errorf("format organization failed: %w", err)
 	}
 
-	tags, err := bo.organizeByTags(books)
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("context cancelled after format organization: %w", err)
+	}
+
+	tags, err := bo.organizeByTags(ctx,books)
 	if err != nil {
 			atomic.AddInt64(&bo.metrics.OrganizationErrors, 1)
-			return types.LibraryPageData{}, fmt.Errorf("tag organization failed: %w", err)
+			return &types.LibraryPageData{}, fmt.Errorf("tag organization failed: %w", err)
 	}
 
-	return types.LibraryPageData{
-		Books:    books,
-		Authors:  authors,
-		Genres:   genres,
-		Formats:  formats,
-		Tags:     tags,
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("context cancelled after tag organization: %w", err)
+	}
+
+	return &types.LibraryPageData{
+		Books:          books,
+		BooksByAuthors: authors,    // Changed from Authors
+		BooksByGenres:  genres,     // Changed from Genres
+		BooksByFormat:  formats,    // Changed from Formats
+		BooksByTags:    tags,
 	}, nil
 }
 
@@ -93,125 +135,190 @@ func (bo *BookOrganizer) GetMetrics() OrganizerMetrics {
 
 // Helper functions
 
-func (bo *BookOrganizer) organizeByAuthors(books []repository.Book) (map[string][]repository.Book, error) {
-	if books == nil {
-			return nil, fmt.Errorf("books slice cannot be nil")
+func (bo *BookOrganizer) organizeByAuthors(ctx context.Context, books []repository.Book) (types.AuthorData, error) {
+	if err := ctx.Err(); err != nil {
+		return types.AuthorData{}, fmt.Errorf("context cancelled: %w", err)
 	}
 
-	result := make(map[string][]repository.Book)
+	if books == nil {
+			// Return empty AuthorData struct instead of nil
+			return types.AuthorData{
+					AllAuthors: make([]string, 0),
+					ByAuthor:   make(map[string][]repository.Book),
+			}, fmt.Errorf("books slice cannot be nil")
+	}
 
-	for i, book := range books {
-			if book.Authors == nil {
-					bo.logger.Warn("book has nil Authors slice",
-							"bookIndex", i,
-							"bookTitle", book.Title,
-					)
-					continue
-			}
+	result := types.AuthorData{
+			AllAuthors: make([]string, 0),
+			ByAuthor:   make(map[string][]repository.Book),
+	}
 
-			for _, author := range book.Authors {
-					if author == "" {
-							bo.logger.Warn("empty author name found",
-									"bookIndex", i,
-									"bookTitle", book.Title,
-							)
-							continue
-					}
-					result[author] = append(result[author], book)
-			}
+	authorSet := make(map[string]struct{})
+
+	for i := range books {
+		// Initialize nil slices
+		if books[i].Authors == nil {
+				books[i].Authors = make([]string, 0)
+				bo.logger.Debug("initialized nil Authors slice",
+						"bookIndex", i,
+						"bookTitle", books[i].Title,
+				)
+				continue
+		}
+
+		for _, author := range books[i].Authors {
+				if author == "" {
+						continue
+				}
+				result.ByAuthor[author] = append(result.ByAuthor[author], books[i])
+				authorSet[author] = struct{}{}
+		}
+}
+
+	// Convert unique authors to slice
+	for author := range authorSet {
+			result.AllAuthors = append(result.AllAuthors, author)
 	}
 
 	return result, nil
 }
 
-func (bo *BookOrganizer) organizeByGenres(books []repository.Book) (map[string][]repository.Book, error) {
-	if books == nil {
-			return nil, fmt.Errorf("books slice cannot be nil")
+func (bo *BookOrganizer) organizeByGenres(ctx context.Context, books []repository.Book) (types.GenreData, error) {
+	if err := ctx.Err(); err != nil {
+		return types.GenreData{}, fmt.Errorf("context cancelled: %w", err)
 	}
 
-	result := make(map[string][]repository.Book)
+	if books == nil {
+			return types.GenreData{}, fmt.Errorf("books slice cannot be nil")
+	}
 
-	for i, book := range books {
-			if book.Genres == nil {
+	result := types.GenreData{
+			AllGenres: make([]string, 0),
+			ByGenre:   make(map[string][]repository.Book),
+	}
+
+	genreSet := make(map[string]struct{})
+
+	for i := range books {
+			if books[i].Genres == nil {
+					books[i].Genres = make([]string, 0)
 					bo.logger.Warn("book has nil Genres slice",
 							"bookIndex", i,
-							"bookTitle", book.Title,
+							"bookTitle", books[i].Title,
 					)
 					continue
 			}
 
-			for _, genre := range book.Genres {
+			for _, genre := range books[i].Genres {
 					if genre == "" {
 							bo.logger.Warn("empty genre found",
 									"bookIndex", i,
-									"bookTitle", book.Title,
+									"bookTitle", books[i].Title,
 							)
 							continue
 					}
-					result[genre] = append(result[genre], book)
+					result.ByGenre[genre] = append(result.ByGenre[genre], books[i])
+					genreSet[genre] = struct{}{} // Mark genre as seen
 			}
+	}
+
+	// Convert unique genres to slice
+	for genre := range genreSet {
+			result.AllGenres = append(result.AllGenres, genre)
 	}
 
 	return result, nil
 }
 
-func (bo *BookOrganizer) organizeByFormats(books []repository.Book) (map[string][]repository.Book, error) {
-	if books == nil {
-			return nil, fmt.Errorf("books slice cannot be nil")
+func (bo *BookOrganizer) organizeByFormats(ctx context.Context, books []repository.Book) (types.FormatData, error) {
+	if err := ctx.Err(); err != nil {
+		return types.FormatData{}, fmt.Errorf("context cancelled: %w", err)
 	}
 
-	result := make(map[string][]repository.Book)
+	if books == nil {
+			return types.FormatData{}, fmt.Errorf("books slice cannot be nil")
+	}
+
+	result := types.FormatData{
+			AudioBook: make([]repository.Book, 0),
+			EBook:     make([]repository.Book, 0),
+			Physical:  make([]repository.Book, 0),
+	}
 
 	for i, book := range books {
-			if book.Formats == nil {
-					bo.logger.Warn("book has nil Formats slice",
-							"bookIndex", i,
-							"bookTitle", book.Title,
-					)
-					continue
-			}
+		// Check formats array instead of single format
+		for _, format := range book.Formats {
+				// Normalize format to lowercase for comparison
+				format = strings.ToLower(format)
 
-			for _, format := range book.Formats {
-					if format == "" {
-							bo.logger.Warn("empty format found",
-									"bookIndex", i,
-									"bookTitle", book.Title,
-							)
-							continue
-					}
-					result[format] = append(result[format], book)
-			}
-	}
+				switch format {
+				case FormatAudioBook:
+						result.AudioBook = append(result.AudioBook, book)
+				case FormatEBook:
+						result.EBook = append(result.EBook, book)
+				case FormatPhysical:
+						result.Physical = append(result.Physical, book)
+				default:
+						bo.logger.Warn("unknown format found",
+								"format", format,
+								"bookIndex", i,
+								"bookTitle", book.Title)
+				}
+		}
+}
 
 	return result, nil
 }
 
-func (bo *BookOrganizer) organizeByTags(books []repository.Book) (map[string][]repository.Book, error) {
-	if books == nil {
-			return nil, fmt.Errorf("books slice cannot be nil")
+func (bo *BookOrganizer) organizeByTags(ctx context.Context, books []repository.Book) (types.TagData, error) {
+	if err := ctx.Err(); err != nil {
+		return types.TagData{}, fmt.Errorf("context cancelled: %w", err)
 	}
 
-	result := make(map[string][]repository.Book)
+	if books == nil {
+			return types.TagData{}, fmt.Errorf("books slice cannot be nil")
+	}
 
-	for i, book := range books {
-			if book.Tags == nil {
-					bo.logger.Warn("book has nil Tags slice",
-							"bookIndex", i,
-							"bookTitle", book.Title,
-					)
-					continue
-			}
+	result := types.TagData{
+			AllTags: make([]string, 0),
+			ByTag:   make(map[string][]repository.Book),
+	}
 
-			for _, tag := range book.Tags {
-					if tag == "" {
-							bo.logger.Warn("empty tag found",
-									"bookIndex", i,
-									"bookTitle", book.Title,
-							)
-							continue
-					}
-					result[tag] = append(result[tag], book)
+	tagSet := make(map[string]struct{})
+
+	for i := range books {
+		if i > 0 && i%100 == 0 { // Check every 100 items
+			if err := ctx.Err(); err != nil {
+					return types.TagData{}, fmt.Errorf("context cancelled during tag processing: %w", err)
 			}
+		}
+
+		// Initialize nil slices
+		if books[i].Tags == nil {
+				books[i].Tags = make([]string, 0)
+				bo.logger.Debug("initialized nil Tags slice",
+						"bookIndex", i,
+						"bookTitle", books[i].Title,
+				)
+				continue
+		}
+
+		for _, tag := range books[i].Tags {
+				if tag == "" {
+						bo.logger.Debug("skipping empty tag",
+								"bookIndex", i,
+								"bookTitle", books[i].Title,
+						)
+						continue
+				}
+				result.ByTag[tag] = append(result.ByTag[tag], books[i])
+				tagSet[tag] = struct{}{}
+		}
+	}
+
+	// Convert unique tags to slice
+	for tag := range tagSet {
+			result.AllTags = append(result.AllTags, tag)
 	}
 
 	return result, nil

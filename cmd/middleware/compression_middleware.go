@@ -3,6 +3,7 @@ package middleware
 import (
 	"fmt"
 	"log"
+	"log/slog"
 	"net/http"
 	"runtime/debug"
 	"strings"
@@ -73,6 +74,9 @@ func NewAdaptiveCompression(monitor *CompressionMonitor) func(http.Handler) http
 	// Guard clauses
 	if monitor == nil {
 		panic("compression monitor cannot be nil")
+	}
+	if logger == nil {
+		logger = slog.Default()
 	}
 
 	// Attempt to load config from env

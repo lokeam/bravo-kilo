@@ -10,27 +10,13 @@ import (
 // This file defines the contract that ALL domains must follow
 type DomainType string
 
-// Every domain must implement this interface
-type DomainHandler interface {
-	// Identifies what type of domain this is
-	GetType() DomainType
-
-	// Gets all items for this domain
-	GetLibraryItems(ctx context.Context, userID int) ([]LibraryItem, error)
-
-	// Gets metadata like categories, tags, etc.
-	GetMetadata(ctx context.Context, userID int) (DomainMetadata, error)
-}
-
 // Common structure for ALL items across ALL domains
 type LibraryItem struct {
 	ID          int         `json:"id"`
 	Title       string      `json:"title"`
 	Type        DomainType  `json:"type"`
 	DateAdded   string      `json:"dateAdded"`
-	LastUpdated string      `json:"lastUpdated"`
-	Metadata    interface{} `json:"metadata"`
-}
+	LastUpdated string      `json:"lastUpdated"`}
 
 // Common metadata structure for ALL domains
 type DomainMetadata struct {

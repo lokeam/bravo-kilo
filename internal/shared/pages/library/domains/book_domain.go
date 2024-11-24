@@ -43,14 +43,28 @@ func (h *BookDomainHandler) GetLibraryItems(ctx context.Context, userID int) ([]
         "domain", "books",
     )
 
+    start := time.Now()
+
     // Call refactored Getter from crud.go
     books, err := h.bookHandlers.GetAllUserBooksDomain(ctx, userID)
     if err != nil {
+        h.logger.Error("failed to get user books",
+            "userID", userID,
+            "error", err,
+            "duration", time.Since(start),
+        )
+
         return nil, &BookDomainError{
             Source: "GetLibraryItems",
             Err:    err,
         }
     }
+
+    h.logger.Debug("successfully retrieved books",
+    "userID", userID,
+    "bookCount", len(books),
+        "duration", time.Since(start),
+    )
 
     items := make([]types.LibraryItem, len(books))
     for i, book := range books {
@@ -60,9 +74,21 @@ func (h *BookDomainHandler) GetLibraryItems(ctx context.Context, userID int) ([]
             Type:        types.BookDomainType,
             DateAdded:   book.CreatedAt.Format(time.RFC3339),
             LastUpdated: book.LastUpdated.Format(time.RFC3339),
-            Metadata:    book,
         }
     }
 
+    h.logger.Debug("completed GetLibraryItems",
+        "userID", userID,
+        "itemCount", len(items),
+        "totalDuration", time.Since(start),
+    )
+
     return items, nil
+}
+
+func (h *BookDomainHandler) GetMetadata() (types.DomainMetadata, error){
+    return types.DomainMetadata{
+        DomainType: types.BookDomainType,  // Use correct field name
+        Label:      "Books",               // Use correct field name
+    }, nil
 }

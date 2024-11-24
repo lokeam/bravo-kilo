@@ -17,6 +17,7 @@ import (
 	"github.com/lokeam/bravo-kilo/internal/shared/cache"
 	"github.com/lokeam/bravo-kilo/internal/shared/jwt"
 	"github.com/lokeam/bravo-kilo/internal/shared/organizer"
+	"github.com/lokeam/bravo-kilo/internal/shared/pages/library/domains"
 	"github.com/lokeam/bravo-kilo/internal/shared/processor/bookprocessor"
 	"github.com/lokeam/bravo-kilo/internal/shared/redis"
 	"github.com/lokeam/bravo-kilo/internal/shared/types"
@@ -24,24 +25,42 @@ import (
 	goredis "github.com/redis/go-redis/v9"
 )
 
+const (
+	BooksDomain types.DomainType = "books"
+	GamesDomain types.DomainType = "games"
+
+	PageRuleKey  validator.ValidationRuleKey = "page"
+	LimitRuleKey validator.ValidationRuleKey = "limit"
+	SortRuleKey  validator.ValidationRuleKey = "sort"
+
+	defaultContextTimeout = 30 * time.Second  // Increased from 10s
+
+	// Operation budgets (percentages of total timeout)
+	cacheOperationBudget    = 0.2  // 20% of total time
+	dbOperationBudget      = 0.3  // 30% of total time
+	processingBudget       = 0.3  // 30% of total time
+	organizingBudget       = 0.2  // 20% of total time
+)
+
 type LibraryPageHandler struct {
 	mu                 sync.RWMutex
 	domainHandlers     map[types.DomainType]types.DomainHandler
-	processor          *bookprocessor.BookProcessor
 	redisClient        *redis.RedisClient
 	logger             *slog.Logger
 	cacheManager       *cache.CacheManager
 	metrics            *LibraryMetrics
 	organizer          *organizer.BookOrganizer
-	requestTimeout     time.Duration
+	bookProcessor      *bookprocessor.BookProcessor
+
+	// Validator
 	baseValidator      *validator.BaseValidator
 	validationRules    validator.QueryValidationRules
 }
 
 type LibraryResponse struct {
-	RequestID string      `json:"requestId"`
-	Data     interface{}  `json:"data"`
-	Source   string       `json:"source"` // either "cache" || "database"
+	RequestID  string                  `json:"requestId"`
+	Data       *types.LibraryPageData   `json:"data"`
+	Source     string                  `json:"source"` // either "cache" || "database"
 }
 
 type LibraryMetrics struct {
@@ -62,10 +81,12 @@ type LibraryQueryParams struct {
 	Sort  string `json:"sort" validate:"omitempty,oneof=asc desc"`
 }
 
-const (
-    BooksDomain types.DomainType = "books"
-    GamesDomain types.DomainType = "games"
-)
+// ADD: New helper type for operation tracking
+type operationDetails struct {
+	name      string
+	budget    float64
+	startTime time.Time
+}
 
 func NewLibraryPageHandler(
 	bookHandlers *handlers.BookHandlers,
@@ -92,10 +113,10 @@ func NewLibraryPageHandler(
 		return nil, fmt.Errorf("baseValidator cannot be nil")
 	}
 
-	// Init processor + organizer
-	processor, err := bookprocessor.NewBookProcessor(logger)
+	// Init organizer + processor
+	bookProcessor, err := bookprocessor.NewBookProcessor(logger)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create book processor: %w", err)
+			return nil, fmt.Errorf("failed to create book processor: %w", err)
 	}
 
 	organizer, err := organizer.NewBookOrganizer(logger)
@@ -111,39 +132,39 @@ func NewLibraryPageHandler(
 
 	// Set validation rules
 	validationRules := validator.QueryValidationRules{
-		"page": {
-			Required: true,
-			Type:     validator.QueryTypeInt,
-			MinLength: 1,
-			MaxLength: 5,
+		PageRuleKey: {
+				Required:  true,
+				Type:     validator.QueryTypeInt,
+				MinLength: 1,
+				MaxLength: 5,
 		},
-		"limit": {
-				Required: true,
+		LimitRuleKey: {
+				Required:  true,
 				Type:     validator.QueryTypeInt,
 				MinLength: 1,
 				MaxLength: 3,
 		},
-		"sort": {
-				Required: false,
-				Type:     validator.QueryTypeString,
+		SortRuleKey: {
+				Required:      false,
+				Type:         validator.QueryTypeString,
 				AllowedValues: []string{"asc", "desc"},
 		},
-}
-
-	h := &LibraryPageHandler{
-		domainHandlers:  make(map[types.DomainType]types.DomainHandler),
-		processor:       processor,
-		organizer:       organizer,
-		redisClient:     redisClient,
-		logger:          logger,
-		cacheManager:    cacheManager,
-		metrics:         &LibraryMetrics{},
-		requestTimeout:  5 * time.Second,
-		baseValidator:   baseValidator,
-		validationRules: validationRules,
 	}
 
-	return h, nil
+	bookDomainHandler := domains.NewBookDomainHandler(bookHandlers, logger)
+	return &LibraryPageHandler{
+		domainHandlers: map[types.DomainType]types.DomainHandler{
+			BooksDomain: bookDomainHandler,
+		},
+		logger:          logger,
+		redisClient:     redisClient,
+		organizer:       organizer,
+		bookProcessor:   bookProcessor,
+		cacheManager:    cacheManager,
+		metrics:         &LibraryMetrics{},
+		baseValidator:   baseValidator,
+		validationRules: validationRules,
+	}, nil
 }
 
 func (h *LibraryPageHandler) HandleGetLibraryPageData(w http.ResponseWriter, r *http.Request) {
@@ -152,8 +173,20 @@ func (h *LibraryPageHandler) HandleGetLibraryPageData(w http.ResponseWriter, r *
 	if requestID == "" {
 			requestID = uuid.New().String()
 	}
+	h.logger.Info("Starting library page request",
+	"method", r.Method,
+	"path", r.URL.Path)
 
-	// 2. Request Tracking
+	// Start tracking total request duration
+	start := time.Now()
+	defer h.trackOperationDuration("total_request", start)
+
+	// Parent context with overall timeout
+	ctx, cancel := context.WithTimeout(r.Context(), defaultContextTimeout)
+	ctx = context.WithValue(ctx, "requestID", requestID)
+	defer cancel()
+
+	// Request Tracking
 	requestStart := time.Now()
 	defer func() {
 			h.logger.Info("completed library page request",
@@ -165,6 +198,13 @@ func (h *LibraryPageHandler) HandleGetLibraryPageData(w http.ResponseWriter, r *
 			)
 	}()
 
+	// Pre-auth context check
+	preAuthOp := h.beginOperation("pre-authentication", 0.1) // Small budget for auth checks
+	if err := h.checkContext(ctx, requestID, preAuthOp); err != nil {
+			h.respondWithError(w, requestID, err, http.StatusGatewayTimeout)
+			return
+	}
+
 	// 3. JWT Authentication (Primary Security Check)
 	userID, err := jwt.ExtractUserIDFromJWT(r, config.AppConfig.JWTPublicKey)
 	if err != nil {
@@ -175,32 +215,23 @@ func (h *LibraryPageHandler) HandleGetLibraryPageData(w http.ResponseWriter, r *
 			h.respondWithError(w, requestID, err, http.StatusUnauthorized)
 			return
 	}
+
+	h.logger.Debug("user authenticated",
+		"requestID", requestID,
+		"userID", userID,
+	)
+
+	// Post-auth context check
+	postAuthOp := h.beginOperation("post-authentication", 0.1)
+	if err := h.checkContext(ctx, requestID, postAuthOp); err != nil {
+			h.respondWithError(w, requestID, err, http.StatusGatewayTimeout)
+			return
+	}
+
 	h.logger.Debug("user authenticated",
 			"requestID", requestID,
 			"userID", userID,
 	)
-
-	// 4. Context Setup
-	ctx := r.Context()
-	ctx, cancel := context.WithTimeout(ctx, h.requestTimeout)
-	if ctx == nil {
-		h.logger.Error("nil context received",
-			"requestID", requestID,
-		)
-		h.respondWithError(w, requestID, fmt.Errorf("nil context received"), http.StatusInternalServerError)
-		return
-	}
-	defer cancel()
-
-	// 5. Start validation timing
-	validationStart := time.Now()
-	defer func() {
-		duration := time.Since(validationStart)
-		if ctx.Err() == nil {
-				h.metrics.recordValidationDuration(time.Since(validationStart))
-		}
-		h.metrics.recordValidationDuration(duration)
-	}()
 
 	h.logger.Info("starting library page request",
 			"requestID", requestID,
@@ -208,30 +239,34 @@ func (h *LibraryPageHandler) HandleGetLibraryPageData(w http.ResponseWriter, r *
 			"path", r.URL.Path,
 	)
 
-    // Parse and validate query parameters
-    queryParams := LibraryQueryParams{
-			Page:  1,  // Default values
-			Limit: 10,
-		}
-
-		if err := h.parseQueryParams(r, &queryParams); err != nil {
-				h.logger.Error("invalid query parameters",
-						"requestID", requestID,
-						"error", err,
-				)
-				h.respondWithError(w, requestID, err, http.StatusBadRequest)
-				return
-		}
-
-	// 6. Context check after time consuming operations
-	if ctx.Err() != nil {
-    h.logger.Error("request timeout",
-        "requestID", requestID,
-        "error", ctx.Err(),
-    )
-    h.respondWithError(w, requestID, ctx.Err(), http.StatusGatewayTimeout)
-    return
+	// 2. Pre-validation context check with budget
+	preValidationOp := h.beginOperation("pre-validation", 0.05) // 5% budget
+	if err := h.checkContext(ctx, requestID, preValidationOp); err != nil {
+			h.respondWithError(w, requestID, err, http.StatusGatewayTimeout)
+			return
 	}
+
+	// 3. Parse and validate query parameters
+	var params LibraryQueryParams
+	err = h.withTimeout(ctx, "query_validation", 0.05, func(opCtx context.Context) error {
+			return h.parseQueryParams(r, &params)
+	})
+	if err != nil {
+			h.logger.Error("invalid query parameters",
+					"requestID", requestID,
+					"error", err,
+			)
+			h.respondWithError(w, requestID, err, http.StatusBadRequest)
+			return
+	}
+
+	// 4. Post-validation context check
+	postValidationOp := h.beginOperation("post-validation", 0.05)
+	if err := h.checkContext(ctx, requestID, postValidationOp); err != nil {
+			h.respondWithError(w, requestID, err, http.StatusGatewayTimeout)
+			return
+	}
+
 
 	// 7. Get domain from query param
 	domainType := types.DomainType(r.URL.Query().Get("domain"))
@@ -243,6 +278,14 @@ func (h *LibraryPageHandler) HandleGetLibraryPageData(w http.ResponseWriter, r *
 
 		domainType = types.BookDomainType // Default to books if not specified
 	}
+
+	// 6. Pre-domain validation context check
+	preDomainValidationOp := h.beginOperation("pre-domain-validation", 0.05)
+	if err := h.checkContext(ctx, requestID, preDomainValidationOp); err != nil {
+			h.respondWithError(w, requestID, err, http.StatusGatewayTimeout)
+			return
+	}
+
 	if err := h.baseValidator.ValidateField("domain", string(domainType)); err != nil {
 		h.logger.Error("domain validation failed",
 			"requestID", requestID,
@@ -254,7 +297,7 @@ func (h *LibraryPageHandler) HandleGetLibraryPageData(w http.ResponseWriter, r *
 		return
 	}
 
-	// 8. Validate domain type
+	// 7. Validate domain handler exists
 	domainHandler, exists := h.domainHandlers[domainType]
 	if !exists {
 			h.logger.Error("invalid domain requested",
@@ -270,12 +313,59 @@ func (h *LibraryPageHandler) HandleGetLibraryPageData(w http.ResponseWriter, r *
 	"domain", domainType,
 	)
 
-	// 9. Check cache
-	cacheKey := fmt.Sprintf("page:library:%d:domain:%s", userID, domainType)
-	h.logger.Debug("checking cache",
-			"requestID", requestID,
-			"cacheKey", cacheKey,
-	)
+	// Post-domain validation context check
+	postDomainValidationOp := h.beginOperation("post-domain-validation", 0.05)
+	if err := h.checkContext(ctx, requestID, postDomainValidationOp); err != nil {
+			h.respondWithError(w, requestID, err, http.StatusGatewayTimeout)
+			return
+	}
+
+	// 8. Pre-cache context check
+	preCacheOp := h.beginOperation("pre-cache", 0.05)
+	if err := h.checkContext(ctx, requestID, preCacheOp); err != nil {
+			h.respondWithError(w, requestID, err, http.StatusGatewayTimeout)
+			return
+	}
+
+	// 9. Redis health monitoring
+	if !h.redisClient.IsReady() {
+		h.logger.Warn("Redis client not ready",
+				"requestID", requestID,
+				"status", h.redisClient.GetStatus())
+
+		// Get circuit breaker state if available
+		if breaker := h.redisClient.GetCircuitBreaker(); breaker != nil {
+				h.logger.Warn("Circuit breaker status",
+						"requestID", requestID,
+						"state", breaker.GetState())
+		}
+	}
+
+	// 10. Cache operations
+	cacheKeyCtx, cacheKeyCancel := context.WithTimeout(ctx, h.cacheTimeout)
+	defer cacheKeyCancel()
+
+	cacheKey, err := h.generateCacheKey(cacheKeyCtx, userID, domainType)
+	if err != nil {
+			if err == context.DeadlineExceeded {
+					h.logger.Error("cache key generation timed out",
+							"requestID", requestID,
+							"error", err,
+					)
+			} else {
+					h.logger.Error("cache key generation failed",
+							"requestID", requestID,
+							"error", err,
+					)
+			}
+	}
+
+	// 11. Post-cache context check
+	postCacheOp := h.beginOperation("post-cache", 0.05)
+	if err := h.checkContext(ctx, requestID, postCacheOp); err != nil {
+			h.respondWithError(w, requestID, err, http.StatusGatewayTimeout)
+			return
+	}
 
 	var libraryData *types.LibraryPageData
 	cacheStart := time.Now()
@@ -340,10 +430,11 @@ func (h *LibraryPageHandler) HandleGetLibraryPageData(w http.ResponseWriter, r *
 		}
 	}
 
-	// 10. Get domain data, call various domain handler methods (BookDomainHandler is default)
-	if ctx.Err() != nil {
-		h.respondWithError(w, requestID, ctx.Err(), http.StatusGatewayTimeout)
-		return
+	// 13. Pre-database operation context check
+	preDBOp := h.beginOperation("pre-database", 0.05)
+	if err := h.checkContext(ctx, requestID, preDBOp); err != nil {
+			h.respondWithError(w, requestID, err, http.StatusGatewayTimeout)
+			return
 	}
 
 	// Ensure domain handler isn't nil before calling methods on it
@@ -356,7 +447,33 @@ func (h *LibraryPageHandler) HandleGetLibraryPageData(w http.ResponseWriter, r *
 		return
 	}
 
-	items, err := domainHandler.GetLibraryItems(ctx, userID)
+	// 14. Database operations with timeout budget
+	var libraryData *types.LibraryPageData
+	err = h.withTimeout(ctx, "database_operations", dbOperationBudget, func(opCtx context.Context) error {
+			data, err := domainHandler.GetLibraryItems(opCtx, userID, params)
+			if err != nil {
+					h.logger.Error("failed to get library data from database",
+							"requestID", requestID,
+							"domain", domainType,
+							"error", err,
+					)
+					return fmt.Errorf("database operation failed: %w", err)
+			}
+			libraryData = data
+			return nil
+	})
+	postDBOp := h.beginOperation("post-database", 0.05)
+	if err := h.checkContext(ctx, requestID, postDBOp); err != nil {
+			h.respondWithError(w, requestID, err, http.StatusGatewayTimeout)
+			return
+	}
+
+
+	// Database operations with specific timeout
+	dbCtx, dbCancel := context.WithTimeout(ctx, h.dbTimeout)
+	defer dbCancel()
+
+	items, err := domainHandler.GetLibraryItems(dbCtx, userID)
 	if err != nil {
 		h.logger.Error("failed to get library items",
 			"requestID", requestID,
@@ -366,13 +483,22 @@ func (h *LibraryPageHandler) HandleGetLibraryPageData(w http.ResponseWriter, r *
 		return
 	}
 
-	h.logger.Debug("items retrieved",
-	"requestID", requestID,
-		"itemCount", len(items),
-	)
 
-	// 11. Process + organize data
-	processedData, err := h.processor.ProcessLibraryItems(ctx, items)
+	h.logger.Debug("Retrieved domain items",
+	"requestID", requestID,
+	"itemCount", len(items),
+	"domain", domainType,
+	"hasNilItems", items == nil)
+
+	if err := h.checkContext(ctx, requestID, "pre-processing"); err != nil {
+		h.respondWithError(w, requestID, err, http.StatusGatewayTimeout)
+		return
+	}
+
+	processCtx, processCancel := context.WithTimeout(ctx, h.processTimeout)
+	defer processCancel()
+
+	processedData, err := h.bookProcessor.ProcessLibraryItems(processCtx, items)
 	if err != nil {
 		h.logger.Error("processing failed",
 		"requestID", requestID,
@@ -382,38 +508,54 @@ func (h *LibraryPageHandler) HandleGetLibraryPageData(w http.ResponseWriter, r *
 		return
 	}
 
-	// Type assertion for processed data
-	typedData, ok := processedData.(*types.LibraryPageData)
-	if !ok {
-			err := fmt.Errorf("invalid data type from processor: expected *types.LibraryPageData, got %T", processedData)
-			h.logger.Error("type assertion failed",
-					"requestID", requestID,
-					"error", err,
-			)
-			h.respondWithError(w, requestID, err, http.StatusInternalServerError)
-			return
+	// Check context after processing
+	if err := h.checkContext(ctx, requestID, "post-processing"); err != nil {
+		h.respondWithError(w, requestID, err, http.StatusGatewayTimeout)
+		return
 	}
 
-	h.logger.Debug("organizing processed data",
+	h.logger.Debug("Processing completed",
 	"requestID", requestID,
-	)
-	organizedData := types.NewLibraryPageData(h.logger)
+	"hasNilProcessedData", processedData == nil)
 
-  // Perform thread-safe deep copy
-  copyStart := time.Now()
-  if err := organizedData.DeepCopy(typedData); err != nil {
-			h.logger.Error("deep copy failed",
-					"requestID", requestID,
-					"error", err,
-					"duration", time.Since(copyStart),
-			)
-			h.respondWithError(w, requestID, err, http.StatusInternalServerError)
-			return
+	// Pre-organization context check
+	if err := h.checkContext(ctx, requestID, "pre-organization"); err != nil {
+		h.respondWithError(w, requestID, err, http.StatusGatewayTimeout)
+		return
 	}
-	h.logger.Debug("deep copy completed",
+
+	organizeCtx, organizeCancel := context.WithTimeout(ctx, h.organizeTimeout)
+	defer organizeCancel()
+
+	organizedData, err := h.organizer.OrganizeForLibrary(organizeCtx, processedData)
+	if err != nil {
+		h.logger.Error("organizing failed",
 			"requestID", requestID,
-			"duration", time.Since(copyStart),
-	)
+			"error", err,
+		)
+		h.respondWithError(w, requestID, err, http.StatusInternalServerError)
+		return
+	}
+
+	// Post-organization context check
+	if err := h.checkContext(ctx, requestID, "post-organization"); err != nil {
+		h.respondWithError(w, requestID, err, http.StatusGatewayTimeout)
+		return
+	}
+
+	h.logger.Debug("Organization completed",
+	"requestID", requestID,
+	"organizedDataSize", len(organizedData.Books),
+	"authorCount", len(organizedData.BooksByAuthors.AllAuthors),
+	"authorMappingSize", len(organizedData.BooksByAuthors.ByAuthor),
+	"genreCount", len(organizedData.BooksByGenres.AllGenres),
+	"genreMappingSize", len(organizedData.BooksByGenres.ByGenre),
+	"formatAudioBookCount", len(organizedData.BooksByFormat.AudioBook),
+	"formatEBookCount", len(organizedData.BooksByFormat.EBook),
+	"formatPhysicalCount", len(organizedData.BooksByFormat.Physical),
+	"tagCount", len(organizedData.BooksByTags.AllTags),
+	"tagMappingSize", len(organizedData.BooksByTags.ByTag))
+
 
 	pageData := LibraryResponse{
 		RequestID: requestID,
@@ -423,31 +565,56 @@ func (h *LibraryPageHandler) HandleGetLibraryPageData(w http.ResponseWriter, r *
 
 	// 12. Cache response
 	// todo: replace constant ttl with proper cacheManager config
-	h.logger.Debug("caching response",
-		"requestID", requestID,
-		"cacheKey", cacheKey,
-		"ttl", h.redisClient.GetConfig().CacheConfig.DefaultTTL,
-	)
 	cacheStart = time.Now()
-	err = h.redisClient.Set(ctx, cacheKey, organizedData, h.redisClient.GetConfig().CacheConfig.DefaultTTL)
+	h.logger.Debug("Preparing to cache response",
+        "requestID", requestID,
+        "cacheKey", cacheKey,
+        "ttl", h.redisClient.GetConfig().CacheConfig.DefaultTTL,
+        "dataSize", len(organizedData.Books),
+        "hasNilData", organizedData == nil)
+
+	// Add context with timeout for cache operation
+	cacheCtx, cancelCache := context.WithTimeout(ctx, h.cacheTimeout)
+	defer cancelCache()
+
+	err = h.redisClient.Set(cacheCtx, cacheKey, organizedData, h.redisClient.GetConfig().CacheConfig.DefaultTTL)
 	cacheDuration = time.Since(cacheStart)
 	atomic.AddInt64(&h.metrics.CacheOperationDuration, cacheDuration.Nanoseconds())
 
 	if err != nil {
-			atomic.AddInt64(&h.metrics.Errors, 1)
-			h.logger.Error("failed to cache response",
+		if err == context.DeadlineExceeded {
+				h.logger.Error("cache operation timed out",
+						"requestID", requestID,
+						"duration", cacheDuration,
+						"cacheKey", cacheKey)
+		} else {
+				h.logger.Error("failed to cache response",
+						"requestID", requestID,
+						"error", err,
+						"cacheKey", cacheKey,
+						"duration", cacheDuration)
+		}
+		atomic.AddInt64(&h.metrics.Errors, 1)
+	} else {
+			h.logger.Debug("Successfully cached response",
 					"requestID", requestID,
-					"error", err,
-					"cacheKey", cacheKey,
 					"duration", cacheDuration,
-			)
+					"cacheKey", cacheKey)
+	}
+
+
+	// Final context check before response
+	if err := h.checkContext(ctx, requestID, "pre-response"); err != nil {
+		h.respondWithError(w, requestID, err, http.StatusGatewayTimeout)
+		return
 	}
 
 	// 13. Return response
-	h.logger.Info("sending response",
-	"requestID", requestID,
-	"source", "database",
-	)
+	h.logger.Info("Sending response",
+        "requestID", requestID,
+        "source", pageData.Source,
+        "dataSize", len(pageData.Data.Books),
+        "responseTime", time.Since(requestStart))
 	h.respondWithJSON(w, requestID, pageData)
 }
 
@@ -625,4 +792,84 @@ func (h *LibraryPageHandler) parseQueryParams(r *http.Request, params *LibraryQu
 	}
 
 	return nil
+}
+
+func (h *LibraryPageHandler) generateCacheKey (ctx context.Context, userID int, domainType types.DomainType) (string, error) {
+	start := time.Now()
+	defer h.trackOperationDuration("cache_key_gen", start)
+
+	// Use parent context directly - no need for separate timeout here
+	if err := ctx.Err(); err != nil {
+			h.logger.Error("context error in generateCacheKey",
+					"duration", time.Since(start),
+					"error", err,
+			)
+			return "", err
+	}
+
+	key := fmt.Sprintf("library:%d:%s", userID, domainType)
+
+	h.logger.Debug("cache key generated",
+			"duration", time.Since(start),
+			"key", key,
+	)
+	return key, nil
+}
+
+func (h *LibraryPageHandler) checkContext(ctx context.Context, requestID string, op operationDetails) error {
+	if err := ctx.Err(); err != nil {
+			h.logger.Error("context cancelled",
+					"requestID", requestID,
+					"operation", op.name,
+					"duration", time.Since(op.startTime),
+					"error", err,
+			)
+			return err
+	}
+	return nil
+}
+
+// Budgeted context timeout helpers
+func (h *LibraryPageHandler) beginOperation(name string, budget float64) operationDetails {
+	return operationDetails{
+			name:      name,
+			budget:    budget,
+			startTime: time.Now(),
+	}
+}
+
+func (h *LibraryPageHandler) trackOperationDuration(operation string, start time.Time) {
+	duration := time.Since(start)
+	h.logger.Debug("operation duration",
+			"operation", operation,
+			"duration", duration,
+	)
+}
+
+func (h *LibraryPageHandler) withTimeout(
+	parentCtx context.Context,
+	operation string,
+	budget float64,
+	fn func(context.Context) error,
+) error {
+	timeout := time.Duration(float64(defaultContextTimeout) * budget)
+	ctx, cancel := context.WithTimeout(parentCtx, timeout)
+	defer cancel()
+
+	start := time.Now()
+	defer h.trackOperationDuration(operation, start)
+
+	op := h.beginOperation(operation, budget)
+
+	// Execute operation with timeout context
+	err := fn(ctx)
+	if err != nil {
+			h.logger.Error("operation failed",
+					"operation", op.name,
+					"duration", time.Since(op.startTime),
+					"error", err,
+			)
+	}
+
+	return err
 }

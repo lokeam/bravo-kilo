@@ -308,8 +308,16 @@ func (r *BookRepositoryImpl) GetBookIdByTitle(title string) (int, error) {
 }
 
 func (r *BookRepositoryImpl) GetAllBooksByUserID(userID int) ([]Book, error) {
+	r.Logger.Info("Starting GetAllBooksByUserID",
+	"userID", userID,
+	"method", "GetAllBooksByUserID")
+
 	ctx, cancel := context.WithTimeout(context.Background(), dbconfig.DBTimeout)
 	defer cancel()
+
+	r.Logger.Debug("Created context with timeout",
+	"timeout", dbconfig.DBTimeout,
+	"userID", userID)
 
 	var rows *sql.Rows
 	var err error
@@ -348,10 +356,18 @@ func (r *BookRepositoryImpl) GetAllBooksByUserID(userID int) ([]Book, error) {
 		}
 	}
 
+	r.Logger.Debug("Retrieved rows from database",
+	"userID", userID,
+	"usingPreparedStmt", r.getAllBooksByUserIDStmt != nil)
+
 	defer rows.Close()
 
 	bookIDMap := make(map[int]*Book)
 	var bookIDs []int
+
+	r.Logger.Debug("Starting to scan rows into books",
+	"userID", userID)
+
 	for rows.Next() {
 		var book Book
 		var descriptionJSON, notesJSON []byte
@@ -392,10 +408,18 @@ func (r *BookRepositoryImpl) GetAllBooksByUserID(userID int) ([]Book, error) {
 		bookIDs = append(bookIDs, book.ID)
 	}
 
+	r.Logger.Debug("Starting batch fetch for book details",
+	"bookCount", len(bookIDs),
+	"userID", userID)
+
 	// Batch Fetch authors, formats, genres, and tags
 	if err := r.batchFetchBookDetails(ctx, bookIDs, bookIDMap); err != nil {
 		return nil, fmt.Errorf("failed to fetch additional book details: %w", err)
 	}
+
+	r.Logger.Debug("Completed batch fetch",
+	"bookCount", len(bookIDs),
+	"userID", userID)
 
 	// Collect books from map into a slice, check for empty fields
 	var books []Book
@@ -403,6 +427,12 @@ func (r *BookRepositoryImpl) GetAllBooksByUserID(userID int) ([]Book, error) {
 		book.EmptyFields, book.HasEmptyFields = r.findEmptyFields(book)
 		books = append(books, *book)
 	}
+
+
+	r.Logger.Info("Completed GetAllBooksByUserID",
+	"userID", userID,
+	"totalBooks", len(books),
+	"booksWithDetails", len(bookIDMap))
 
 	return books, nil
 }
@@ -549,6 +579,9 @@ func (r *BookRepositoryImpl) addBookToUser(tx *sql.Tx, userID, bookID int) error
 }
 
 func (r *BookRepositoryImpl) batchFetchBookDetails(ctx context.Context, bookIDs []int, bookIDMap map[int]*Book) error {
+	r.Logger.Debug("Starting batchFetchBookDetails",
+	"bookCount", len(bookIDs))
+
 	query := `
 	SELECT
 		b.id AS book_id,
@@ -575,6 +608,9 @@ func (r *BookRepositoryImpl) batchFetchBookDetails(ctx context.Context, bookIDs 
 	}
 	defer rows.Close()
 
+	r.Logger.Debug("Executed batch fetch query",
+	"bookIDsCount", len(bookIDs))
+
 	// Processing the result rows
 	for rows.Next() {
 		var bookID int
@@ -586,6 +622,13 @@ func (r *BookRepositoryImpl) batchFetchBookDetails(ctx context.Context, bookIDs 
 			return err
 		}
 
+    r.Logger.Debug("Scanned book details",
+        "bookID", bookID,
+        "authorCount", len(authorNames),
+        "genreCount", len(genreNames),
+        "formatCount", len(formatTypes),
+        "tagCount", len(tagNames))
+
 		// Fetch book from map
 		book := bookIDMap[bookID]
 
@@ -594,6 +637,13 @@ func (r *BookRepositoryImpl) batchFetchBookDetails(ctx context.Context, bookIDs 
 		book.Genres = append(book.Genres, genreNames...)
 		book.Formats = append(book.Formats, formatTypes...)
 		book.Tags = append(book.Tags, tagNames...)
+
+		r.Logger.Debug("Updated book with details",
+		"bookID", bookID,
+		"finalAuthorCount", len(book.Authors),
+		"finalGenreCount", len(book.Genres),
+		"finalFormatCount", len(book.Formats),
+		"finalTagCount", len(book.Tags))
 	}
 
 	// Check for errors after row iteration
@@ -601,6 +651,8 @@ func (r *BookRepositoryImpl) batchFetchBookDetails(ctx context.Context, bookIDs 
 		r.Logger.Error("Error with rows in batch fetch", "error", err)
 		return err
 	}
+
+
 
 	return nil
 }
