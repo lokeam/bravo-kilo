@@ -85,7 +85,6 @@ func main() {
 
 	// Create server with timeouts
 	srv := app.serve(
-		ctx,
 		f.BookHandlers,
 		f.SearchHandlers,
 		f.AuthHandlers,
@@ -150,7 +149,6 @@ func initializeEnvironment() error {
 }
 
 func (app *application) serve(
-	ctx context.Context,
 	bookHandlers *handlers.BookHandlers,
 	searchHandlers *handlers.SearchHandlers,
 	authHandlers *authHandlers.AuthHandlers,
@@ -161,7 +159,7 @@ func (app *application) serve(
 
 	return &http.Server{
 		Addr:         fmt.Sprintf(":%d", app.config.port),
-		Handler:      app.routes(ctx,bookHandlers, searchHandlers, authHandlers, libraryPageHandler, baseValidator),
+		Handler:      app.routes(bookHandlers, searchHandlers, authHandlers, libraryPageHandler, baseValidator),
 		IdleTimeout:  time.Minute,
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 30 * time.Second,
