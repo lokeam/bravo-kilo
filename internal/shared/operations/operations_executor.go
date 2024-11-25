@@ -4,13 +4,17 @@ import (
 	"context"
 	"log/slog"
 	"time"
+
+	"github.com/lokeam/bravo-kilo/internal/shared/types"
 )
 
 type OperationExecutor[T any] struct {
-	name      string
-	timeout   time.Duration
-	logger    *slog.Logger
+	name    string
+	timeout time.Duration
+	logger  *slog.Logger
 }
+
+var _ types.OperationExecutor[any] = (*OperationExecutor[any])(nil)
 
 func NewOperationExecutor[T any](
 	name string,

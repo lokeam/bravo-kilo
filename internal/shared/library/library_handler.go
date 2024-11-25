@@ -3,12 +3,15 @@ package library
 import (
 	"log/slog"
 	"net/http"
+
+	"github.com/lokeam/bravo-kilo/internal/shared/services"
 )
 
 
 type LibraryHandler struct {
-	service  *LibraryService
-	logger   *slog.Logger
+	libraryService            *LibraryService
+	validationService         *services.ValidationService
+	logger                    *slog.Logger
 }
 
 // RESPONSIBILITIES:
@@ -32,21 +35,22 @@ func (h *LibraryHandler) HandleGetLibraryPageData(w http.ResponseWriter, r *http
 	// Auth
 	userID, err := h.authenticateRequest(r)
 	if err != nil {
-		h.respondError(w, requestID, err)
+		h.respondWithError(w, requestID, err)
 		return
 	}
 
 	// Validate and parse params
-	params, err := h.parseAndValidateParams(r)
+	params, err := h.validationService.ValidateLibraryRequest(ctx, r.URL.Query())
 	if err != nil {
-			h.respondError(w, requestID, err)
-			return
+		h.respondWithError(w, requestID, err)
+		return
 	}
 
+
 	// Get library data
-	response, err := h.service.GetLibraryData(ctx, userID, params)
+	response, err := h.libraryService.GetLibraryData(ctx, userID, params)
 	if err != nil {
-		h.respondError(w, requestID, err)
+		h.respondWithError(w, requestID, err)
 		return
 	}
 
@@ -56,7 +60,7 @@ func (h *LibraryHandler) HandleGetLibraryPageData(w http.ResponseWriter, r *http
 
 // Helpers
 
-func (h *LibraryHandler) responseWithJSON(w http.ResponseWriter, data any) {
+func (h *LibraryHandler) respondWithJSON(w http.ResponseWriter, data any) {
 	/*
 	Responsibilities:
 	- Set content type to JSON
@@ -71,14 +75,5 @@ func (h *LibraryHandler) respondWithError(w http.ResponseWriter, err error, stat
 	- Log error
 	- Set error status
 	- Write error response
-	*/
-}
-
-func (h *LibraryHandler) parseQueryParams(r *http.Request) (*LibraryQueryParams, error) {
-	/*
-	Responsibilities:
-	- Extract page/limit from query
-	- Basic type conversion
-	- NO BUSINESS VALIDATION
 	*/
 }

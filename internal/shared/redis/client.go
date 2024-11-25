@@ -288,11 +288,8 @@ func (c *RedisClient) Get(ctx context.Context, key string) (string, error) {
 
 
 	if !c.IsReady() {
-		slog.Error("Redis client not ready for GET operation",
-				"status", c.status,
-				"isReady", c.isReady,
-		)
-		return "", fmt.Errorf("redis client not ready")
+		c.handleOperationError(ErrClientNotReady)
+		return "", ErrClientNotReady
 	}
 
 	if _, ok := ctx.Deadline(); !ok {
@@ -301,25 +298,17 @@ func (c *RedisClient) Get(ctx context.Context, key string) (string, error) {
 		defer cancel()
 	}
 
-	// Add logging for debugging
-	val, err := c.client.Get(ctx, key).Result()
-
 	// Log the result of the GET operation
+	val, err := c.client.Get(ctx, key).Result()
 	if err != nil {
 			if err == redis.Nil {
-					slog.Info("Cache miss for key",
-							"key", key,
-							"error", "key not found")
-			} else {
-					slog.Error("Redis GET operation failed",
-							"key", key,
-							"error", err)
+					return "", ErrNotFound
 			}
-	} else {
-			slog.Info("Cache hit for key",
-					"key", key,
-					"valueLength", len(val))
+			c.handleOperationError(err)
+			return "", NewOperationError("GET", key, err)
 	}
+
+	c.handleOperationSuccess()
 
 	slog.Info("Redis operation completed",
 	"operation", "GET",

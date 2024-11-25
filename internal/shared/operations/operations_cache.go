@@ -8,16 +8,16 @@ import (
 
 	"github.com/lokeam/bravo-kilo/internal/shared/redis"
 	"github.com/lokeam/bravo-kilo/internal/shared/types"
-	"github.com/lokeam/bravo-kilo/internal/shared/validator"
 )
 
 
 type CacheOperation struct {
-	*OperationExecutor[*types.LibraryPageData]
+	executor     types.OperationExecutor[*types.LibraryPageData]
+	validator    types.Validator
 	client       *redis.RedisClient
-	validator    *validator.BaseValidator
 	metrics      *redis.Metrics
 	logger       *slog.Logger
+	config       *redis.RedisConfig
 }
 
 func NewCacheOperation(
@@ -26,23 +26,25 @@ func NewCacheOperation(
 	logger *slog.Logger,
 ) *CacheOperation {
 	return &CacheOperation{
-		OperationExecutor: NewOperationExecutor[*types.LibraryPageData](
+		executor: NewOperationExecutor[*types.LibraryPageData](
 			"cache",
 			timeout,
 			logger,
 		),
 		client: client,
+		logger: logger,
+		config: client.GetConfig(),
 	}
 }
 
-// Get uses executor to wrap cache retrieval
+// Get executor to wrap cache retrieval
 func (co *CacheOperation) Get(
 	ctx context.Context,
 	userID int,
 	params *types.LibraryQueryParams,
 	) (*types.LibraryPageData, error) {
 		// Use executor to wrap cache operation
-		return co.Execute(ctx, func(ctx context.Context) (*types.LibraryPageData, error) {
+		return co.executor.Execute(ctx, func(ctx context.Context) (*types.LibraryPageData, error) {
 			cacheKey := fmt.Sprintf("library:%d", userID)
 
 			// Get string data from Redis
@@ -68,4 +70,49 @@ func (co *CacheOperation) Get(
 
 			return pageData, nil
 		})
+}
+
+// Set executor to wrap cache update
+func (co *CacheOperation) Set(
+	ctx context.Context,
+	userID int,
+	params *types.LibraryQueryParams,
+	data *types.LibraryPageData,
+) error {
+	// Use executor to wrap cache operation
+	_, err := co.executor.Execute(ctx, func(ctx context.Context) (*types.LibraryPageData, error) {
+		// Validate data before caching
+		if err := co.validator.ValidateStruct(ctx, data); err != nil {
+			return nil, fmt.Errorf("validation failed: %w", err)
+		}
+
+		// Generate cache key
+		cacheKey := fmt.Sprintf("library:%d", userID)
+
+		// Marshal data for storage
+		marshaledData, err := data.MarshalBinary()
+		if err != nil {
+			return nil, fmt.Errorf("marshal failed: %w", err)
+		}
+
+		// Set data in Redis
+		ttl := co.client.GetConfig().CacheConfig.DefaultTTL
+		if ttl == 0 {
+			ttl = time.Hour
+		}
+
+		// Set data in Redis with configured TTL
+		if err := co.client.Set(ctx, cacheKey, string(marshaledData), ttl); err != nil {
+			co.metrics.IncrementCacheMisses()
+			return nil, fmt.Errorf("redis cache set operation failed: %w", err)
+		}
+
+		// Increment metrics
+		co.metrics.IncrementCacheHits()
+
+		// Return original data for executor type
+		return data, nil
+	})
+
+	return err
 }

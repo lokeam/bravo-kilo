@@ -29,14 +29,6 @@ const (
 	ErrQueryInvalidFormat ValidationErrorCode = "QUERY_INVALID_FORMAT"
 )
 
-type ValidationError struct {
-	Field   string                 `json:"field"`
-	Code    string                 `json:"code"`
-	Message string                 `json:"message"`
-	Value     interface{}          // legacy code. Double check if this is still needed
-	Context map[string]interface{} `json:"context,omitempty"`
-}
-
 // Constructor
 func NewValidationError(field string, code ValidationErrorCode, message string) ValidationError {
 	return ValidationError{
@@ -45,22 +37,4 @@ func NewValidationError(field string, code ValidationErrorCode, message string) 
 		Message:  message,
 		Context:  make(map[string]interface{}),
 	}
-}
-
-func (ve *ValidationError) WithContext(key string, value interface{}) *ValidationError {
-	if ve.Context == nil {
-		ve.Context = make(map[string]interface{})
-	}
-
-	ve.Context[key] = value
-	return ve
-}
-
-func IsValidationError(err error) bool {
-	_, ok := err.(ValidationError)
-	return ok
-}
-
-func (ve ValidationError) Error() string {
-	return ve.Message
 }

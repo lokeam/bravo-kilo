@@ -16,6 +16,16 @@ import (
 	"github.com/lokeam/bravo-kilo/internal/shared/types"
 )
 
+type ValidationDomain = types.ValidationDomain
+type ValidationRuleKey = types.ValidationRuleKey
+type QueryParamType = types.QueryParamType
+type ValidationContext = types.ValidationContext
+type ValidationError = types.ValidationError
+type ValidationResponse = types.ValidationResponse
+type QueryValidationRules = types.QueryValidationRules
+
+var _ types.Validator = (*BaseValidator)(nil)
+
 const (
 	DefaultMaxQueryParamLength = 100
 	MaxPatternCompileTimeout   = 100 * time.Millisecond
@@ -234,16 +244,16 @@ func (bv *BaseValidator) GetDefaultQueryRules() QueryValidationRules {
 		"email":
 		{
 			Required: true,
-			Type: QueryTypeEmail,
+			Type: types.QueryTypeEmail,
 			MaxLength: 255,
 		},
 		"date": {
 			Required: false,
-			Type: QueryTypeDate,
+			Type: types.QueryTypeDate,
 		},
 		"id": {
 			Required: true,
-			Type: QueryTypeUUID,
+			Type: types.QueryTypeUUID,
 		},
 		"username": {
 			Required: true,
@@ -327,7 +337,7 @@ func (bv *BaseValidator) validateQueryParamLength(param ValidationRuleKey, value
 func (bv *BaseValidator) validateQueryParamType(param ValidationRuleKey, value string, paramType QueryParamType) *ValidationError {
 	paramStr := param.String()
 	switch paramType {
-	case QueryTypeInt:
+	case types.QueryTypeInt:
 			if _, err := strconv.Atoi(value); err != nil {
 					verr := NewValidationError(
 						paramStr,
@@ -338,7 +348,7 @@ func (bv *BaseValidator) validateQueryParamType(param ValidationRuleKey, value s
 					verrPtr.WithContext("actual_value", value)
 					return verrPtr
 			}
-	case QueryTypeBool:
+	case types.QueryTypeBool:
 			if value != "true" && value != "false" {
 					verr := NewValidationError(
 						paramStr,
@@ -349,7 +359,7 @@ func (bv *BaseValidator) validateQueryParamType(param ValidationRuleKey, value s
 					verrPtr.WithContext("actual_value", value)
 					return verrPtr
 			}
-	case QueryTypeDate:
+	case types.QueryTypeDate:
 		if _, err := time.Parse("2006-01-02", value); err != nil {
 			verr := NewValidationError(
 				paramStr,
@@ -360,7 +370,7 @@ func (bv *BaseValidator) validateQueryParamType(param ValidationRuleKey, value s
 			verrPtr.WithContext("actual_value", value)
 			return verrPtr
 		}
-	case QueryTypeUUID:
+	case types.QueryTypeUUID:
 		if _, err := uuid.Parse(value); err != nil {
 			verr := NewValidationError(
 				paramStr,
@@ -371,7 +381,7 @@ func (bv *BaseValidator) validateQueryParamType(param ValidationRuleKey, value s
 			verrPtr.WithContext("actual_value", value)
 			return verrPtr
 		}
-	case QueryTypeEmail:
+	case types.QueryTypeEmail:
 		if !bv.commonPatterns.email.MatchString(value) {
 			verr := NewValidationError(
 				paramStr,
@@ -382,7 +392,7 @@ func (bv *BaseValidator) validateQueryParamType(param ValidationRuleKey, value s
 			verrPtr.WithContext("actual_value", value)
 			return verrPtr
 		}
-	case QueryTypeURL:
+	case types.QueryTypeURL:
 		if _, err := url.Parse(value); err != nil {
 			verr := NewValidationError(
 				paramStr,
@@ -521,6 +531,3 @@ func (bv *BaseValidator) getCompiledPattern(ctx context.Context, pattern string)
 	}
 }
 
-func (v ValidationRuleKey) String() string {
-	return string(v)
-}

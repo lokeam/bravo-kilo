@@ -22,4 +22,10 @@ const (
 	// Common validation patterns
 	EmailPattern         = `^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`
 	URLPattern      = `^https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{2,256}\.[a-z]{2,6}\b([-a-zA-Z0-9@:%_\+.~#?&//=]*)$`
+
+	// Query parameter validation rules
+	MinPage = 1
+	MaxPage = 99999
+	MinLimit = 1
+	MaxLimit = 100
 )
