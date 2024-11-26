@@ -90,9 +90,7 @@ func (ls *LibraryService) GetLibraryData(ctx context.Context, userID int, params
 	), nil
 }
 
-// Helpers
-
-// Construct response
+// Helper - Construct response
 func (ls *LibraryService) buildResponse(
 	requestID string,
 	data *types.LibraryPageData,

@@ -6,6 +6,7 @@ import (
 	"log/slog"
 
 	"github.com/lokeam/bravo-kilo/internal/books/repository"
+	"github.com/lokeam/bravo-kilo/internal/shared/core"
 	"github.com/lokeam/bravo-kilo/internal/shared/processor"
 	"github.com/lokeam/bravo-kilo/internal/shared/types"
 )
@@ -26,11 +27,11 @@ func NewBookProcessor(logger *slog.Logger) (*BookProcessor, error) {
 	}, nil
 }
 
-func (bp *BookProcessor) GetDomainType() types.DomainType {
-	return types.BookDomainType
+func (bp *BookProcessor) GetDomainType() core.DomainType {
+	return core.BookDomainType
 }
 
-func (bp *BookProcessor) ProcessLibraryItems(ctx context.Context, items []types.LibraryItem) (*types.LibraryPageData, error) {
+func (bp *BookProcessor) ProcessLibraryItems(ctx context.Context, items []core.LibraryItem) (*types.LibraryPageData, error) {
 	if items == nil {
 		return nil, fmt.Errorf("items slice cannot be nil")
 	}
@@ -58,7 +59,7 @@ func (bp *BookProcessor) ProcessLibraryItems(ctx context.Context, items []types.
 			}
 
 			// Process chunk
-			go func(chunk []types.LibraryItem) {
+			go func(chunk []core.LibraryItem) {
 					for _, item := range chunk {
 							select {
 							case <-ctx.Done():

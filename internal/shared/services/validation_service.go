@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/url"
 
+	"github.com/lokeam/bravo-kilo/internal/shared/core"
 	"github.com/lokeam/bravo-kilo/internal/shared/operations"
 	"github.com/lokeam/bravo-kilo/internal/shared/types"
 	"github.com/lokeam/bravo-kilo/internal/shared/validator"
@@ -23,8 +24,15 @@ func (vs *ValidationService) ValidateLibraryRequest(
 	query url.Values,
 ) (*types.LibraryQueryParams, error) {
 	return vs.executor.Execute(ctx, func(opCtx context.Context) (*types.LibraryQueryParams, error) {
-		// 1. Create empty params (no query params to parse at this time)
-		params := &types.LibraryQueryParams{}
+		// 1. Grab domain from query parameters
+		params := &types.LibraryQueryParams{
+			Domain: core.DomainType(query.Get("domain")),
+		}
+
+		// Validate domain
+		if params.Domain == "" {
+			params.Domain = core.BookDomainType
+		}
 
 		// The library page does not have any business rules to validate, skip to structure validation
 

@@ -13,11 +13,11 @@ import (
 
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
+	"github.com/lokeam/bravo-kilo/internal/shared/core"
 	"github.com/lokeam/bravo-kilo/internal/shared/types"
 )
 
-type ValidationDomain = types.ValidationDomain
-type ValidationRuleKey = types.ValidationRuleKey
+type ValidationDomain = core.DomainType
 type QueryParamType = types.QueryParamType
 type ValidationContext = types.ValidationContext
 type ValidationError = types.ValidationError
@@ -124,7 +124,7 @@ func (bv *BaseValidator) ValidateField(field, value string) error {
 	// Check against known domain types for domain validation
 	if field == "domain" {
 		switch value {
-		case string(types.BookDomainType), string(types.GameDomainType):
+		case string(core.BookDomainType), string(core.GameDomainType):
 			return nil
 		default:
 			return fmt.Errorf("invalid domain type")
@@ -237,8 +237,8 @@ func (bv *BaseValidator) GetDefaultQueryRules() QueryValidationRules {
 			Required: true,
 			MaxLength: 50,
 			AllowedValues: []string{
-				string(types.BookDomainType),
-				string(types.GameDomainType),
+				string(core.BookDomainType),
+				string(core.GameDomainType),
 			},
 		},
 		"email":
@@ -302,7 +302,7 @@ func (bv *BaseValidator) formatValidationErrors(errors validator.ValidationError
 }
 
 // Query param validator helpers
-func (bv *BaseValidator) validateQueryParamLength(param ValidationRuleKey, value string, minLen,maxLen int) *ValidationError {
+func (bv *BaseValidator) validateQueryParamLength(param types.ValidationRuleKey, value string, minLen,maxLen int) *ValidationError {
 	paramStr := param.String()
 	if maxLen == 0 {
 			maxLen = DefaultMaxQueryParamLength
@@ -334,7 +334,7 @@ func (bv *BaseValidator) validateQueryParamLength(param ValidationRuleKey, value
 	return nil
 }
 
-func (bv *BaseValidator) validateQueryParamType(param ValidationRuleKey, value string, paramType QueryParamType) *ValidationError {
+func (bv *BaseValidator) validateQueryParamType(param types.ValidationRuleKey, value string, paramType QueryParamType) *ValidationError {
 	paramStr := param.String()
 	switch paramType {
 	case types.QueryTypeInt:
@@ -407,7 +407,7 @@ func (bv *BaseValidator) validateQueryParamType(param ValidationRuleKey, value s
 	return nil
 }
 
-func (bv *BaseValidator) validateQueryAllowedValues(param ValidationRuleKey, value string, allowedValues []string) *ValidationError {
+func (bv *BaseValidator) validateQueryAllowedValues(param types.ValidationRuleKey, value string, allowedValues []string) *ValidationError {
 	paramStr := param.String()
 	if len(allowedValues) == 0 {
 			return nil
@@ -430,7 +430,7 @@ func (bv *BaseValidator) validateQueryAllowedValues(param ValidationRuleKey, val
 	return verrPtr
 }
 
-func (bv *BaseValidator) validateRegexQueryPattern(param ValidationRuleKey, value, pattern string) *ValidationError {
+func (bv *BaseValidator) validateRegexQueryPattern(param types.ValidationRuleKey, value, pattern string) *ValidationError {
 	paramStr := param.String()
 	if pattern == "" {
 		return nil

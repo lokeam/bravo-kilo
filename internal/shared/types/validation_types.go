@@ -1,14 +1,17 @@
 package types
 
-import "time"
+import (
+	"time"
 
-type ValidationDomain string
+	"github.com/lokeam/bravo-kilo/internal/shared/core"
+)
+
 type ValidationRuleKey string
 type QueryParamType string
 
 type ValidationContext struct {
 	RequestID     string
-	Domain        ValidationDomain
+	Domain        core.DomainType
 	UserID        int
 	Timestamp     time.Time
 	TraceID       string
@@ -44,9 +47,6 @@ type QueryValidationRules map[ValidationRuleKey]QueryValidationRule
 
 
 const (
-	// Validation domains
-	BookDomain ValidationDomain = "book"
-
 	// Query param types
 	QueryTypeString  QueryParamType = "string"
 	QueryTypeInt     QueryParamType = "int"

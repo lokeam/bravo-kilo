@@ -4,16 +4,16 @@ import (
 	"context"
 	"sync/atomic"
 
-	"github.com/lokeam/bravo-kilo/internal/shared/types"
+	"github.com/lokeam/bravo-kilo/internal/shared/core"
 )
 
 // Defines how each domain processes its library items
 type DomainProcessor interface {
 	// Converts domain items into page-specific data
-	ProcessLibraryItems(ctx context.Context, items []types.LibraryItem) (interface{}, error)
+	ProcessLibraryItems(ctx context.Context, items []core.LibraryItem) (interface{}, error)
 
 	// Return type of domain that is being processed
-	GetDomainType() types.DomainType
+	GetDomainType() core.DomainType
 
 	GetMetrics() *ProcessorMetrics
 }

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/lokeam/bravo-kilo/internal/books/repository"
+	"github.com/lokeam/bravo-kilo/internal/shared/core"
 )
 
 type LibraryResponse struct {
@@ -16,8 +17,9 @@ type LibraryResponse struct {
 }
 
 type LibraryQueryParams struct {
-	Page   int      `json:"page" validate:"required,min=1,max=99999`
-	Limit  int      `json:"limit" validate:"required,min=1,max=999"`
+	Domain    core.DomainType    `json:"domain" validate:required,oneof=books, games movies`
+	Page      int                 `json:"page" validate:"required,min=1,max=99999`
+	Limit     int                 `json:"limit" validate:"required,min=1,max=999"`
 }
 
 type LibraryPageData struct {

@@ -1,4 +1,4 @@
-package domains
+package domaintypes
 
 import (
 	"context"
@@ -37,6 +37,11 @@ type DomainError struct {
 func (e *DomainError) Error() string {
 	return fmt.Sprintf("%s domain error in %s: %s - %v",
 			e.Domain, e.Source, e.Message, e.Err)
+}
+
+type BookDomainError struct {
+	Source string
+	Err    error
 }
 
 var (
@@ -99,4 +104,8 @@ func NewDomainError(domain, source, message string, err error) error {
 			Message: message,
 			Err:     err,
 	}
+}
+
+func (e *BookDomainError) Error() string {
+	return fmt.Sprintf("book domain error in %s: %v", e.Source, e.Err)
 }

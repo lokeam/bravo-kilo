@@ -48,7 +48,7 @@ func (h *LibraryHandler) HandleGetLibraryPageData(w http.ResponseWriter, r *http
 
 
 	// Get library data
-	response, err := h.libraryService.GetLibraryData(ctx, userID, params)
+	libraryData, err := h.libraryService.GetLibraryData(ctx, userID, params)
 	if err != nil {
 		h.respondWithError(w, requestID, err)
 		return

@@ -2,17 +2,23 @@ package domains
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"time"
 
 	"github.com/lokeam/bravo-kilo/internal/books/handlers"
-	"github.com/lokeam/bravo-kilo/internal/shared/types"
+	"github.com/lokeam/bravo-kilo/internal/shared/core"
 )
 
 
 type BookDomainHandler struct {
     bookHandlers *handlers.BookHandlers
     logger       *slog.Logger
+}
+
+type BookDomainError struct {
+    Source string
+    Err    error
 }
 
 func NewBookDomainHandler(
@@ -31,13 +37,13 @@ func NewBookDomainHandler(
     }
 }
 
-// GetType implements types.DomainHandler
-func (h *BookDomainHandler) GetType() types.DomainType {
-    return types.BookDomainType
+// GetType implements core.DomainHandler
+func (h *BookDomainHandler) GetType() core.DomainType {
+    return core.BookDomainType
 }
 
-// GetLibraryItems implements types.DomainHandler
-func (h *BookDomainHandler) GetLibraryItems(ctx context.Context, userID int) ([]types.LibraryItem, error) {
+// GetLibraryItems implements core.DomainHandler
+func (h *BookDomainHandler) GetLibraryItems(ctx context.Context, userID int) ([]core.LibraryItem, error) {
     h.logger.Debug("fetching library items",
         "userID", userID,
         "domain", "books",
@@ -66,12 +72,12 @@ func (h *BookDomainHandler) GetLibraryItems(ctx context.Context, userID int) ([]
         "duration", time.Since(start),
     )
 
-    items := make([]types.LibraryItem, len(books))
+    items := make([]core.LibraryItem, len(books))
     for i, book := range books {
-        items[i] = types.LibraryItem{
+        items[i] = core.LibraryItem{
             ID:          book.ID,
             Title:       book.Title,
-            Type:        types.BookDomainType,
+            Type:        core.BookDomainType,
             DateAdded:   book.CreatedAt.Format(time.RFC3339),
             LastUpdated: book.LastUpdated.Format(time.RFC3339),
         }
@@ -86,9 +92,13 @@ func (h *BookDomainHandler) GetLibraryItems(ctx context.Context, userID int) ([]
     return items, nil
 }
 
-func (h *BookDomainHandler) GetMetadata() (types.DomainMetadata, error){
-    return types.DomainMetadata{
-        DomainType: types.BookDomainType,  // Use correct field name
+func (h *BookDomainHandler) GetMetadata() (core.DomainMetadata, error){
+    return core.DomainMetadata{
+        DomainType: core.BookDomainType,  // Use correct field name
         Label:      "Books",               // Use correct field name
     }, nil
+}
+
+func (e *BookDomainError) Error() string {
+    return fmt.Sprintf("book domain error in %s: %v", e.Source, e.Err)
 }
