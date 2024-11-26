@@ -8,9 +8,9 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/lokeam/bravo-kilo/cmd/middleware"
 	authhandlers "github.com/lokeam/bravo-kilo/internal/auth/handlers"
 	"github.com/lokeam/bravo-kilo/internal/books/repository"
+	"github.com/lokeam/bravo-kilo/internal/shared/core"
 	"github.com/lokeam/bravo-kilo/internal/shared/utils"
 	"golang.org/x/oauth2"
 )
@@ -179,7 +179,7 @@ func (h *SearchHandlers) HandleSearchBooks(response http.ResponseWriter, request
 
 
 	// Get userID from context
-	userID, ok := request.Context().Value(middleware.UserIDKey).(int)
+	userID, ok := request.Context().Value(core.UserIDKey).(int)
 	if !ok {
 			h.logger.Error("Failed to get userID from context")
 			http.Error(response, "Unauthorized", http.StatusUnauthorized)

@@ -19,8 +19,8 @@ import (
 	"github.com/lokeam/bravo-kilo/internal/books/handlers"
 	"github.com/lokeam/bravo-kilo/internal/shared/driver"
 	"github.com/lokeam/bravo-kilo/internal/shared/jwt"
+	libraryhandlers "github.com/lokeam/bravo-kilo/internal/shared/library"
 	"github.com/lokeam/bravo-kilo/internal/shared/logger"
-	"github.com/lokeam/bravo-kilo/internal/shared/pages/library"
 	"github.com/lokeam/bravo-kilo/internal/shared/redis"
 	"github.com/lokeam/bravo-kilo/internal/shared/validator"
 )
@@ -88,7 +88,7 @@ func main() {
 		f.BookHandlers,
 		f.SearchHandlers,
 		f.AuthHandlers,
-		f.LibraryPageHandler,
+		f.LibraryHandler,
 		f.BaseValidator,
 	)
 
@@ -152,14 +152,14 @@ func (app *application) serve(
 	bookHandlers *handlers.BookHandlers,
 	searchHandlers *handlers.SearchHandlers,
 	authHandlers *authHandlers.AuthHandlers,
-	libraryPageHandler *library.LibraryPageHandler,
+	libraryHandlers *libraryhandlers.LibraryHandler,
 	baseValidator *validator.BaseValidator,
 ) *http.Server {
 	app.logger.Info("Initializing server", "port", app.config.port)
 
 	return &http.Server{
 		Addr:         fmt.Sprintf(":%d", app.config.port),
-		Handler:      app.routes(bookHandlers, searchHandlers, authHandlers, libraryPageHandler, baseValidator),
+		Handler:      app.routes(bookHandlers, searchHandlers, authHandlers, libraryHandlers, baseValidator),
 		IdleTimeout:  time.Minute,
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 30 * time.Second,
@@ -258,13 +258,6 @@ func gracefulShutdown(ctx context.Context, srv *http.Server, f *factory.Factory,
 	// Cleanup prepared statements
 	if err := f.BookHandlers.BookCache.CleanupPreparedStatements(); err != nil {
 		log.Error("Error cleaning prepared statements", "error", err)
-	}
-
-	// Library page cleanup
-	if f.LibraryPageHandler != nil {
-		if err := f.LibraryPageHandler.Cleanup(); err != nil {
-			log.Error("Error during library page cleanup", "error", err)
-		}
 	}
 
 	// Shut down Redis

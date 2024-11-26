@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/url"
+	"time"
 
 	"github.com/lokeam/bravo-kilo/internal/shared/core"
 	"github.com/lokeam/bravo-kilo/internal/shared/operations"
@@ -17,6 +18,40 @@ type ValidationService struct {
 	baseValidator          *validator.BaseValidator
 	logger                 *slog.Logger
 	executor               *operations.OperationExecutor[*types.LibraryQueryParams]
+}
+
+const (
+	defaultTimeout = 30 * time.Second
+)
+
+func NewValidationService(
+	baseValidator *validator.BaseValidator,
+	queryValidator *validator.QueryValidator,
+	logger *slog.Logger,
+) (*ValidationService, error) {
+	// Validate required dependencies
+	if baseValidator == nil {
+		return nil, fmt.Errorf("base validator cannot be nil")
+	}
+	if queryValidator == nil {
+		return nil, fmt.Errorf("query validator cannot be nil")
+	}
+	if logger == nil {
+		return nil, fmt.Errorf("logger cannot be nil")
+	}
+
+	executor := operations.NewOperationExecutor[*types.LibraryQueryParams](
+		"validation",
+		defaultTimeout,
+		logger.With("component", "validation_executor"),
+	)
+
+	return &ValidationService{
+		baseValidator:   baseValidator,
+		queryValidator:  queryValidator,
+		logger:          logger.With("component", "validation_service"),
+		executor:        executor,
+	}, nil
 }
 
 func (vs *ValidationService) ValidateLibraryRequest(
@@ -38,7 +73,7 @@ func (vs *ValidationService) ValidateLibraryRequest(
 
 		// 2. Validate structure
 		if err := vs.baseValidator.ValidateStruct(opCtx, params); err != nil {
-			return nil, fmt.Errorf("structure validation failed: %w", err)
+			return nil, fmt.Errorf("structure validation failed: %v", err)
 		}
 
 		return params, nil

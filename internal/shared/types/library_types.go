@@ -11,14 +11,14 @@ import (
 )
 
 type LibraryResponse struct {
-	RequestID   string            `json"requestId"`
+	RequestID   string            `json:"requestId"`
 	Data        *LibraryPageData  `json:"data"`
 	Source      string            `json:"source"`
 }
 
 type LibraryQueryParams struct {
-	Domain    core.DomainType    `json:"domain" validate:required,oneof=books, games movies`
-	Page      int                 `json:"page" validate:"required,min=1,max=99999`
+	Domain    core.DomainType     `json:"domain" validate:"required,oneof=books, games movies"`
+	Page      int                 `json:"page" validate:"required,min=1,max=99999"`
 	Limit     int                 `json:"limit" validate:"required,min=1,max=999"`
 }
 

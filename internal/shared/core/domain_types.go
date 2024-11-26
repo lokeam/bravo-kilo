@@ -1,5 +1,7 @@
 package core
 
+import "context"
+
 type DomainType string
 
 const (
@@ -7,6 +9,12 @@ const (
     GameDomainType  DomainType = "games"
     MovieDomainType DomainType = "movies"
 )
+
+type DomainHandler interface {
+    GetType() DomainType
+    GetLibraryItems(ctx context.Context, userID int) ([]LibraryItem, error)
+    GetMetadata() (DomainMetadata, error)
+}
 
 type LibraryItem struct {
     ID          int         `json:"id"`

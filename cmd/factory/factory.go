@@ -15,12 +15,17 @@ import (
 	bookcache "github.com/lokeam/bravo-kilo/internal/books/cache"
 	"github.com/lokeam/bravo-kilo/internal/books/handlers"
 	"github.com/lokeam/bravo-kilo/internal/books/repository"
-	"github.com/lokeam/bravo-kilo/internal/books/services"
+	bookservices "github.com/lokeam/bravo-kilo/internal/books/services"
 	"github.com/lokeam/bravo-kilo/internal/shared/cache"
+	"github.com/lokeam/bravo-kilo/internal/shared/core"
+	"github.com/lokeam/bravo-kilo/internal/shared/domains"
+	"github.com/lokeam/bravo-kilo/internal/shared/library"
 	"github.com/lokeam/bravo-kilo/internal/shared/models"
-	"github.com/lokeam/bravo-kilo/internal/shared/pages/library"
-	"github.com/lokeam/bravo-kilo/internal/shared/pages/library/domains"
+	"github.com/lokeam/bravo-kilo/internal/shared/operations"
+	"github.com/lokeam/bravo-kilo/internal/shared/organizer"
+	"github.com/lokeam/bravo-kilo/internal/shared/processor/bookprocessor"
 	"github.com/lokeam/bravo-kilo/internal/shared/redis"
+	sharedservices "github.com/lokeam/bravo-kilo/internal/shared/services"
 	"github.com/lokeam/bravo-kilo/internal/shared/transaction"
 	"github.com/lokeam/bravo-kilo/internal/shared/validator"
 	"github.com/lokeam/bravo-kilo/internal/shared/workers"
@@ -34,7 +39,7 @@ type Factory struct {
     DeletionWorker        *workers.DeletionWorker
     CacheWorker           *workers.CacheWorker
     CacheManager          *cache.CacheManager
-    LibraryPageHandler    *library.LibraryPageHandler
+    LibraryHandler        *library.LibraryHandler
     BaseValidator         *validator.BaseValidator
 }
 
@@ -132,7 +137,58 @@ func NewFactory(ctx context.Context, db *sql.DB, redisClient *redis.RedisClient,
 
     tokenModel := models.NewTokenModel(db, log)
 
+    bookDomainAdapter := operations.NewBookDomainAdapter(
+        bookRepo,
+        log.With("component", "book_domain_adapter"),
+    )
+
+    domainOperation := operations.NewDomainOperation(
+        core.BookDomainType,
+        bookDomainAdapter,
+        log.With("component", "domain_operation"),
+    )
+
+    cacheOperation := operations.NewCacheOperation(
+        redisClient,
+        30 * time.Second,
+        log.With("component", "cache_operation"),
+    )
+
+    bookProcessor, err := bookprocessor.NewBookProcessor(
+        log.With("component", "book_processor"),
+    )
+    if err != nil {
+        log.Error("failed to create book processor", "error", err)
+        return nil, fmt.Errorf("failed to create book processor: %w", err)
+    }
+
+    bookOrganizer, err := organizer.NewBookOrganizer(
+        log.With("component", "book_organizer"),
+    )
+    if err != nil {
+        log.Error("failed to create book organizer", "error", err)
+        return nil, fmt.Errorf("failed to create book organizer: %w", err)
+    }
+
+    processorOperation, err := operations.NewProcessorOperation(
+        bookProcessor,
+        bookOrganizer,
+        30 * time.Second,
+        log.With("component", "processor_operation"),
+    )
+    if err != nil {
+        log.Error("failed to create processor operation", "error", err)
+        return nil, fmt.Errorf("failed to create processor operation: %w", err)
+    }
+
+
     // Initialize auth-related services
+    operationsManager := operations.NewManager(
+        cacheOperation,
+        domainOperation,
+        processorOperation,
+    )
+
     tokenService := authservices.NewTokenService(
 			log.With("service", "token"),
 			tokenModel,
@@ -166,7 +222,7 @@ func NewFactory(ctx context.Context, db *sql.DB, redisClient *redis.RedisClient,
 		)
 
     // Initialize book-related services
-    bookService, err := services.NewBookService(
+    bookService, err := bookservices.NewBookService(
         bookRepo,
         authorRepo,
         genreRepo,
@@ -180,7 +236,7 @@ func NewFactory(ctx context.Context, db *sql.DB, redisClient *redis.RedisClient,
         return nil, err
     }
 
-    bookUpdaterService, err := services.NewBookUpdaterService(
+    bookUpdaterService, err := bookservices.NewBookUpdaterService(
         db,
         log,
         bookRepo,
@@ -197,7 +253,7 @@ func NewFactory(ctx context.Context, db *sql.DB, redisClient *redis.RedisClient,
         return nil, err
     }
 
-    exportService, err := services.NewExportService(
+    exportService, err := bookservices.NewExportService(
         log,
         bookRepo,
     )
@@ -206,7 +262,7 @@ func NewFactory(ctx context.Context, db *sql.DB, redisClient *redis.RedisClient,
         return nil, err
     }
 
-    bookCacheService := services.NewBookCacheService(
+    bookCacheService := bookservices.NewBookCacheService(
         redisClient,
         log.With("service", "book_cache"),
     )
@@ -253,24 +309,47 @@ func NewFactory(ctx context.Context, db *sql.DB, redisClient *redis.RedisClient,
         return nil, err
     }
 
-    baseValidator, err := validator.NewBaseValidator(log.With("component", "validator"), validator.BookDomain)
-    if err != nil {
-        return nil, err
-    }
-
-    libraryHandler, err := library.NewLibraryPageHandler(
-        bookHandlers,
-        redisClient,
-        log,
-        cacheManager,
-        baseValidator,
+    baseValidator, err := validator.NewBaseValidator(
+        log.With("component", "validator"),
+        core.BookDomainType,
     )
     if err != nil {
-        return nil, fmt.Errorf("failed to initialize library handler: %w", err)
+        return nil, fmt.Errorf("failed to initialize base validator: %w", err)
     }
 
+    queryValidator, err := validator.NewQueryValidator(
+        log.With("component", "query_validator"),
+    )
+    if err != nil {
+        return nil, fmt.Errorf("failed to initialize query validator: %w", err)
+    }
+
+    validationService, err := sharedservices.NewValidationService(
+        baseValidator,
+        queryValidator,
+        log.With("component", "validation_service"),
+    )
+    if err != nil {
+        return nil, fmt.Errorf("failed to initialize validation service: %v", err)
+    }
+
+    libraryService, err := library.NewLibraryService(
+        operationsManager,
+        validationService,
+        log.With("component", "library_service"),
+    )
+    if err != nil {
+        return nil, fmt.Errorf("error initializing library service: %v", err)
+    }
+
+    libraryHandler := library.NewLibraryHandler(
+        libraryService,
+        validationService,
+        log,
+    )
+
     bookDomainHandler := domains.NewBookDomainHandler(bookHandlers, log.With("domain", "books"))
-    if err := libraryHandler.RegisterDomain(bookDomainHandler); err != nil {
+    if err := operationsManager.RegisterDomain(bookDomainHandler); err != nil {
         return nil, fmt.Errorf("failed to register book domain handler: %w", err)
     }
 
@@ -289,7 +368,7 @@ func NewFactory(ctx context.Context, db *sql.DB, redisClient *redis.RedisClient,
         DeletionWorker:        deletionWorker,
         CacheWorker:           cacheWorker,
         CacheManager:          cacheManager,
-        LibraryPageHandler:    libraryHandler,
+        LibraryHandler:    libraryHandler,
         BaseValidator:         baseValidator,
     }, nil
 }

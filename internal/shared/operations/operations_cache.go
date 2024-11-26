@@ -62,7 +62,7 @@ func (co *CacheOperation) Get(
 
 			// Validate data
 			if err := co.validator.ValidateStruct(ctx, pageData); err != nil {
-				return nil, fmt.Errorf("validation failed: %w", err)
+				return nil, fmt.Errorf("validation failed: %v", err)
 			}
 
 			// Increment metrics
@@ -83,7 +83,7 @@ func (co *CacheOperation) Set(
 	_, err := co.executor.Execute(ctx, func(ctx context.Context) (*types.LibraryPageData, error) {
 		// Validate data before caching
 		if err := co.validator.ValidateStruct(ctx, data); err != nil {
-			return nil, fmt.Errorf("validation failed: %w", err)
+			return nil, fmt.Errorf("validation failed: %v", err)
 		}
 
 		// Generate cache key

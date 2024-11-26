@@ -8,7 +8,8 @@ import (
 	"github.com/lokeam/bravo-kilo/cmd/middleware"
 	authhandlers "github.com/lokeam/bravo-kilo/internal/auth/handlers"
 	"github.com/lokeam/bravo-kilo/internal/books/handlers"
-	"github.com/lokeam/bravo-kilo/internal/shared/pages/library"
+	"github.com/lokeam/bravo-kilo/internal/shared/core"
+	libraryhandlers "github.com/lokeam/bravo-kilo/internal/shared/library"
 	"github.com/lokeam/bravo-kilo/internal/shared/validator"
 
 	chimiddleware "github.com/go-chi/chi/middleware"
@@ -31,7 +32,7 @@ func (app *application) routes(
 	bookHandlers *handlers.BookHandlers,
 	searchHandlers *handlers.SearchHandlers,
 	authHandlers *authhandlers.AuthHandlers,
-	libraryPageHandler *library.LibraryPageHandler,
+	libraryHandler *libraryhandlers.LibraryHandler,
 	baseValidator *validator.BaseValidator,
 ) http.Handler {
 	mux := chi.NewRouter()
@@ -95,7 +96,7 @@ func (app *application) routes(
 		r.Route("/api/v1/books", func(r chi.Router) {
 			r.Use(middleware.VerifyJWT)
 			r.Use(middleware.RequestValidation(baseValidator, middleware.ValidationConfig{
-				Domain: validator.BookDomain,
+				Domain: core.BookDomainType,
 				Timeout: 30 * time.Second,
 			}))
 			r.Get("/by-id/{bookID}", bookHandlers.HandleGetBookByID)
@@ -110,13 +111,13 @@ func (app *application) routes(
 		r.Route("/api/v1/pages", func(r chi.Router) {
 			r.Use(middleware.VerifyJWT)
 			r.Use(middleware.RequestValidation(baseValidator, middleware.ValidationConfig{
-				Domain: validator.BookDomain,
+				Domain: core.BookDomainType,
 				Timeout: 30 * time.Second,
 			}))
 
 			r.Use(middleware.NewAdaptiveCompression(app.compressionMonitor))
 
-			r.With(middleware.RateLimiter).Get("/library", libraryPageHandler.HandleGetLibraryPageData)
+			r.With(middleware.RateLimiter).Get("/library", libraryHandler.HandleGetLibraryPageData)
 		})
 	})
 

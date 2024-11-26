@@ -1,6 +1,7 @@
 package library
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -8,7 +9,10 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/lokeam/bravo-kilo/config"
 	"github.com/lokeam/bravo-kilo/internal/shared/core"
+	"github.com/lokeam/bravo-kilo/internal/shared/jwt"
+	"github.com/lokeam/bravo-kilo/internal/shared/operations"
 	"github.com/lokeam/bravo-kilo/internal/shared/services"
 )
 
@@ -18,6 +22,7 @@ type ErrorResponse struct {
 }
 
 type LibraryHandler struct {
+	authExecutor              *operations.OperationExecutor[int]
 	libraryService            *LibraryService
 	validationService         *services.ValidationService
 	logger                    *slog.Logger
@@ -27,6 +32,28 @@ var (
 	ErrValidation     = errors.New("validation error")
 	ErrAuthentication = errors.New("authentication error")
 )
+
+func NewLibraryHandler(
+	libraryService *LibraryService,
+	validationService *services.ValidationService,
+	logger *slog.Logger,
+) *LibraryHandler {
+	if libraryService == nil {
+		panic("library service is required")
+	}
+	if validationService == nil {
+		panic("validation service is required")
+	}
+	if logger == nil {
+		panic("logger is required")
+	}
+	return &LibraryHandler{
+		authExecutor:        operations.NewOperationExecutor[int]("auth_request", 5*time.Second, logger),
+		libraryService:      libraryService,
+		validationService:   validationService,
+		logger:              logger,
+	}
+}
 
 // RESPONSIBILITIES:
 
@@ -52,7 +79,7 @@ func (h *LibraryHandler) HandleGetLibraryPageData(w http.ResponseWriter, r *http
 	}
 
 	// Auth
-	userID, err := h.authenticateRequest(r)
+	userID, err := h.authenticateRequest(ctx, r)
 	if err != nil {
 		h.respondWithError(w, requestID, err)
 		return
@@ -73,7 +100,7 @@ func (h *LibraryHandler) HandleGetLibraryPageData(w http.ResponseWriter, r *http
 		return
 	}
 
-	// send response back to frontend
+	// Send response back to frontend
 	if err := h.respondWithJSON(w, http.StatusOK, libraryData); err != nil {
 		h.logger.Error("failed to send response",
 			"error", err,
@@ -81,10 +108,18 @@ func (h *LibraryHandler) HandleGetLibraryPageData(w http.ResponseWriter, r *http
 	}
 
 	http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	return
 }
 
 // Helpers
+func (h *LibraryHandler) authenticateRequest(ctx context.Context, r *http.Request) (int, error) {
+	return h.authExecutor.Execute(ctx, func(ctx context.Context) (int, error) {
+		userID, err := jwt.ExtractUserIDFromJWT(r, config.AppConfig.JWTPublicKey)
+		if err != nil {
+				return 0, ErrAuthentication
+		}
+		return userID, nil
+	})
+}
 
 func (h *LibraryHandler) respondWithJSON(w http.ResponseWriter, status int, data any) error {
 	/*

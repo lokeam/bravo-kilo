@@ -6,21 +6,17 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/lokeam/bravo-kilo/internal/shared/core"
 	"github.com/lokeam/bravo-kilo/internal/shared/operations"
 	"github.com/lokeam/bravo-kilo/internal/shared/redis"
+	"github.com/lokeam/bravo-kilo/internal/shared/services"
 	"github.com/lokeam/bravo-kilo/internal/shared/types"
 )
-
-type contextKey string
 
 type LibraryService struct {
 	operations *operations.Manager
 	logger     *slog.Logger
 }
-
-const (
-	RequestIDKey contextKey = "requestID"
-)
 
 // RESPONSIBILITIES:
 /*
@@ -30,6 +26,27 @@ const (
 	- Make sure error handling chain is CLEAN
 	- Type safe response building
 */
+func NewLibraryService(
+	operationsManager *operations.Manager,
+	validationService *services.ValidationService,
+	logger *slog.Logger,
+) (*LibraryService, error) {
+	if operationsManager == nil {
+		return nil, fmt.Errorf("operations manager cannot be nil")
+	}
+	if validationService == nil {
+		panic("validation service is required")
+	}
+	if logger == nil {
+		panic("logger is required")
+	}
+	return &LibraryService{
+		operations: operationsManager,
+		logger:              logger,
+	}, nil
+}
+
+
 
 // 1. Primary business logic flow
 func (ls *LibraryService) GetLibraryData(ctx context.Context, userID int, params *types.LibraryQueryParams) (*types.LibraryResponse, error) {
@@ -84,7 +101,7 @@ func (ls *LibraryService) GetLibraryData(ctx context.Context, userID int, params
 
 	// 5. Build response
 	return ls.buildResponse(
-		ctx.Value(RequestIDKey).(string),
+		ctx.Value(core.RequestIDKey).(string),
 		data,
 		"database",
 	), nil
