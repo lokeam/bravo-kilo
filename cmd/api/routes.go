@@ -39,6 +39,9 @@ func (app *application) routes(
 	// Panic Recovery
 	mux.Use(chimiddleware.Recoverer)
 
+	// Ensure every request has a unique ID
+	mux.Use(middleware.RequestID)
+
 	// Logging
 	mux.Use(middleware.LogHeaders)
 

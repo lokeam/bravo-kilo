@@ -11,13 +11,10 @@ import (
 
 	"github.com/gorilla/csrf"
 	"github.com/lokeam/bravo-kilo/config"
+	"github.com/lokeam/bravo-kilo/internal/shared/core"
 	"github.com/lokeam/bravo-kilo/internal/shared/crypto"
 	"github.com/lokeam/bravo-kilo/internal/shared/types"
 )
-
-type userKeyType string
-
-const UserIDKey userKeyType = "userID"
 
 var limiter = rate.NewLimiter(1, 5)
 
@@ -103,13 +100,13 @@ func VerifyJWT(next http.Handler) http.Handler {
 		}
 
 		logger.Info("JWT verified successfully", "userID", claims.UserID, "path", r.URL.Path)
-		ctx := context.WithValue(r.Context(), UserIDKey, claims.UserID)
+		ctx := context.WithValue(r.Context(), core.UserIDKey, claims.UserID)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 
 func GetUserID(ctx context.Context) (int, bool) {
-    userID, ok := ctx.Value(UserIDKey).(int)
+    userID, ok := ctx.Value(core.UserIDKey).(int)
     if !ok {
         logger.Error("Failed to get userID from context")
         return 0, false
