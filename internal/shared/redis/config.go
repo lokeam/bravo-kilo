@@ -127,9 +127,9 @@ func NewRedisConfig() *RedisConfig {
 
 	// Circuit Breaker defaults
 	config.CircuitBreaker.Enabled = true
-	config.CircuitBreaker.MaxFailures = 25
-	config.CircuitBreaker.ResetTimeout = 45 * time.Second
-	config.CircuitBreaker.HalfOpenRequests = 10
+	config.CircuitBreaker.MaxFailures = 10
+	config.CircuitBreaker.ResetTimeout = 30 * time.Second
+	config.CircuitBreaker.HalfOpenRequests = 5
 
 	return config
 }

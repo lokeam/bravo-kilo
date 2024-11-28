@@ -117,7 +117,7 @@ func (app *application) routes(
 
 			r.Use(middleware.NewAdaptiveCompression(app.compressionMonitor))
 
-			r.With(middleware.RateLimiter).Get("/library", libraryHandler.HandleGetLibraryPageData)
+			r.Get("/library", libraryHandler.HandleGetLibraryPageData)
 		})
 	})
 

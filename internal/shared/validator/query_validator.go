@@ -2,10 +2,8 @@ package validator
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"net/url"
-	"strconv"
 	"time"
 
 	"github.com/lokeam/bravo-kilo/internal/shared/operations"
@@ -46,13 +44,6 @@ func (qv *QueryValidator) ParseAndValidate(
 
 		// Parse validated parameters
 		validatedParams := &types.LibraryQueryParams{}
-		if page := query.Get("page"); page != "" {
-			val, err := strconv.Atoi(page)
-			if err != nil {
-				return nil, fmt.Errorf("invalid page parameter: %w", err)
-			}
-			validatedParams.Page = val
-		}
 
 		return validatedParams, nil
 }

@@ -2,12 +2,13 @@ package workers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
 
 	"github.com/lokeam/bravo-kilo/internal/shared/redis"
-	goredis "github.com/redis/go-redis/v9"
+	"github.com/lokeam/bravo-kilo/internal/shared/rueidis"
 )
 
 type UserDeletionService interface {
@@ -19,12 +20,12 @@ type UserDeletionService interface {
 }
 
 type UserDeletionServiceImpl struct {
-	redisClient *redis.RedisClient
+	redisClient *rueidis.Client
 	logger      *slog.Logger
 }
 
 func NewUserDeletionService(
-    redisClient *redis.RedisClient,
+    redisClient *rueidis.Client,
     logger *slog.Logger,
 ) UserDeletionService {
     if redisClient == nil {
@@ -50,7 +51,7 @@ func (s *UserDeletionServiceImpl) GetUserDeletionMarker(ctx context.Context, use
     key := s.buildKey("userDelete", userID)
 
     _, err := s.redisClient.Get(ctx, key)
-    if err == goredis.Nil {
+    if errors.Is(err, rueidis.ErrNotFound) {
         s.logger.Info("User deletion marker not found", "userID", userID)
         return false, nil
     }

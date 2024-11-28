@@ -9,6 +9,7 @@ import (
 	"github.com/lokeam/bravo-kilo/internal/books/repository"
 	"github.com/lokeam/bravo-kilo/internal/shared/cache"
 	"github.com/lokeam/bravo-kilo/internal/shared/redis"
+	"github.com/lokeam/bravo-kilo/internal/shared/rueidis"
 )
 
 const (
@@ -31,7 +32,7 @@ type BookCacheInvalidatorImpl struct {
 
 func NewBookCacheInvalidator(
     bookCache repository.BookCache,
-    redisClient *redis.RedisClient,
+    redisClient *rueidis.Client,
     logger *slog.Logger,
 ) *BookCacheInvalidatorImpl {
     if bookCache == nil {

@@ -4,12 +4,13 @@ import (
 	"database/sql"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/lokeam/bravo-kilo/internal/books"
 	"github.com/lokeam/bravo-kilo/internal/books/repository"
 	"github.com/lokeam/bravo-kilo/internal/books/services"
 	"github.com/lokeam/bravo-kilo/internal/shared/cache"
-	"github.com/lokeam/bravo-kilo/internal/shared/redis"
+	"github.com/lokeam/bravo-kilo/internal/shared/rueidis"
 	"github.com/lokeam/bravo-kilo/internal/shared/workers"
 
 	"github.com/go-playground/validator/v10"
@@ -33,12 +34,24 @@ type BookHandlers struct {
 	exportLimiter           *rate.Limiter
 	logger                  *slog.Logger
 	bookModels              books.Models
-	redisClient             *redis.RedisClient
+	redisClient             *rueidis.Client
 	cacheManager            *cache.CacheManager
 	cacheWorker             *workers.CacheWorker
 	sanitizer               *bluemonday.Policy
 	validate                *validator.Validate
 	DB                      *sql.DB
+
+	cacheDurations struct {
+		BookList          time.Duration
+		BookDetail        time.Duration
+		BooksByAuthor     time.Duration
+		BooksByFormat     time.Duration
+		BooksByGenre      time.Duration
+		BooksByTag        time.Duration
+		BookHomepage      time.Duration
+		UserData          time.Duration
+		DefaultTTL        time.Duration
+	}
 }
 
 // Create a new Handlers instance
@@ -58,7 +71,7 @@ func NewBookHandlers(
 	bookService services.BookService,
 	bookCacheService services.BookCacheService,
 	exportService services.ExportService,
-	redisClient *redis.RedisClient,
+	redisClient *rueidis.Client,
 	cacheManager *cache.CacheManager,
 	cacheWorker *workers.CacheWorker,
 	) (*BookHandlers, error) {
@@ -142,6 +155,28 @@ func NewBookHandlers(
 		redisClient:       redisClient,
 		cacheManager:      cacheManager,
 		cacheWorker:       cacheWorker,
+
+		cacheDurations: struct {
+			BookList          time.Duration
+			BookDetail        time.Duration
+			BooksByAuthor     time.Duration
+			BooksByFormat     time.Duration
+			BooksByGenre      time.Duration
+			BooksByTag        time.Duration
+			BookHomepage      time.Duration
+			UserData          time.Duration
+			DefaultTTL        time.Duration
+		}{
+			BookList:          15 * time.Minute,
+			BookDetail:        30 * time.Minute,
+			BooksByAuthor:     15 * time.Minute,
+			BooksByFormat:     15 * time.Minute,
+			BooksByGenre:      15 * time.Minute,
+			BooksByTag:        15 * time.Minute,
+			BookHomepage:      5 * time.Minute,
+			UserData:          30 * time.Minute,
+			DefaultTTL:        15 * time.Minute,
+		},
 	}, nil
 }
 

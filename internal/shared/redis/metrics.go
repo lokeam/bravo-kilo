@@ -38,10 +38,30 @@ type Metrics struct {
 
 func NewMetrics() *Metrics {
 	return &Metrics{
-			OperationLatency:  make(map[string]time.Duration),
-			OperationCount:    make(map[string]int64),
-			ErrorCount:        make(map[string]int64),
-	}
+		// Initialize operation maps
+		Operations:       make(map[string]string),
+		OperationLatency: make(map[string]time.Duration),
+		OperationCount:   make(map[string]int64),
+		ErrorCount:       make(map[string]int64),
+
+		// Initialize other fields with zero values
+		CircuitBreakerState:     StateClosed, // Assuming Closed is the default state
+		CircuitBreakerFailures:  0,
+		CircuitBreakerSuccesses: 0,
+		LastStateChange:         time.Now(),
+
+		ActiveConnections: 0,
+		IdleConnections:   0,
+
+		PoolHits:    0,
+		PoolMisses:  0,
+		PoolTimeout: 0,
+
+		CacheHits:    0,
+		CacheMisses:  0,
+		CacheErrors:  0,
+		CacheLatency: 0,
+}
 }
 
 func (m *Metrics) RecordOperationDuration(operation string, duration time.Duration, err error) {

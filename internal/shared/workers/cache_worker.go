@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lokeam/bravo-kilo/internal/shared/redis"
+	"github.com/lokeam/bravo-kilo/internal/shared/rueidis"
 )
 
 var (
@@ -25,7 +25,7 @@ type CacheInvalidationJob struct {
 type CacheWorker struct {
 	jobs             chan CacheInvalidationJob
 	workers          int
-	redisClient      *redis.RedisClient
+	redisClient      *rueidis.Client
 	logger           *slog.Logger
 	maxAttempts      int
 	retryInterval    time.Duration
@@ -53,7 +53,11 @@ type MetricsSnapshot struct {
 	ProcessingTime  time.Duration
 }
 
-func NewCacheWorker(redisClient *redis.RedisClient, logger *slog.Logger, workers int) (*CacheWorker) {
+func NewCacheWorker(
+	redisClient *rueidis.Client,
+	logger *slog.Logger,
+	workers int,
+	) (*CacheWorker) {
 	if redisClient == nil {
 		return nil
 	}

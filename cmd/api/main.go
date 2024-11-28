@@ -22,10 +22,11 @@ import (
 	libraryhandlers "github.com/lokeam/bravo-kilo/internal/shared/library"
 	"github.com/lokeam/bravo-kilo/internal/shared/logger"
 	"github.com/lokeam/bravo-kilo/internal/shared/redis"
+	"github.com/lokeam/bravo-kilo/internal/shared/rueidis"
 	"github.com/lokeam/bravo-kilo/internal/shared/validator"
 )
 
-var defaultRedisClient *redis.RedisClient
+var defaultRedisClient *rueidis.Client
 
 type appConfig struct {
 	port int
@@ -174,21 +175,26 @@ func initializeResources(ctx context.Context, log *slog.Logger) (*driver.DB, *fa
 	}
 
 	// Initialize Redis
-	cfg := redis.NewRedisConfig()
+	cfg := rueidis.NewConfig()
 	if err := cfg.LoadFromEnv(); err != nil {
-		return nil, nil, fmt.Errorf("redis config error: %w", err)
+			return nil, nil, fmt.Errorf("redis config error: %w", err)
+	}
+	if err := cfg.Validate(); err != nil {
+			return nil, nil, fmt.Errorf("invalid redis config: %w", err)
 	}
 
-	redisClient, err := redis.NewRedisClient(cfg, log)
+	// Create Redis client
+	redisClient, err := rueidis.NewRedisClient(cfg, log)
 	if err != nil {
-		return nil, nil, fmt.Errorf("redis client error: %w", err)
+			return nil, nil, fmt.Errorf("redis client error: %w", err)
 	}
-	defaultRedisClient = redisClient
 
-	// Connect to Redis
-	if err := redisClient.Connect(ctx); err != nil {
-		return nil, nil, fmt.Errorf("redis connection error: %w", err)
+	// Verify connection with PING
+	if err := redisClient.Ping(ctx); err != nil {
+			return nil, nil, fmt.Errorf("redis ping failed: %w", err)
 	}
+
+	// Set global client (if needed)
 	defaultRedisClient = redisClient
 
 	// Initialize factory

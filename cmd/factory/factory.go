@@ -24,7 +24,7 @@ import (
 	"github.com/lokeam/bravo-kilo/internal/shared/operations"
 	"github.com/lokeam/bravo-kilo/internal/shared/organizer"
 	"github.com/lokeam/bravo-kilo/internal/shared/processor/bookprocessor"
-	"github.com/lokeam/bravo-kilo/internal/shared/redis"
+	"github.com/lokeam/bravo-kilo/internal/shared/rueidis"
 	sharedservices "github.com/lokeam/bravo-kilo/internal/shared/services"
 	"github.com/lokeam/bravo-kilo/internal/shared/transaction"
 	"github.com/lokeam/bravo-kilo/internal/shared/validator"
@@ -32,7 +32,7 @@ import (
 )
 
 type Factory struct {
-    RedisClient           *redis.RedisClient
+    RedisClient           *rueidis.Client
     BookHandlers          *handlers.BookHandlers
     SearchHandlers        *handlers.SearchHandlers
     AuthHandlers          *authhandlers.AuthHandlers
@@ -43,7 +43,12 @@ type Factory struct {
     BaseValidator         *validator.BaseValidator
 }
 
-func NewFactory(ctx context.Context, db *sql.DB, redisClient *redis.RedisClient, log *slog.Logger) (*Factory, error) {
+func NewFactory(
+    ctx context.Context,
+    db *sql.DB,
+    redisClient *rueidis.Client,
+    log *slog.Logger,
+    ) (*Factory, error) {
     if redisClient == nil {
         return nil, fmt.Errorf("error initializing factory: redis client is required")
     }
@@ -137,6 +142,23 @@ func NewFactory(ctx context.Context, db *sql.DB, redisClient *redis.RedisClient,
 
     tokenModel := models.NewTokenModel(db, log)
 
+    bookProcessor, err := bookprocessor.NewBookProcessor(
+        log.With("component", "book_processor"),
+    )
+    if err != nil {
+        log.Error("failed to create book processor", "error", err)
+        return nil, fmt.Errorf("failed to create book processor: %w", err)
+    }
+
+
+    bookOrganizer, err := organizer.NewBookOrganizer(
+        log.With("component", "book_organizer"),
+    )
+    if err != nil {
+        log.Error("failed to create book organizer", "error", err)
+        return nil, fmt.Errorf("failed to create book organizer: %w", err)
+    }
+
     bookDomainAdapter := operations.NewBookDomainAdapter(
         bookRepo,
         log.With("component", "book_domain_adapter"),
@@ -148,28 +170,21 @@ func NewFactory(ctx context.Context, db *sql.DB, redisClient *redis.RedisClient,
         log.With("component", "domain_operation"),
     )
 
+    baseValidator, err := validator.NewBaseValidator(
+        log.With("component", "validator"),
+        core.BookDomainType,
+    )
+    if err != nil {
+        return nil, fmt.Errorf("failed to initialize base validator: %w", err)
+    }
+
+
     cacheOperation := operations.NewCacheOperation(
         redisClient,
         30 * time.Second,
         log.With("component", "cache_operation"),
+        baseValidator,
     )
-
-    bookProcessor, err := bookprocessor.NewBookProcessor(
-        log.With("component", "book_processor"),
-    )
-    if err != nil {
-        log.Error("failed to create book processor", "error", err)
-        return nil, fmt.Errorf("failed to create book processor: %w", err)
-    }
-
-    bookOrganizer, err := organizer.NewBookOrganizer(
-        log.With("component", "book_organizer"),
-    )
-    if err != nil {
-        log.Error("failed to create book organizer", "error", err)
-        return nil, fmt.Errorf("failed to create book organizer: %w", err)
-    }
-
     processorOperation, err := operations.NewProcessorOperation(
         bookProcessor,
         bookOrganizer,
@@ -307,14 +322,6 @@ func NewFactory(ctx context.Context, db *sql.DB, redisClient *redis.RedisClient,
     )
     if err != nil {
         return nil, err
-    }
-
-    baseValidator, err := validator.NewBaseValidator(
-        log.With("component", "validator"),
-        core.BookDomainType,
-    )
-    if err != nil {
-        return nil, fmt.Errorf("failed to initialize base validator: %w", err)
     }
 
     queryValidator, err := validator.NewQueryValidator(

@@ -5,15 +5,15 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/lokeam/bravo-kilo/internal/shared/redis"
+	"github.com/lokeam/bravo-kilo/internal/shared/rueidis"
 )
 
 type RedisInvalidator struct {
-	redisClient    *redis.RedisClient
+	redisClient    *rueidis.Client
 	logger         *slog.Logger
 }
 
-func NewRedisInvalidtor(client *redis.RedisClient, logger *slog.Logger) *RedisInvalidator {
+func NewRedisInvalidtor(client *rueidis.Client, logger *slog.Logger) *RedisInvalidator {
 	if client == nil {
 		panic("redis client cannot be nil")
 	}

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/lokeam/bravo-kilo/internal/books/repository"
 	"github.com/lokeam/bravo-kilo/internal/shared/core"
 	"github.com/lokeam/bravo-kilo/internal/shared/operations"
 	"github.com/lokeam/bravo-kilo/internal/shared/redis"
@@ -70,87 +71,166 @@ func (ls *LibraryService) GetLibraryData(ctx context.Context, userID int, params
 
 	// 1. Try cache
 	data, err := ls.operations.Cache.Get(ctx, userID, params)
-	if err != nil && !errors.Is(err, redis.ErrNotFound){
-		// Only return error if not cache miss
-		return nil, fmt.Errorf("cache operation failed: %w", err)
+	if err != nil && !errors.Is(err, redis.ErrNotFound) {
+			// Only return error if not cache miss
+			return nil, fmt.Errorf("cache operation failed: %w", err)
 	}
 
-	// 2.If cache miss, get fresh data
-	if errors.Is(err, redis.ErrNotFound) {
-		// Get domain data
-		data, err = ls.operations.Domain.GetData(ctx, userID, params)
-		if err != nil {
-			return nil, err
-		}
+	// 2. If cache miss OR data is nil, get fresh data
+	if errors.Is(err, redis.ErrNotFound) || data == nil {
+			// Get domain data
+			data, err = ls.operations.Domain.GetData(ctx, userID, params)
+			if err != nil {
+					return nil, err
+			}
 
-		// 3.Process data into correct format
-		data, err = ls.operations.Processor.Process(ctx, data)
-		if err != nil {
-			return nil, err
-		}
+			// 3. Process data into correct format
+			data, err = ls.operations.Processor.Process(ctx, data)
+			if err != nil {
+					return nil, err
+			}
 
-		// 4. Cache processed data
-		if err := ls.operations.Cache.Set(ctx, userID, params, data); err != nil {
-			// Log but don't fail if cache update fails
-			ls.logger.Error("failed to cache library data",
-				"userId", userID,
-				"error", err,
-			)
-		}
+			// 4. Cache processed data
+			if err := ls.operations.Cache.Set(ctx, userID, params, data); err != nil {
+					// Log but don't fail if cache update fails
+					ls.logger.Error("failed to cache library data",
+							"userId", userID,
+							"error", err,
+					)
+			}
 	}
 
-	// 5. Build response
+// 5. Build response
 	return ls.buildResponse(
-		ctx.Value(core.RequestIDKey).(string),
-		data,
-		"database",
+    ctx.Value(core.RequestIDKey).(string),
+    data,
+    "database",
 	), nil
 }
 
 // Helper - Construct response
+// buildResponse constructs a validated LibraryResponse ensuring all required fields meet frontend contract
 func (ls *LibraryService) buildResponse(
 	requestID string,
 	data *types.LibraryPageData,
 	source string,
-	) *types.LibraryResponse {
-	/*
-	Responsibilities:
-		- Construct standard response format
-		- Add metadata (requestID, source)
-		- Enforce type safety
-	*/
-
-	// Validate inputs
+) *types.LibraryResponse {
 	if data == nil {
-		ls.logger.Error("attempt to build response with nil data")
+			ls.logger.Error("attempt to build response with nil data",
+					"component", "library_service",
+					"requestID", requestID,
+					"source", source)
 
-		// Return empty response instead of nil in order to maintain contract
-		return &types.LibraryResponse{
+			// Initialize with empty but valid data structures
+			data = &types.LibraryPageData{
+					Books:          make([]repository.Book, 0),
+					BooksByAuthors: types.AuthorData{
+							AllAuthors: make([]string, 0),
+							ByAuthor:   make(map[string][]repository.Book),
+					},
+					BooksByGenres: types.GenreData{
+							AllGenres: make([]string, 0),
+							ByGenre:   make(map[string][]repository.Book),
+					},
+					BooksByTags: types.TagData{
+							AllTags: make([]string, 0),
+							ByTag:   make(map[string][]repository.Book),
+					},
+					BooksByFormat: types.FormatData{
+							Physical:  make([]repository.Book, 0),
+							EBook:     make([]repository.Book, 0),
+							AudioBook: make([]repository.Book, 0),
+					},
+			}
+	}
+
+	// Ensure all books meet frontend contract requirements
+	for i := range data.Books {
+			// Handle description (required string)
+			if data.Books[i].Description.Ops == nil {
+					data.Books[i].Description = repository.RichText{
+							Ops: []repository.DeltaOp{{Insert: "No description available"}},
+					}
+			}
+
+			// Handle publishDate (required string)
+			if data.Books[i].PublishDate == "" {
+					data.Books[i].PublishDate = "Unknown"
+			}
+
+			// Handle imageLink (required string)
+			if data.Books[i].ImageLink == "" {
+					data.Books[i].ImageLink = "/default-book-cover.jpg"
+			}
+
+			// Handle formats (required array)
+			if len(data.Books[i].Formats) == 0 {
+					data.Books[i].Formats = []string{"physical"} // Default to physical if none specified
+			}
+	}
+
+	// Apply same validations to books in categorized collections
+	ls.validateBookCollection(data.BooksByAuthors.ByAuthor)
+	ls.validateBookCollection(data.BooksByGenres.ByGenre)
+	ls.validateBookCollection(data.BooksByTags.ByTag)
+	ls.validateFormatBooks(&data.BooksByFormat)
+
+	return &types.LibraryResponse{
 			RequestID: requestID,
-			Source:    source,
-		}
+			Data:     data,
+			Source:   source,
 	}
+}
 
-	// Validate data structure
-	if err := data.Validate(); err != nil {
-		ls.logger.Error("library page response data validation failed",
-		"requestID", requestID,
-		"error", err,
-		)
+// validateBookCollection ensures all books in a map collection meet frontend requirements
+func (ls *LibraryService) validateBookCollection(books map[string][]repository.Book) {
+	for category := range books {
+			for i := range books[category] {
+					if books[category][i].Description.Ops == nil {
+							books[category][i].Description = repository.RichText{
+									Ops: []repository.DeltaOp{{Insert: "No description available"}},
+							}
+					}
+					if books[category][i].PublishDate == "" {
+							books[category][i].PublishDate = "Unknown"
+					}
+					if books[category][i].ImageLink == "" {
+							books[category][i].ImageLink = "/default-book-cover.jpg"
+					}
+					if len(books[category][i].Formats) == 0 {
+							books[category][i].Formats = []string{"physical"}
+					}
+			}
 	}
+}
 
-	// Create response
-	response := &types.LibraryResponse{
-		RequestID: requestID,
-		Data:      data,
-		Source:    source,
+// validateFormatBooks ensures all books in format collections meet frontend requirements
+func (ls *LibraryService) validateFormatBooks(formatData *types.FormatData) {
+	for i := range formatData.Physical {
+			ls.normalizeSingleBook(&formatData.Physical[i])
 	}
+	for i := range formatData.EBook {
+			ls.normalizeSingleBook(&formatData.EBook[i])
+	}
+	for i := range formatData.AudioBook {
+			ls.normalizeSingleBook(&formatData.AudioBook[i])
+	}
+}
 
-	ls.logger.Info("library page response created",
-		"requestID", requestID,
-		"source", source,
-		"bookCount", len(data.Books),
-	)
-
-	return response
+// validateSingleBook ensures a single book meets frontend requirements
+func (ls *LibraryService) normalizeSingleBook(book *repository.Book) {
+	if book.Description.Ops == nil {
+			book.Description = repository.RichText{
+					Ops: []repository.DeltaOp{{Insert: "No description available"}},
+			}
+	}
+	if book.PublishDate == "" {
+			book.PublishDate = "Unknown"
+	}
+	if book.ImageLink == "" {
+			book.ImageLink = "/default-book-cover.jpg"
+	}
+	if len(book.Formats) == 0 {
+			book.Formats = []string{"physical"}
+	}
 }

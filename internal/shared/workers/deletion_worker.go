@@ -55,3 +55,4 @@ func (w *DeletionWorker) StartDeletionWorker() {
 func (w *DeletionWorker) StopDeletionWorker() {
     close(w.stopChan)
 }
+

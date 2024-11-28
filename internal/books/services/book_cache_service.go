@@ -3,36 +3,36 @@ package services
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
 
-	"github.com/lokeam/bravo-kilo/config"
 	"github.com/lokeam/bravo-kilo/internal/shared/redis"
-	goredis "github.com/redis/go-redis/v9"
+	"github.com/lokeam/bravo-kilo/internal/shared/rueidis"
 )
 
 type BookCacheService interface {
     // High-level cache operations
-    GetCachedBook(ctx context.Context, userID int, bookID int, result interface{}) (bool, error)
-    GetCachedBookList(ctx context.Context, userID int, operation string, result interface{}) (bool, error)
-    SetCachedBook(ctx context.Context, userID int, bookID int, value interface{}) error
-    SetCachedBookList(ctx context.Context, userID int, operation string, value interface{}) error
+    SetCachedBook(ctx context.Context, userID int, bookID int, value interface{}, duration time.Duration) error
+    SetCachedBookList(ctx context.Context, userID int, operation string, value interface{}, duration time.Duration) error
+	SetCachedGeminiResponse(ctx context.Context, prompt string, response string, duration time.Duration) error
+
     InvalidateCache(ctx context.Context, userID int, bookID int) error
 	GetCachedGeminiResponse(ctx context.Context, prompt string) (string, bool, error)
-	SetCachedGeminiResponse(ctx context.Context, prompt string, response string) error
+    GetCachedBook(ctx context.Context, userID int, bookID int, result interface{}) (bool, error)
+    GetCachedBookList(ctx context.Context, userID int, operation string, result interface{}) (bool, error)
     GetCacheKeys(itemID, userID int) []string
 }
 
 type BookCacheServiceImpl struct {
-    redisClient *redis.RedisClient
+    redisClient *rueidis.Client
     logger      *slog.Logger
     metrics     *BookCacheMetrics
-    config      *redis.RedisConfig
 }
 
 func NewBookCacheService(
-    redisClient *redis.RedisClient,
+    redisClient *rueidis.Client,
     logger *slog.Logger,
 ) BookCacheService {
     if redisClient == nil {
@@ -46,7 +46,6 @@ func NewBookCacheService(
         redisClient: redisClient,
         logger:      logger.With("component", "book_cache_service"),
         metrics:     NewBookCacheMetrics(),
-        config:      redisClient.GetConfig(),
     }
 }
 
@@ -61,14 +60,26 @@ func (s *BookCacheServiceImpl) GetCachedBookList(ctx context.Context, userID int
     return s.getCachedData(ctx, key, result)
 }
 
-func (s *BookCacheServiceImpl) SetCachedBook(ctx context.Context, userID int, bookID int, value interface{}) error {
+func (s *BookCacheServiceImpl) SetCachedBook(
+    ctx context.Context,
+    userID int,
+    bookID int,
+    value interface{},
+    duration time.Duration,
+    ) error {
     key := s.buildKey("bookDetail", userID, bookID)
-    return s.setCachedData(ctx, key, value, config.AppConfig.DefaultBookCacheExpiration)
+    return s.setCachedData(ctx, key, value, duration)
 }
 
-func (s *BookCacheServiceImpl) SetCachedBookList(ctx context.Context, userID int, operation string, value interface{}) error {
+func (s *BookCacheServiceImpl) SetCachedBookList(
+    ctx context.Context,
+    userID int,
+    operation string,
+    value interface{},
+    duration time.Duration,
+    ) error {
     key := s.buildKey(operation, userID)
-    return s.setCachedData(ctx, key, value, config.AppConfig.DefaultBookCacheExpiration)
+    return s.setCachedData(ctx, key, value, duration)
 }
 
 func (s *BookCacheServiceImpl) InvalidateCache(ctx context.Context, userID int, bookID int) error {
@@ -99,16 +110,25 @@ func (s *BookCacheServiceImpl) GetCacheKeys(itemID, userID int) []string {
     }
 }
 
-func (s *BookCacheServiceImpl) SetCachedGeminiResponse(ctx context.Context, prompt string, response string) error {
+func (s *BookCacheServiceImpl) SetCachedGeminiResponse(
+    ctx context.Context,
+    prompt string,
+    response string,
+    duration time.Duration,
+    ) error {
 	key := s.buildKey("gemini", 0, prompt)
-	return s.setCachedData(ctx, key, response, s.config.CacheConfig.GeminiResponse)
+	return s.setCachedData(ctx, key, response, duration)
 }
 
 // Internal helper methods
-func (s *BookCacheServiceImpl) getCachedData(ctx context.Context, key string, result interface{}) (bool, error) {
+func (s *BookCacheServiceImpl) getCachedData(
+    ctx context.Context,
+    key string,
+    result any,
+    ) (bool, error) {
     data, err := s.redisClient.Get(ctx, key)
     if err != nil {
-        if err == goredis.Nil {
+        if errors.Is(err, rueidis.ErrNotFound) {
             s.metrics.RecordCacheMiss(key)
             return false, nil
         }

@@ -20,6 +20,7 @@ require (
 	github.com/lib/pq v1.10.9
 	github.com/microcosm-cc/bluemonday v1.0.27
 	github.com/redis/go-redis/v9 v9.7.0
+	github.com/redis/rueidis v1.0.50
 	golang.org/x/oauth2 v0.21.0
 	golang.org/x/text v0.19.0
 	golang.org/x/time v0.6.0

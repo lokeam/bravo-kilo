@@ -10,6 +10,7 @@ var (
 	ErrConnectionFailed      = errors.New("redis connection failed")
 	ErrInvalidData           = errors.New("invalidate data format")
 	ErrClientNotReady        = errors.New("redis client not ready")
+	ErrTimeout               = errors.New("redis operation timed out") // New error type
 )
 
 type OperationError struct {

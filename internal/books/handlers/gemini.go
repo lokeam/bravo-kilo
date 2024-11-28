@@ -89,7 +89,12 @@ func (h *BookHandlers) HandleGetGeminiBookSummary(response http.ResponseWriter, 
 	}
 
     // Cache the response with error logging
-    if err := h.bookCacheService.SetCachedGeminiResponse(ctx, prompt, string(jsonResponse)); err != nil {
+    if err := h.bookCacheService.SetCachedGeminiResponse(
+			ctx,
+			prompt,
+			string(jsonResponse),
+			h.cacheDurations.DefaultTTL,
+		); err != nil {
 			h.logger.Error("Cache storage error",
 					"error", err,
 					"prompt", prompt,
