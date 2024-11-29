@@ -32,6 +32,13 @@ func (bp *BookProcessor) GetDomainType() core.DomainType {
 }
 
 func (bp *BookProcessor) ProcessLibraryItems(ctx context.Context, items []core.LibraryItem) (*types.LibraryPageData, error) {
+	bp.logger.Debug("PROCESSOR: Starting ProcessLibraryItems",
+		"component", "book_processor",
+		"function", "ProcessLibraryItems",
+		"itemsCount", len(items),
+			"firstItemDetails", logFirstItem(items),
+		)
+
 	if items == nil {
 		return nil, fmt.Errorf("items slice cannot be nil")
 	}
@@ -58,6 +65,15 @@ func (bp *BookProcessor) ProcessLibraryItems(ctx context.Context, items []core.L
 					end = len(items)
 			}
 
+			chunk := items[i:end]
+			bp.logger.Debug("PROCESSOR: Processing chunk",
+				"component", "book_processor",
+				"function", "ProcessLibraryItems",
+				"chunkSize", len(chunk),
+				"chunkStartIndex", i,
+				"chunkEndIndex", end,
+			)
+
 			// Process chunk
 			go func(chunk []core.LibraryItem) {
 					for _, item := range chunk {
@@ -66,6 +82,12 @@ func (bp *BookProcessor) ProcessLibraryItems(ctx context.Context, items []core.L
 									errorChan <- ctx.Err()
 									return
 							default:
+									bp.logger.Debug("PROCESSOR: Converting item to book",
+										"component", "book_processor",
+										"function", "ProcessLibraryItems",
+										"itemID", item.ID,
+										"itemTitle", item.Title,
+									)
 									bp.metrics.ItemsProcessed.Add(1)
 									resultChan <- repository.Book{
 											ID:    item.ID,
@@ -73,13 +95,18 @@ func (bp *BookProcessor) ProcessLibraryItems(ctx context.Context, items []core.L
 									}
 							}
 					}
-			}(items[i:end])
+			}(chunk)
 	}
 
 	// 2. Init new variable to hold books
 	books := make([]repository.Book, 0, len(items))
 	remaining := len(items)
 
+	bp.logger.Debug("PROCESSOR: Starting to collect results",
+		"component", "book_processor",
+		"function", "ProcessLibraryItems",
+		"expectedBooks", remaining,
+	)
 
 	// 3. Walk through slice of items
 	for remaining > 0 {
@@ -91,6 +118,15 @@ func (bp *BookProcessor) ProcessLibraryItems(ctx context.Context, items []core.L
 		case book := <-resultChan:
 				books = append(books, book)
 				remaining--
+
+				if len(books) == 1 {
+					bp.logger.Debug("PROCESSOR: First book processed",
+							"component", "book_processor",
+							"function", "ProcessLibraryItems",
+							"firstBookID", book.ID,
+							"firstBookTitle", book.Title,
+					)
+				}
 		}
 	}
 
@@ -98,9 +134,9 @@ func (bp *BookProcessor) ProcessLibraryItems(ctx context.Context, items []core.L
 	if len(books) == 0 {
 		return nil, fmt.Errorf("no valid books found in items")
 	}
-	// 5. Return LibraryData
 
-	return &types.LibraryPageData{
+	// 5. Return LibraryData
+	result := &types.LibraryPageData{
     Books: books,
     BooksByAuthors: types.AuthorData{
         AllAuthors: make([]string, 0),
@@ -119,10 +155,25 @@ func (bp *BookProcessor) ProcessLibraryItems(ctx context.Context, items []core.L
         AllTags: make([]string, 0),
         ByTag:   make(map[string][]repository.Book),
     },
-	}, nil
+	}
+
+	bp.logger.Debug("PROCESSOR: Completed ProcessLibraryItems",
+		"component", "book_processor",
+		"function", "ProcessLibraryItems",
+		"processedBooksCount", len(books),
+		"firstProcessedBook", logFirstBook(books),
+	)
+
+	return result, nil
 }
 
 func (bp *BookProcessor) ProcessBooks(books []repository.Book) (types.LibraryPageData, error) {
+	bp.logger.Debug("PROCESSOR: After organization",
+        "component", "book_processor",
+        "booksCount", len(books),
+        "firstBookTitle", books[0].Title,
+        "firstBookAuthors", books[0].Authors)
+
 	// Handle nil input
 	if books == nil {
 			return types.LibraryPageData{
@@ -206,4 +257,27 @@ func (bp *BookProcessor) GetMetrics() *processor.ProcessorMetrics {
 	metrics.InvalidItems.Store(bp.metrics.InvalidItems.Load())
 
 	return metrics
+}
+
+// Helper function to safely log first item details
+func logFirstItem(items []core.LibraryItem) map[string]interface{} {
+	if len(items) == 0 {
+			return nil
+	}
+	return map[string]interface{}{
+			"id":    items[0].ID,
+			"title": items[0].Title,
+			"type":  items[0].Type,
+	}
+}
+
+// Helper function to safely log first book details
+func logFirstBook(books []repository.Book) map[string]interface{} {
+	if len(books) == 0 {
+			return nil
+	}
+	return map[string]interface{}{
+			"id":    books[0].ID,
+			"title": books[0].Title,
+	}
 }

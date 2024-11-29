@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/lokeam/bravo-kilo/internal/shared/core"
 	"github.com/lokeam/bravo-kilo/internal/shared/organizer"
 	"github.com/lokeam/bravo-kilo/internal/shared/processor/bookprocessor"
 	"github.com/lokeam/bravo-kilo/internal/shared/types"
@@ -53,27 +52,39 @@ func (p *ProcessorOperation) Process(ctx context.Context, data *types.LibraryPag
             return nil, fmt.Errorf("input data cannot be nil")
         }
 
-        libraryItems := make([]core.LibraryItem, len(data.Books))
-        for i, book := range data.Books {
-            libraryItems[i] = core.LibraryItem{
-                ID:          book.ID,
-                Title:      book.Title,
-                Type:       core.BookDomainType,
-            }
+        // Get first book details as map
+        var firstBookDetails map[string]interface{}
+        if len(data.Books) > 0 {
+            firstBookDetails = logBookDetails(data.Books[0])
         }
 
-        // Process the items
-        processedData, err := p.processor.ProcessLibraryItems(ctx, libraryItems)
-        if err != nil {
-            return nil, fmt.Errorf("processing failed: %w", err)
-        }
+        p.logger.Debug("PROCESSOR: Starting organization",
+            "component", "processor_operation",
+            "function", "Process",
+            "inputBooksCount", len(data.Books),
+            "firstBookDetails", firstBookDetails,
+        )
 
         // Organize the processed data
-        organizedData, err := p.organizer.OrganizeForLibrary(ctx, processedData)
+        organizedData, err := p.organizer.OrganizeForLibrary(ctx, data)
         if err != nil {
             return nil, fmt.Errorf("organizing failed: %w", err)
         }
 
+        // Get organized book details as map
+        var firstOrganizedBookDetails map[string]interface{}
+        if len(organizedData.Books) > 0 {
+            firstOrganizedBookDetails = logBookDetails(organizedData.Books[0])
+        }
+
+        p.logger.Debug("PROCESSOR: Completed organizing",
+            "component", "processor_operation",
+            "function", "Process",
+            "finalBooksCount", len(organizedData.Books),
+            "firstFinalBookDetails", logBookDetails(firstOrganizedBookDetails),
+        )
+
         return organizedData, nil
     })
 }
+

@@ -53,10 +53,20 @@ func (d *DomainOperation) GetData(
 	params *types.LibraryQueryParams,
 ) (*types.LibraryPageData, error) {
 	return d.Execute(ctx, func(ctx context.Context) (*types.LibraryPageData, error) {
+		  // Call book repository to get books
 			books, err := d.handler.GetLibraryItems(ctx, userID)
 			if err != nil {
-					return nil, fmt.Errorf("failed to get library items: %w", err)
+				return nil, fmt.Errorf("failed to get library items: %w", err)
 			}
+
+			d.logger.Debug("DOMAIN_OP: Data before sending to organizer",
+			"component", "domain_operation",
+			"function", "GetData",
+			"dataType", fmt.Sprintf("%T", books),
+			"hasData", books != nil,
+			// If it's a slice of books, log the first book's details
+			"firstBookDetails", logBookDetails(books), // Create this helper function
+		)
 
 			// Initialize page data and assign books directly
 			pageData := types.NewLibraryPageData(d.logger)
@@ -64,4 +74,23 @@ func (d *DomainOperation) GetData(
 
 			return pageData, nil
 	})
+}
+
+func logBookDetails(data interface{}) map[string]interface{} {
+	if books, ok := data.([]repository.Book); ok && len(books) > 0 {
+			book := books[0]
+			return map[string]interface{}{
+					"id":           book.ID,
+					"title":        book.Title,
+					"authorCount":  len(book.Authors),
+					"authors":      book.Authors,
+					"genreCount":   len(book.Genres),
+					"genres":       book.Genres,
+					"formatCount":  len(book.Formats),
+					"formats":      book.Formats,
+					"tagCount":     len(book.Tags),
+					"tags":         book.Tags,
+			}
+	}
+	return nil
 }

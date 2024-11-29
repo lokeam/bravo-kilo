@@ -391,6 +391,15 @@ func (r *BookRepositoryImpl) GetAllBooksByUserID(userID int) ([]Book, error) {
 			return nil, fmt.Errorf("failed to scan book row: %w", err)
 		}
 
+		r.Logger.Debug("scanned book row",
+		"bookID", book.ID,
+		"title", book.Title,
+		"rawAuthors", book.Authors,  // Add this
+		"rawGenres", book.Genres,    // Add this
+			"rawTags", book.Tags,
+		)
+
+
 		// Convert description and notes from JSON to RichText
 		if len(descriptionJSON) > 0 {
 			if err := json.Unmarshal(descriptionJSON, &book.Description); err != nil {
@@ -415,6 +424,21 @@ func (r *BookRepositoryImpl) GetAllBooksByUserID(userID int) ([]Book, error) {
 	// Batch Fetch authors, formats, genres, and tags
 	if err := r.batchFetchBookDetails(ctx, bookIDs, bookIDMap); err != nil {
 		return nil, fmt.Errorf("failed to fetch additional book details: %w", err)
+	}
+
+	for bookID, book := range bookIDMap {
+		r.Logger.Debug("post-batch fetch book details",
+				"bookID", bookID,
+				"title", book.Title,
+				"authorCount", len(book.Authors),
+				"authors", book.Authors,
+				"genreCount", len(book.Genres),
+				"genres", book.Genres,
+				"formatCount", len(book.Formats),
+				"formats", book.Formats,
+				"tagCount", len(book.Tags),
+				"tags", book.Tags,
+		)
 	}
 
 	r.Logger.Debug("Completed batch fetch",
@@ -644,6 +668,13 @@ func (r *BookRepositoryImpl) batchFetchBookDetails(ctx context.Context, bookIDs 
 		"finalGenreCount", len(book.Genres),
 		"finalFormatCount", len(book.Formats),
 		"finalTagCount", len(book.Tags))
+
+		r.Logger.Debug("REPOSITORY: After author assignment",
+        "function", "batchFetchBookDetails",
+        "bookID", bookID,
+        "title", book.Title,
+        "authorCount", len(book.Authors),
+        "authors", book.Authors)
 	}
 
 	// Check for errors after row iteration

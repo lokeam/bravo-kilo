@@ -84,7 +84,7 @@ func (ls *LibraryService) GetLibraryData(ctx context.Context, userID int, params
 					return nil, err
 			}
 
-			// 3. Process data into correct format
+			// 3. Organize data into correct shape
 			data, err = ls.operations.Processor.Process(ctx, data)
 			if err != nil {
 					return nil, err

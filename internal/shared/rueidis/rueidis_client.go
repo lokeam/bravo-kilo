@@ -2,6 +2,7 @@ package rueidis
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"sync/atomic"
@@ -85,6 +86,12 @@ func NewRedisClient(
 // Core operations with built-in metrics and logging
 func (c *Client) Get(ctx context.Context, key string) (string, error) {
 	start := time.Now()
+	c.logger.Debug("attempting cache get",
+		"key", key,
+		"operation", "GET",
+		"timestamp", start)
+
+
 	defer func() {
 			c.stats.Operations.Add(1)
 			c.stats.LastOperation.Store(time.Now())
@@ -107,22 +114,47 @@ func (c *Client) Get(ctx context.Context, key string) (string, error) {
 			return "", err
 	}
 
-	c.logger.Debug("redis get successful",
-			"key", key,
-			"duration", time.Since(start))
+	c.logger.Debug("cache operation complete",
+		"key", key,
+		"operation", "GET",
+		"duration", time.Since(start),
+		"hit", result != "",
+		"size", len(result))
 
 	return result, nil
 }
 
 func (c *Client) Set(ctx context.Context, key string, value interface{}, expiration time.Duration) error {
+	// Convert value to string based on type
 	start := time.Now()
-	defer func() {
-			c.stats.Operations.Add(1)
-			c.stats.LastOperation.Store(time.Now())
-	}()
+	var strValue string
+	switch v := value.(type) {
+	case string:
+			strValue = v
+	case []byte:
+			strValue = string(v)
+	default:
+			// For other types, use JSON marshaling
+			jsonBytes, err := json.Marshal(value)
+			if err != nil {
+					c.logger.Error("failed to marshal value",
+							"key", key,
+							"valueType", fmt.Sprintf("%T", value),
+							"error", err)
+					return fmt.Errorf("failed to marshal value: %w", err)
+			}
+			strValue = string(jsonBytes)
+	}
 
-	// Build and execute command
-	cmd := c.client.B().Set().Key(key).Value(fmt.Sprint(value)).Ex(expiration).Build()
+	c.logger.Debug("attempting redis SET",
+			"key", key,
+			"valueType", fmt.Sprintf("%T", value),
+			"valueSize", len(strValue),
+			"ttl", expiration,
+	)
+
+	// Build and execute command with properly serialized value
+	cmd := c.client.B().Set().Key(key).Value(strValue).Ex(expiration).Build()
 	err := c.client.Do(ctx, cmd).Error()
 
 	if err != nil {
@@ -317,4 +349,8 @@ func (c *Client) RemoveFromDeletionQueue(ctx context.Context, queueKey string, s
 			"userID", userID,
 			"duration", time.Since(timeStart))
 	return nil
+}
+
+func (c *Client) ClearCorruptedEntry(ctx context.Context, key string) error {
+	return c.client.Do(ctx, c.client.B().Del().Key(key).Build()).Error()
 }

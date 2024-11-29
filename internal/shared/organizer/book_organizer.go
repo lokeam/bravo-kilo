@@ -51,78 +51,79 @@ func (bo *BookOrganizer) OrganizeForLibrary(ctx context.Context, items *types.Li
 
 	books := items.Books
 
-	if len(books) == 0 {
-		return &types.LibraryPageData{
-				Books:          books,
-				BooksByAuthors: types.AuthorData{
-						AllAuthors: make([]string, 0),
-						ByAuthor:   make(map[string][]repository.Book),
-				},
-				BooksByGenres: types.GenreData{
-						AllGenres: make([]string, 0),
-						ByGenre:   make(map[string][]repository.Book),
-				},
-				BooksByFormat: types.FormatData{
-						AudioBook: make([]repository.Book, 0),
-						EBook:     make([]repository.Book, 0),
-						Physical:  make([]repository.Book, 0),
-				},
-				BooksByTags: types.TagData{
-						AllTags: make([]string, 0),
-						ByTag:   make(map[string][]repository.Book),
-				},
-		}, nil
-}
+	bo.logger.Debug("ORGANIZER: Starting library organization",
+	"component", "book_organizer",
+	"function", "OrganizeForLibrary",
+	"booksCount", len(books),
+	"firstBookDetails", logBookDetails(books[0]), // Add this helper function
+	)
 
-	atomic.AddInt64(&bo.metrics.ItemsOrganized, int64(len(books)))
-
-	authors, err := bo.organizeByAuthors(ctx, books)
-	if err != nil {
-			atomic.AddInt64(&bo.metrics.OrganizationErrors, 1)
-			return &types.LibraryPageData{}, fmt.Errorf("author organization failed: %w", err)
-	}
-
-	if err := ctx.Err(); err != nil {
-		return nil, fmt.Errorf("context cancelled after author organization: %w", err)
-	}
-
-	genres, err := bo.organizeByGenres(ctx, books)
-	if err != nil {
-			atomic.AddInt64(&bo.metrics.OrganizationErrors, 1)
-			return &types.LibraryPageData{}, fmt.Errorf("genre organization failed: %w", err)
-	}
-
-	if err := ctx.Err(); err != nil {
-		return nil, fmt.Errorf("context cancelled after genre organization: %w", err)
-	}
-
-	formats, err := bo.organizeByFormats(ctx, books)
-	if err != nil {
-			atomic.AddInt64(&bo.metrics.OrganizationErrors, 1)
-			return &types.LibraryPageData{}, fmt.Errorf("format organization failed: %w", err)
-	}
-
-	if err := ctx.Err(); err != nil {
-		return nil, fmt.Errorf("context cancelled after format organization: %w", err)
-	}
-
-	tags, err := bo.organizeByTags(ctx,books)
-	if err != nil {
-			atomic.AddInt64(&bo.metrics.OrganizationErrors, 1)
-			return &types.LibraryPageData{}, fmt.Errorf("tag organization failed: %w", err)
-	}
-
-	if err := ctx.Err(); err != nil {
-		return nil, fmt.Errorf("context cancelled after tag organization: %w", err)
-	}
-
-	return &types.LibraryPageData{
+	// Initialize result with empty collections
+	result := &types.LibraryPageData{
 		Books:          books,
-		BooksByAuthors: authors,    // Changed from Authors
-		BooksByGenres:  genres,     // Changed from Genres
-		BooksByFormat:  formats,    // Changed from Formats
-		BooksByTags:    tags,
-	}, nil
+		BooksByAuthors: types.AuthorData{AllAuthors: make([]string, 0), ByAuthor: make(map[string][]repository.Book)},
+		BooksByGenres:  types.GenreData{AllGenres: make([]string, 0), ByGenre: make(map[string][]repository.Book)},
+		BooksByFormat:  types.FormatData{AudioBook: make([]repository.Book, 0), EBook: make([]repository.Book, 0), Physical: make([]repository.Book, 0)},
+		BooksByTags:    types.TagData{AllTags: make([]string, 0), ByTag: make(map[string][]repository.Book)},
+	}
+
+	// Track if we had any errors
+	var hadErrors bool
+
+	// Build author data
+	if authors, err := bo.organizeByAuthors(ctx, books); err != nil {
+		hadErrors = true
+		bo.logger.Error("author organization failed, continuing with empty author data",
+				"error", err)
+		atomic.AddInt64(&bo.metrics.OrganizationErrors, 1)
+	} else {
+		result.BooksByAuthors = authors
+	}
+
+    // Build genre data
+    if genres, err := bo.organizeByGenres(ctx, books); err != nil {
+			hadErrors = true
+			bo.logger.Error("genre organization failed, continuing with empty genre data",
+					"error", err)
+			atomic.AddInt64(&bo.metrics.OrganizationErrors, 1)
+		} else {
+			result.BooksByGenres = genres
+		}
+
+    // Build format data
+    if formats, err := bo.organizeByFormats(ctx, books); err != nil {
+			hadErrors = true
+			bo.logger.Error("format organization failed, continuing with empty format data",
+					"error", err)
+			atomic.AddInt64(&bo.metrics.OrganizationErrors, 1)
+		} else {
+			result.BooksByFormat = formats
+		}
+
+    // Build tag data
+    if tags, err := bo.organizeByTags(ctx, books); err != nil {
+			hadErrors = true
+			bo.logger.Error("tag organization failed, continuing with empty tag data",
+					"error", err)
+			atomic.AddInt64(&bo.metrics.OrganizationErrors, 1)
+		} else {
+			result.BooksByTags = tags
+		}
+
+    bo.logger.Debug("ORGANIZER: Completed library organization",
+        "component", "book_organizer",
+        "function", "OrganizeForLibrary",
+        "resultBooksCount", len(result.Books),
+        "firstResultBookDetails", logBookDetails(result.Books[0]),
+        "hadErrors", hadErrors,
+    )
+
+    // Return partial results with error indication
+    if hadErrors {
+			return result, fmt.Errorf("some organization operations failed, partial results returned")
+		}
+
+		return result, nil
 }
 
 
@@ -136,44 +137,68 @@ func (bo *BookOrganizer) GetMetrics() OrganizerMetrics {
 // Helper functions
 
 func (bo *BookOrganizer) organizeByAuthors(ctx context.Context, books []repository.Book) (types.AuthorData, error) {
+	bo.logger.Debug("ORGANIZER: raw books received",
+        "component", "book_organizer",
+        "booksCount", len(books),
+        "firstBook", books[0])
+
 	if err := ctx.Err(); err != nil {
-		return types.AuthorData{}, fmt.Errorf("context cancelled: %w", err)
+			return types.AuthorData{}, fmt.Errorf("context cancelled: %w", err)
 	}
 
+	// Init empty result to return if books slice is nil
+	emptyResult := types.AuthorData{
+		AllAuthors: make([]string, 0),
+		ByAuthor:   make(map[string][]repository.Book),
+	}
+
+	// Handle nil books slice
 	if books == nil {
-			// Return empty AuthorData struct instead of nil
 			return types.AuthorData{
 					AllAuthors: make([]string, 0),
 					ByAuthor:   make(map[string][]repository.Book),
 			}, fmt.Errorf("books slice cannot be nil")
 	}
 
+	// Handle empty books slice
+	if len(books) == 0 {
+		return emptyResult, nil
+	}
+
+	bo.logger.Debug("starting author organization",
+			"booksCount", len(books),
+			"firstBookAuthors", books[0].Authors,
+			"firstBookTitle", books[0].Title)
+
 	result := types.AuthorData{
 			AllAuthors: make([]string, 0),
 			ByAuthor:   make(map[string][]repository.Book),
 	}
 
-	authorSet := make(map[string]struct{})
+	authorSet := make(map[string]struct{})  // Moved up before use
 
-	for i := range books {
-		// Initialize nil slices
-		if books[i].Authors == nil {
-				books[i].Authors = make([]string, 0)
-				bo.logger.Debug("initialized nil Authors slice",
-						"bookIndex", i,
-						"bookTitle", books[i].Title,
-				)
-				continue
-		}
+	for i, book := range books {
+			bo.logger.Debug("processing book authors",
+					"bookIndex", i,
+					"bookTitle", book.Title,
+					"rawAuthors", book.Authors)
 
-		for _, author := range books[i].Authors {
-				if author == "" {
-						continue
-				}
-				result.ByAuthor[author] = append(result.ByAuthor[author], books[i])
-				authorSet[author] = struct{}{}
-		}
-}
+			if len(book.Authors) == 0 {
+					bo.logger.Warn("book has no authors",
+							"bookIndex", i,
+							"bookTitle", book.Title)
+					continue
+			}
+
+			for _, author := range book.Authors {
+					if author == "" {
+							continue
+					}
+					bookCopy := book
+					result.ByAuthor[author] = append(result.ByAuthor[author], bookCopy)
+					authorSet[author] = struct{}{}
+			}
+	}
 
 	// Convert unique authors to slice
 	for author := range authorSet {
@@ -322,4 +347,19 @@ func (bo *BookOrganizer) organizeByTags(ctx context.Context, books []repository.
 	}
 
 	return result, nil
+}
+
+func logBookDetails(book repository.Book) map[string]interface{} {
+	return map[string]interface{}{
+			"id":           book.ID,
+			"title":        book.Title,
+			"authorCount":  len(book.Authors),
+			"authors":      book.Authors,
+			"genreCount":   len(book.Genres),
+			"genres":       book.Genres,
+			"formatCount":  len(book.Formats),
+			"formats":      book.Formats,
+			"tagCount":     len(book.Tags),
+			"tags":         book.Tags,
+	}
 }

@@ -686,7 +686,7 @@ func (lpd *LibraryPageData) UnmarshalBinary(data []byte) error {
 			"dataSize", len(data),
 	)
 
-	// Need at least 4 bytes for length prefix
+	// Validate size, min and max
 	if len(data) < 4 {
 			lpd.logger.Error("data too short for length prefix",
 					"dataSize", len(data),
@@ -695,36 +695,58 @@ func (lpd *LibraryPageData) UnmarshalBinary(data []byte) error {
 			return fmt.Errorf("data too short: %d bytes", len(data))
 	}
 
-	// Read length prefix
-	var length uint32
-	if err := binary.Read(bytes.NewReader(data[:4]), binary.LittleEndian, &length); err != nil {
+	// Total size check
+	totalSize := len(data)
+	if totalSize > maxMemoryLimit {
+		lpd.logger.Error("total data exceeds limit",
+      "size", totalSize,
+      "limit", maxMemoryLimit,
+    )
+		return fmt.Errorf("total data size %d exceeds limit %d", totalSize, maxMemoryLimit)
+	}
+
+	// Read and validate length prefix
+	var claimedLength uint32
+	lengthReader := bytes.NewReader(data[:4])
+	if err := binary.Read(lengthReader, binary.LittleEndian, &claimedLength); err != nil {
 			lpd.logger.Error("failed to read length prefix",
 					"error", err,
-					"dataSize", len(data),
 			)
 			return fmt.Errorf("failed to read length prefix: %w", err)
 	}
 
-	// Check memory limit
-	if length > uint32(maxMemoryLimit) {
-			lpd.logger.Error("data exceeds memory limit",
-					"length", length,
-					"limit", maxMemoryLimit,
-			)
-			return fmt.Errorf("data size %d exceeds memory limit %d", length, maxMemoryLimit)
+	// Validate claimed length before using it
+	if claimedLength > uint32(maxMemoryLimit) {
+		lpd.logger.Error("claimed length exceeds limit",
+				"claimedLength", claimedLength,
+				"limit", maxMemoryLimit,
+		)
+		return fmt.Errorf("claimed length %d exceeds limit %d", claimedLength, maxMemoryLimit)
 	}
 
-	// Verify length
-	if uint32(len(data)-4) != length {
-			lpd.logger.Error("invalid data length",
-					"expected", length,
-					"actual", len(data)-4,
+	// Verify actual data matches claimed length
+	actualDataLength := uint32(len(data) - 4)
+	if actualDataLength != claimedLength {
+			lpd.logger.Error("length mismatch",
+					"claimed", claimedLength,
+					"actual", actualDataLength,
 					"totalSize", len(data),
 			)
-			return fmt.Errorf("invalid data length: expected %d, got %d", length, len(data)-4)
+			return fmt.Errorf("length mismatch: claimed %d, actual %d", claimedLength, actualDataLength)
 	}
 
-	// Temporary struct for unmarshaling that matches the JSON structure
+	// JSON Validation
+	jsonData := data[4:]
+	if !json.Valid(jsonData) {
+		lpd.logger.Error("invalid JSON structure",
+				"dataSize", len(jsonData),
+				"claimedLength", claimedLength,
+				"totalSize", len(data),
+		)
+		return fmt.Errorf("invalid JSON structure in binary data")
+	}
+
+	// Unmarshal into temporary structure
 	var temp struct {
 			Books    []repository.Book `json:"books"`
 			Authors  struct {
@@ -746,17 +768,131 @@ func (lpd *LibraryPageData) UnmarshalBinary(data []byte) error {
 			} `json:"booksByTags"`
 	}
 
+	// Pre unmarshal data logging
+	lpd.logger.Debug("pre-unmarshal data",
+    "jsonPreview", string(data[4:min(len(data), 104)]), // First 100 chars after length prefix
+		"dataSize", len(data)-4,
+	)
+
 	// Unmarshal JSON portion
 	if err := json.Unmarshal(data[4:], &temp); err != nil {
 			lpd.logger.Error("json unmarshal failed",
 					"error", err,
-					"jsonSize", length,
+					"jsonSize", claimedLength,
 			)
 			return fmt.Errorf("json unmarshal failed: %w", err)
 	}
 
+
+	if temp.Authors.AllAuthors == nil {
+    temp.Authors.AllAuthors = make([]string, 0)
+    lpd.logger.Debug("initialized nil AllAuthors slice")
+	}
+	if temp.Authors.ByAuthor == nil {
+			temp.Authors.ByAuthor = make(map[string][]repository.Book)
+			lpd.logger.Debug("initialized nil ByAuthor map")
+	}
+	if temp.Genres.AllGenres == nil {
+			temp.Genres.AllGenres = make([]string, 0)
+			lpd.logger.Debug("initialized nil AllGenres slice")
+	}
+	if temp.Genres.ByGenre == nil {
+			temp.Genres.ByGenre = make(map[string][]repository.Book)
+			lpd.logger.Debug("initialized nil ByGenre map")
+	}
+	if temp.Formats.AudioBook == nil {
+			temp.Formats.AudioBook = make([]repository.Book, 0)
+			lpd.logger.Debug("initialized nil AudioBook slice")
+	}
+	if temp.Formats.EBook == nil {
+			temp.Formats.EBook = make([]repository.Book, 0)
+			lpd.logger.Debug("initialized nil EBook slice")
+	}
+	if temp.Formats.Physical == nil {
+			temp.Formats.Physical = make([]repository.Book, 0)
+			lpd.logger.Debug("initialized nil Physical slice")
+	}
+	if temp.Tags.AllTags == nil {
+			temp.Tags.AllTags = make([]string, 0)
+			lpd.logger.Debug("initialized nil AllTags slice")
+	}
+	if temp.Tags.ByTag == nil {
+			temp.Tags.ByTag = make(map[string][]repository.Book)
+			lpd.logger.Debug("initialized nil ByTag map")
+	}
+
+
+	// post unmarshal validation
+	if temp.Books == nil {
+    lpd.logger.Error("unmarshaled nil Books slice")
+			return fmt.Errorf("unmarshaled nil Books slice")
+	}
+	lpd.logger.Debug("unmarshal results",
+    "bookCount", len(temp.Books),
+    "firstBook", func() string {
+        if len(temp.Books) > 0 {
+            return fmt.Sprintf("%+v", temp.Books[0])
+        }
+        return "no books"
+		}(),
+	)
+
+	// Validate individual books
+	for i, book := range temp.Books {
+		if len(book.Authors) > 0 && book.Authors[0] == "" {
+				lpd.logger.Error("book has empty author",
+						"bookIndex", i,
+						"bookTitle", book.Title,
+				)
+				return fmt.Errorf("book %q has empty author", book.Title)
+		}
+	}
+
+	// Pre assignment validation
+	for i, book := range temp.Books {
+		if book.Authors == nil {
+				lpd.logger.Error("nil Authors slice detected",
+						"bookIndex", i,
+						"bookTitle", book.Title,
+				)
+				// Initialize empty slice instead of failing
+				temp.Books[i].Authors = make([]string, 0)
+		}
+		if book.Genres == nil {
+			lpd.logger.Error("nil Genres slice detected",
+					"bookIndex", i,
+					"bookTitle", book.Title,
+			)
+			temp.Books[i].Genres = make([]string, 0)
+		}
+    if book.Tags == nil {
+			temp.Books[i].Tags = make([]string, 0)     // Change: Use temp.Books[i] instead of book
+		}
+		if book.Formats == nil {
+				temp.Books[i].Formats = make([]string, 0)  // Change: Use temp.Books[i] instead of book
+		}
+	}
+
 	// Update fields with proper type conversion
 	lpd.Books = temp.Books
+
+	// Post assignment validation
+	lpd.logger.Debug("field assignment verification",
+			"sourceAuthorsLen", func() int {
+					if len(temp.Books) > 0 {
+							return len(temp.Books[0].Authors)
+					}
+					return -1
+			}(),
+			"destAuthorsLen", func() int {
+					if len(lpd.Books) > 0 {
+							return len(lpd.Books[0].Authors)
+					}
+					return -1
+			}(),
+	)
+
+
 	lpd.BooksByAuthors = AuthorData{
 			AllAuthors: temp.Authors.AllAuthors,
 			ByAuthor:   temp.Authors.ByAuthor,
@@ -784,7 +920,7 @@ func (lpd *LibraryPageData) UnmarshalBinary(data []byte) error {
 	}
 
 	lpd.logger.Debug("binary unmarshaling completed",
-			"jsonSize", length,
+			"jsonSize", claimedLength,
 			"totalSize", len(data),
 	)
 

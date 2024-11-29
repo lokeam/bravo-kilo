@@ -107,7 +107,7 @@ func (h *LibraryHandler) HandleGetLibraryPageData(w http.ResponseWriter, r *http
 		)
 	}
 
-	http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	return
 }
 
 // Helpers
@@ -129,14 +129,37 @@ func (h *LibraryHandler) respondWithJSON(w http.ResponseWriter, status int, data
 	- Write JSON response
 	*/
 
+		h.logger.Debug("preparing response",
+			"status", status,
+			"contentType", "application/json",
+		)
     // Start timing the response
     start := time.Now()
 
-    // Set content type before writing response
-    w.Header().Set("Content-Type", "application/json")
+    // Log header state before write attempt
+    if rw, ok := w.(interface{ Written() bool }); ok {
+			h.logger.Debug("checking response writer state",
+					"headersWritten", rw.Written(),
+					"status", status,
+			)
+		}
 
-    // Set status code
-    w.WriteHeader(status)
+    // Only set Content-Type if not already set
+    if w.Header().Get("Content-Type") == "" {
+        h.logger.Debug("setting content-type header",
+            "contentType", "application/json",
+        )
+        w.Header().Set("Content-Type", "application/json")
+    }
+
+    // Check if we can write headers
+    if rw, ok := w.(interface{ Written() bool }); !ok || !rw.Written() {
+        h.logger.Debug("writing headers",
+            "contentType", "application/json",
+            "status", status,
+        )
+        w.WriteHeader(status)
+    }
 
     // Encode data to JSON and write to response
     if err := json.NewEncoder(w).Encode(data); err != nil {
@@ -176,6 +199,12 @@ func (h *LibraryHandler) respondWithError(w http.ResponseWriter, requestID strin
 	}
 
 	// Log error with context
+	h.logger.Debug("preparing error response",
+		"requestID", requestID,
+		"status", status,
+		"errorType", fmt.Sprintf("%T", err),
+	)
+
 	h.logger.Error("sending error response",
 			"error", err,
 			"requestId", requestID,
@@ -184,4 +213,11 @@ func (h *LibraryHandler) respondWithError(w http.ResponseWriter, requestID strin
 
 	// Use existing respondWithJSON to send response
 	return h.respondWithJSON(w, status, response)
+}
+
+func (lh *LibraryHandler) isHeaderWritten(w http.ResponseWriter) bool {
+	if rw, ok := w.(interface{ Written() bool }); ok {
+			return rw.Written()
+	}
+	return false
 }
