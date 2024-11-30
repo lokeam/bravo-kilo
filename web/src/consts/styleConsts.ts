@@ -18,3 +18,7 @@ export const TAILWIND_CARD_LIST_ITEM_CLASSES = {
   BORDER: 'border-b ',
   LAST_ITEM: 'border-none',
 } as const;
+
+export const TAILWIND_HOMEPAGE_CLASSES = {
+  LOADING_WRAPPER: 'bk_home flex flex-col items-center px-5 antialiased mdTablet:pl-1 pr-5 mdTablet:ml-24 h-screen pt-12'
+} as const;

@@ -105,7 +105,7 @@ export type AggregatedHomePageData = {
   homepageStats: HomepageStatistics;
 };
 
-/****** Type Guards */
+/****** Type Guards ******/
 // Type guard for Quill Delta object
 export function isQuillDelta(content: any): content is Delta {
   return content && typeof content.ops !== 'undefined';
@@ -158,12 +158,40 @@ export function isBookTagsData(data: any): data is BookTagsData {
   return isBookData(data, 'tagImgs');
 }
 
+/****** Default Data Constants ******/
+export const defaultBookFormats: BooksByFormat = {
+  audioBook: [],
+  physical: [],
+  eBook: [],
+};
+
 export const defaultBookGenres: BookGenresData = {
   allGenres: [],
   placeholder: {
     bookList: [],
     genreImgs: [],
   },
+};
+
+export const defaultHomePageStats: HomepageStatistics = {
+  userBkLang: { booksByLang: [] },
+  userBkGenres: { booksByGenre: [] },
+  userTags: { userTags: [] },
+  userAuthors: { booksByAuthor: [] },
+};
+
+export const defaultHomePageData = {
+  books: [],
+  booksByFormat: [
+    { label: 'Physical', count: 0 },
+    { label: 'eBook', count: 0 },
+    { label: 'Audio', count: 0 },
+  ],
+  totalBooks: 0,
+  booksByLang: [],
+  booksByGenre: [],
+  userTags: [],
+  booksByAuthor: [],
 };
 
 export const defaultBookTags: BookTagsData = {
@@ -174,7 +202,7 @@ export const defaultBookTags: BookTagsData = {
   },
 };
 
-/****** Utility Types */
+/****** Utility Types ******/
 export type TransformToStringified<T> = {
   [K in keyof T]: T[K] extends { author: string }[] ? string[] :
                   T[K] extends { genre: string }[] ? string[] :
@@ -183,6 +211,15 @@ export type TransformToStringified<T> = {
                   T[K];
 };
 
+export type TransformedHomeData = {
+  books: Book[];
+  booksByFormat: FormatCount[];
+  totalBooks: number;
+  booksByLang: Array<{ label: string; count: number }>;
+  booksByGenre: Array<{ label: string; count: number }>;
+  userTags: Array<{ label: string; count: number }>;
+  booksByAuthor: Array<{ label: string; count: number }>;
+};
 
 export type RawHomepageStats = {
   userBkLang: Record<string, number>;
@@ -195,6 +232,12 @@ export type BooksByFormat = {
   physical: Book[];
   eBook: Book[];
   audioBook: Book[];
+};
+
+// Type for transformed format data on Homepage
+export type FormatCount = {
+  label: string;
+  count: number;
 };
 
 export type HomepageStatistics = {
@@ -211,4 +254,3 @@ export type HomepageStatistics = {
     userTags: Array<{ label: string; count: number }>;
   };
 };
-

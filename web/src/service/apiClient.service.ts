@@ -1,6 +1,13 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
-import { Book, BookAPIPayload } from '../types/api';
+import {
+  AggregatedHomePageData,
+  Book,
+  BookAPIPayload,
+  HomepageStatistics,
+  defaultHomePageStats
+} from '../types/api';
 import { LibraryPageResponse } from '../queries/types/responses';
+
 
 interface RetryConfig extends InternalAxiosRequestConfig {
   _retry?: boolean;
@@ -174,6 +181,22 @@ apiClient.interceptors.request.use(
   }
 );
 
+// Helper function: check if homepage stats are valid
+function isValidHomepageStats(stats: unknown): stats is HomepageStatistics {
+  if (!stats || typeof stats !== 'object') return false;
+  const s = stats as HomepageStatistics;
+  return !!(
+    s.userBkLang?.booksByLang &&
+    s.userBkGenres?.booksByGenre &&
+    s.userTags?.userTags &&
+    s.userAuthors?.booksByAuthor &&
+    Array.isArray(s.userBkLang.booksByLang) &&
+    Array.isArray(s.userBkGenres.booksByGenre) &&
+    Array.isArray(s.userTags.userTags) &&
+    Array.isArray(s.userAuthors.booksByAuthor)
+  );
+}
+
 export const fetchUserBooks = async (userID: number): Promise<Book[]> => {
   console.log('apiClient.service - fetchUserBooks called');
   console.log('apiClient.service - fetchUserBooks called with userID: ', userID);
@@ -265,21 +288,91 @@ export const fetchBookIDByTitle = async (bookTitle: string) => {
   }
 };
 
-export const fetchHomepageData = async (userID: number) => {
+export const fetchHomepageData = async (userID: number): Promise<AggregatedHomePageData> => {
   try {
-    const { data } = await apiClient.get(`/api/v1/user/books/homepage?userID=${userID}`);
-    return data || {
-      userBkLang: { booksByLang: [] },
-      userBkGenres: { booksByGenre: [] },
-      userAuthors: { booksByAuthor: [] },
-      userTags: { userTags: [] }
+    console.log('Fetching homepage data: ', {
+      userID,
+      endpoint: '/api/v1/user/pages/home',
+      domain: 'books'
+    });
+
+    // Request validation
+    if (!userID) {
+      throw new Error('UserID is required');
+    }
+
+    const response = await apiClient.get<AggregatedHomePageData>('/api/v1/pages/home', {
+      params: {
+        userID,
+        domain: 'books'
+      }
+    });
+
+    // Response validation - first check if data exists
+    if (!response.data) {
+      throw new Error('No data received from homepage endpoint');
+    }
+
+    // Check if books is an array
+    if (!Array.isArray(response.data.books)) {
+      console.error('Invalid books format:', response.data.books);
+      response.data.books = [];
+    }
+
+    // Validate response
+    if (!response.data || typeof response.data !== 'object') {
+      console.error('Invalid response format:', response.data);
+      throw new Error('Invalid response format');
+    }
+
+    if (!isValidHomepageStats(response.data.homepageStats)) {
+      console.error('Invalid stats format:', response.data.homepageStats);
+      response.data.homepageStats = defaultHomePageStats;
+    }
+
+    // Log response structure for debugging
+    console.log('Homepage response structure: ', {
+      hasBooks: !!response.data.books?.length,
+      hasFormats: !!response.data.booksByFormat,
+      hasStats: !!response.data.homepageStats,
+      status: response.status,
+    });
+
+    // Type guard
+    const defaultData: AggregatedHomePageData = {
+      books: response.data.books || [],
+      booksByFormat: response.data.booksByFormat || { audioBook: [], physical: [], eBook: [] },
+      homepageStats: response.data.homepageStats || {
+        userBkLang: { booksByLang: [] },
+        userBkGenres: { booksByGenre: [] },
+        userTags: { userTags: [] },
+        userAuthors: { booksByAuthor: [] },
+      }
+    };
+
+    // Ensure all required properties are present
+    return {
+      ...defaultData,
+      ...response.data
     };
   } catch (error) {
-    console.error('Error fetching homepage data:', error);
+    if (error instanceof AxiosError) {
+      console.error('Homepage data fetch failed: ', {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        params: error.config?.params,
+        headers: error.response?.headers,
+        config: {
+          url: error.config?.url,
+          params: error.config?.params
+        }
+      });
+    } else {
+      console.error('Unknown error fetching homepage data:', error);
+    }
+    throw error;
   }
-
-  const { data } = await apiClient.get(`/api/v1/user/books/homepage?userID=${userID}`);
-  return data || [];
 };
 
 export const fetchLibraryPageData = async (userID: number): Promise<LibraryPageResponse> => {
@@ -461,5 +554,7 @@ export const initiateAccountRecovery = async () => {
     return { success: false, message: 'An unknown error occurred' };
   }
 };
+
+
 
 export default apiClient;

@@ -1,6 +1,7 @@
 export const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
 import { Book } from '../types/api';
 
+/****** Library Page Sorting Function ******/
 export const sortBooks = (
   books: Book[],
   sortCriteria: string,

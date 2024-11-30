@@ -7,13 +7,40 @@ import EmptyHomeCard from '../components/ErrorMessages/EmptyHomeCard';
 import Loading from '../components/Loading/Loading';
 import PageWithErrorBoundary from '../components/ErrorMessages/PageWithErrorBoundary';
 
-import useHomePageData from '../hooks/useHomeData';
-import { AggregatedHomePageData } from '../types/api';
+import { useUser } from '../hooks/useUser';
+import { useGetHomePageData } from '../queries/hooks/pages/home/useGetHomePageData';
+import {
+  defaultHomePageData,
+  defaultBookFormats,
+  defaultHomePageStats,
+  FormatCount,
+  TransformedHomeData
+} from '../types/api';
+import { TAILWIND_HOMEPAGE_CLASSES } from '../consts/styleConsts';
 
 function Home() {
-  const { data, isLoading } = useHomePageData();
+  const { data: user, isLoading: isUserLoading } = useUser();
+
+  // Early return if no user ID to satisfy TypeScript
+  if (!user?.id) {
+    return (
+      <div className={TAILWIND_HOMEPAGE_CLASSES['LOADING_WRAPPER']}>
+        <Loading />
+      </div>
+    );
+  }
+
+  const {
+    data: homeData,
+    isLoading: isHomeDataLoading,
+    error: homeError
+  } = useGetHomePageData({
+    userID: user.id,
+    domain: 'books'
+  });
   // Extract homepageStats for debugging
-  const homepageStats = data?.homepageStats;
+  const homepageStats = homeData?.homepageStats;
+
   useEffect(() => {
     if (homepageStats) {
       console.log('Homepage stats received:', homepageStats);
@@ -26,48 +53,51 @@ function Home() {
     }
   }, [homepageStats]);
 
-  const { books, booksByFormat, totalBooks, booksByLang, booksByGenre, userTags, booksByAuthor } = useMemo(() => {
-    const defaultData: AggregatedHomePageData = {
-      books: [],
-      booksByFormat: { audioBook: [], physical: [], eBook: [] },
-      homepageStats: {
-        userBkLang: { booksByLang: [] },
-        userBkGenres: { booksByGenre: [] },
-        userTags: { userTags: [] },
-        userAuthors: { booksByAuthor: [] }
-      }
-    };
+  // Data transformation memoization
+  const {
+    books,
+    booksByFormat,
+    totalBooks,
+    booksByLang,
+    booksByGenre,
+    userTags,
+    booksByAuthor
+  }: TransformedHomeData = useMemo(() => {
+    if (!homeData) {
+      // Return properly formatted default data
+      return defaultHomePageData;
+    }
 
-    if (!data) return {
-      ...defaultData,
-      totalBooks: 0,
-      booksByFormat: [],
-      booksByLang: [],
-      booksByGenre: [],
-      userTags: [],
-      booksByAuthor: [],
-    };
+    const {
+      books = [],
+      booksByFormat = defaultBookFormats,
+      homepageStats = defaultHomePageStats,
+    } = homeData;
 
-    const { books = [], booksByFormat = { physical: [], eBook: [], audioBook: [] }, homepageStats = defaultData.homepageStats } = data;
+    // Transform booksByFormat into array of FormatCount
+    const transformedBooksByFormat: FormatCount[] = [
+      { label: 'Physical', count: booksByFormat.physical?.length || 0 },
+      { label: 'eBook', count: booksByFormat.eBook?.length || 0 },
+      { label: 'Audio', count: booksByFormat.audioBook?.length || 0 },
+    ];
 
     return {
       books,
-      booksByFormat: [
-        { label: "Physical", count: booksByFormat.physical?.length || 0 },
-        { label: "eBook", count: booksByFormat.eBook?.length || 0 },
-        { label: "Audio", count: booksByFormat.audioBook?.length || 0 },
-      ],
+      booksByFormat: transformedBooksByFormat,
       totalBooks: books.length || 0,
       booksByLang: homepageStats.userBkLang?.booksByLang || [],
       booksByGenre: homepageStats.userBkGenres?.booksByGenre || [],
       userTags: homepageStats.userTags?.userTags || [],
       booksByAuthor: homepageStats.userAuthors?.booksByAuthor || [],
     };
-  }, [data]);
+  }, [homeData]);
 
+  // Empty state memoization
   const isEmpty = useMemo(() => {
     const hasNoBooks = books.length === 0;
-    const hasNoFormats = booksByFormat.every(format => format.count === 0);
+    const hasNoFormats = (booksByFormat as FormatCount[]).every(
+      (format: FormatCount) => format.count === 0
+    );
     const hasNoLanguages = !booksByLang?.length;
     const hasNoGenres = !booksByGenre?.length;
     const hasNoAuthors = !booksByAuthor?.length;
@@ -81,24 +111,35 @@ function Home() {
            hasNoTags;
   }, [books, booksByFormat, booksByLang, booksByGenre, booksByAuthor, userTags]);
 
-  if (isLoading) return (
-    <div className="bk_home flex flex-col items-center px-5 antialiased mdTablet:pl-1 pr-5 mdTablet:ml-24 h-screen pt-12">
+  const isLoading = isUserLoading || isHomeDataLoading;
+
+  if (isHomeDataLoading) return (
+    <div className={TAILWIND_HOMEPAGE_CLASSES['LOADING_WRAPPER']}>
       <Loading />
     </div>
   );
 
-  if (!isLoading && isEmpty) {
+  if (!isHomeDataLoading && isEmpty) {
     return (
-      <div className="bk_home flex flex-col items-center px-5 antialiased mdTablet:pl-1 pr-5 mdTablet:ml-24 h-screen pt-12">
+      <div className={TAILWIND_HOMEPAGE_CLASSES['LOADING_WRAPPER']}>
         <EmptyHomeCard />
       </div>
     )
   }
 
   console.log('===========');
-  console.log('data package: ', data);
+  console.log('data package: ', homeData);
   console.log('booksByAuthor: ', booksByAuthor);
   console.log('books.length: ', books.length || 0);
+
+
+  // Handle error states
+  if (homeError) {
+    console.error('Home data fetch error: ', {
+      error: homeError,
+      userID: user?.id
+    })
+  }
 
   return (
     <PageWithErrorBoundary fallbackMessage="Error loading home page">
@@ -148,7 +189,6 @@ function Home() {
                 totalBooks={totalBooks}
               />
             )}
-
 
           </div>
         </div>

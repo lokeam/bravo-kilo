@@ -6,6 +6,13 @@ export const queryKeys = {
       byDomain: (domain: string) => [...queryKeys.library.page.all(), domain] as const,
     }
   },
+  home: {
+    root: ['home'] as const,
+    page: {
+      all: () => [...queryKeys.home.root, 'page'] as const,
+      byDomain: (domain: string) => [...queryKeys.home.page.all(), domain] as const,
+    }
+  },
   books: {
     root: ['books'] as const,
     all: (userID: number) => [...queryKeys.books.root, userID] as const,

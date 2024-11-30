@@ -9,6 +9,7 @@ import (
 	authhandlers "github.com/lokeam/bravo-kilo/internal/auth/handlers"
 	"github.com/lokeam/bravo-kilo/internal/books/handlers"
 	"github.com/lokeam/bravo-kilo/internal/shared/core"
+	homehandlers "github.com/lokeam/bravo-kilo/internal/shared/home"
 	libraryhandlers "github.com/lokeam/bravo-kilo/internal/shared/library"
 	"github.com/lokeam/bravo-kilo/internal/shared/validator"
 
@@ -33,6 +34,7 @@ func (app *application) routes(
 	searchHandlers *handlers.SearchHandlers,
 	authHandlers *authhandlers.AuthHandlers,
 	libraryHandler *libraryhandlers.LibraryHandler,
+	homeHandler *homehandlers.HomeHandler,
 	baseValidator *validator.BaseValidator,
 ) http.Handler {
 	mux := chi.NewRouter()
@@ -118,6 +120,7 @@ func (app *application) routes(
 			r.Use(middleware.NewAdaptiveCompression(app.compressionMonitor))
 
 			r.Get("/library", libraryHandler.HandleGetLibraryPageData)
+			r.Get("/home", homeHandler.HandleGetHomePageData)
 		})
 	})
 
