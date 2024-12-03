@@ -3,6 +3,7 @@ package operations
 import (
 	"context"
 	"encoding"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -66,52 +67,133 @@ func (co *CacheOperation[T]) GetTyped(
 	params *types.PageQueryParams,
 ) (T, error) {
 	var zero T
+	co.logger.Debug("CACHE_OP: Starting cache retrieval",
+		"component", "cache_operation",
+		"function", "GetTyped",
+		"userID", userID,
+		"hasParams", params != nil,
+		"hasClient", co.client != nil,
+	)
+
 	if co.client == nil {
-			return zero, fmt.Errorf("redis client not initialized")
+		co.logger.Error("CACHE_OP: Redis client not initialized",
+			"component", "cache_operation",
+			"function", "GetTyped",
+		)
+		return zero, fmt.Errorf("redis client not initialized")
 	}
 	if params == nil {
-			return zero, fmt.Errorf("params cannot be nil")
+		co.logger.Error("CACHE_OP: Params are nil",
+			"component", "cache_operation",
+			"function", "GetTyped",
+		)
+		return zero, fmt.Errorf("params cannot be nil")
 	}
 
-    return co.executor.Execute(ctx, func(ctx context.Context) (T, error) {
+  return co.executor.Execute(ctx, func(ctx context.Context) (T, error) {
       cacheKey := fmt.Sprintf("%s:%d", params.Domain, userID)
+			co.logger.Debug("CACHE_OP: Attempting cache fetch",
+				"component", "cache_operation",
+				"function", "GetTyped.Execute",
+				"cacheKey", cacheKey,
+			)
 
 			stringData, err := co.client.Get(ctx, cacheKey)
 			if err != nil {
-					if co.metrics != nil {
-							co.metrics.IncrementCacheMisses()
-					}
+				if co.metrics != nil {
+					co.metrics.IncrementCacheMisses()
+				}
 
-					return zero, err
+				mappedErr := co.client.MapError(err, "GET")
+				switch {
+				case errors.Is(mappedErr, rueidis.ErrNotFound):  // Rueidis specific nil check
+						if co.logger != nil {
+								co.logger.Debug("CACHE_OP: Cache miss",
+										"component", "cache_operation",
+										"function", "GetTyped.Execute",
+										"operation", "GET",
+										"key", cacheKey)
+						}
+						return zero, nil
+
+				case err == context.DeadlineExceeded:
+						return zero, redis.NewOperationError("GET", cacheKey, redis.ErrTimeout)
+
+				case errors.Is(err, context.DeadlineExceeded):
+						return zero, redis.NewOperationError("GET", cacheKey, redis.ErrTimeout)
+				case errors.Is(mappedErr, rueidis.ErrConnectionFailed):
+						return zero, redis.NewOperationError("GET", cacheKey, err)
+				case errors.Is(mappedErr, redis.ErrClientNotReady):
+						return zero, redis.NewOperationError("GET", cacheKey, err)
+				default:
+						if co.logger != nil {
+								co.logger.Error("CACHE_OP: Unexpected redis error",
+										"component", "cache_operation",
+										"function", "GetTyped.Execute",
+										"operation", "GET",
+										"key", cacheKey,
+										"error", mappedErr)
+						}
+						return zero, rueidis.NewOperationError("GET", cacheKey, mappedErr)
+				}
 			}
 
 			if stringData == "" {
-					if co.metrics != nil {
-							co.metrics.IncrementCacheMisses()
-					}
-					return zero, nil
+				co.logger.Debug("CACHE_OP: Cache miss - empty data",
+					"component", "cache_operation",
+					"function", "GetTyped.Execute",
+					"cacheKey", cacheKey,
+				)
+				if co.metrics != nil {
+						co.metrics.IncrementCacheMisses()
+				}
+				return zero, nil
 			}
 
 			// Create appropriate type based on T
 			var pageData T
+			co.logger.Debug("CACHE_OP: Creating page data instance",
+				"component", "cache_operation",
+				"function", "GetTyped.Execute",
+				"dataType", fmt.Sprintf("%T", pageData),
+			)
+
 			switch any(pageData).(type) {
 			case *types.LibraryPageData:
 					pageData = any(types.NewLibraryPageData(co.logger)).(T)
 			case *types.HomePageData:
 					pageData = any(types.NewHomePageData(co.logger)).(T)
 			default:
-					return zero, fmt.Errorf("unsupported page type")
+				co.logger.Error("CACHE_OP: Unsupported page type",
+					"component", "cache_operation",
+					"function", "GetTyped.Execute",
+					"type", fmt.Sprintf("%T", pageData),
+				)
+				return zero, fmt.Errorf("unsupported page type")
 			}
 
 			// Type assert to access UnmarshalBinary
 			if unmarshaler, ok := any(pageData).(encoding.BinaryUnmarshaler); ok {
 					if err := unmarshaler.UnmarshalBinary([]byte(stringData)); err != nil {
-							if co.metrics != nil {
-									co.metrics.IncrementCacheMisses()
-							}
-							return zero, redis.NewOperationError("GET", cacheKey, redis.ErrInvalidData)
+						co.logger.Error("CACHE_OP: Unmarshal failed",
+							"component", "cache_operation",
+							"function", "GetTyped.Execute",
+							"error", err,
+							"cacheKey", cacheKey,
+						)
+
+						if co.metrics != nil {
+								co.metrics.IncrementCacheMisses()
+						}
+						return zero, redis.NewOperationError("GET", cacheKey, redis.ErrInvalidData)
 					}
 			}
+			co.logger.Debug("CACHE_OP: Cache hit successful",
+				"component", "cache_operation",
+				"function", "GetTyped.Execute",
+				"cacheKey", cacheKey,
+				"dataType", fmt.Sprintf("%T", pageData),
+			)
 
 			// Success path
 			if co.metrics != nil {
@@ -130,21 +212,47 @@ func (co *CacheOperation[T]) SetTyped(
 	data T,
 ) error {
 	var zero T  // Add zero value at the start
+	co.logger.Debug("CACHE_OP: Starting cache set",
+		"component", "cache_operation",
+		"function", "SetTyped",
+		"userID", userID,
+		"hasParams", params != nil,
+		"hasData", any(data) != nil,
+	)
+
 
 	// Safety check for nil dependencies
 	if co.client == nil {
-			return fmt.Errorf("redis client not initialized")
+		co.logger.Error("CACHE_OP: Redis client not initialized",
+			"component", "cache_operation",
+			"function", "SetTyped",
+		)
+		return fmt.Errorf("redis client not initialized")
 	}
 	if params == nil {
+		co.logger.Error("CACHE_OP: Params are nil",
+			"component", "cache_operation",
+			"function", "SetTyped",
+		)
+
 		return fmt.Errorf("params cannot be nil")
 	}
     // Check for nil using type assertion
   if any(data) == nil {
+		co.logger.Error("CACHE_OP: Data is nil",
+			"component", "cache_operation",
+			"function", "SetTyped",
+		)
 		return fmt.Errorf("cannot cache nil data")
 	}
 
 	_, err := co.executor.Execute(ctx, func(ctx context.Context) (T, error) {
 			cacheKey := fmt.Sprintf("library:%s:%d", params.Domain,userID)
+			co.logger.Debug("CACHE_OP: Validating data",
+				"component", "cache_operation",
+				"function", "SetTyped.Execute",
+				"cacheKey", cacheKey,
+			)
 
 			// Validate data before caching if validator exists
 			if co.validator != nil {
@@ -153,6 +261,12 @@ func (co *CacheOperation[T]) SetTyped(
 									co.metrics.IncrementCacheMisses()
 							}
 							primaryErr := validationErrs[0]
+							co.logger.Error("CACHE_OP: Validation failed",
+								"component", "cache_operation",
+								"function", "SetTyped.Execute",
+								"errors", validationErrs,
+								"cacheKey", cacheKey,
+							)
 
 							if co.logger != nil {
 									co.logger.Error("validation failed during SET",
@@ -167,6 +281,12 @@ func (co *CacheOperation[T]) SetTyped(
 			// Marshal data for storage
 			marshaledData, err := binary.MarshalBinary(data)
 			if err != nil {
+				co.logger.Error("CACHE_OP: Marshal failed",
+					"component", "cache_operation",
+					"function", "SetTyped.Execute",
+					"error", err,
+					"cacheKey", cacheKey,
+				)
 					if co.metrics != nil {
 							co.metrics.IncrementCacheMisses()
 					}
@@ -179,8 +299,21 @@ func (co *CacheOperation[T]) SetTyped(
 					ttl = co.config.CacheConfig.DefaultTTL
 			}
 
+			co.logger.Debug("CACHE_OP: Setting cache data",
+        "component", "cache_operation",
+        "function", "SetTyped.Execute",
+        "cacheKey", cacheKey,
+        "ttl", ttl,
+      )
+
 			// Set data in Redis
 			if err := co.client.Set(ctx, cacheKey, marshaledData, ttl); err != nil {
+					co.logger.Error("CACHE_OP: Cache set failed",
+						"component", "cache_operation",
+						"function", "SetTyped.Execute",
+						"error", err,
+						"cacheKey", cacheKey,
+					)
 					if co.metrics != nil {
 							co.metrics.IncrementCacheMisses()
 					}
@@ -206,9 +339,11 @@ func (co *CacheOperation[T]) SetTyped(
 					co.metrics.IncrementCacheHits()
 			}
 			if co.logger != nil {
-					co.logger.Debug("cache set successful",
-							"operation", "SET",
-							"key", cacheKey)
+				co.logger.Debug("CACHE_OP: Cache set successful",
+					"component", "cache_operation",
+					"function", "SetTyped.Execute",
+					"cacheKey", cacheKey,
+				)
 			}
 
 			return data, nil

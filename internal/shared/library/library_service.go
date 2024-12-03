@@ -84,6 +84,14 @@ func (ls *LibraryService) GetLibraryData(
 			- Return formatted response
 	*/
 
+	ls.logger.Debug("LIBRARY_SERVICE: Starting library data retrieval",
+		"component", "library_service",
+		"function", "GetLibraryData",
+		"userID", userID,
+		"params", params,
+		"requestID", ctx.Value(core.RequestIDKey),
+  )
+
 
 	// 1. Try cache
 	data, err := ls.operations.Cache.Get(ctx, userID, params)
@@ -92,25 +100,54 @@ func (ls *LibraryService) GetLibraryData(
 			return nil, fmt.Errorf("cache operation failed: %w", err)
 	}
 
+	ls.logger.Debug("LIBRARY_SERVICE: Attempting cache retrieval",
+		"component", "library_service",
+		"function", "GetLibraryData",
+		"userID", userID,
+	)
+
 	// Type assertion to ensure data is of correct type
 	organizedData, ok := data.(*types.LibraryPageData)
-	if !ok {
+	if !ok && data != nil {
+		ls.logger.Error("LIBRARY_SERVICE: Type assertion failed",
+			"component", "library_service",
+			"function", "GetLibraryData",
+			"actualType", fmt.Sprintf("%T", data),
+			"userID", userID,
+    )
 		return nil, fmt.Errorf("unexpected data type during library service type assertion: %T", data)
 	}
 
 	// 2. If cache miss OR data is nil, get fresh data
 	if errors.Is(err, redis.ErrNotFound) || data == nil {
+		ls.logger.Debug("LIBRARY_SERVICE: Cache miss, fetching fresh data",
+			"component", "library_service",
+			"function", "GetLibraryData",
+			"userID", userID,
+			"domain", params.Domain,
+		)
 
-			// 3. Determine page-specific (library/home) operation for domain
+		// 3. Determine page-specific (library/home) operation for domain
 			// TODO: Add other domain types as needed
 			pageOperation, err := ls.operationFactory.CreateOperation(params.Domain, core.LibraryPage)
 			if err != nil {
+					ls.logger.Error("LIBRARY_SERVICE: Failed to create operation",
+						"component", "library_service",
+						"function", "GetLibraryData",
+						"error", err,
+						"domain", params.Domain,
+          )
 					return nil, fmt.Errorf("failed to create operation: %w", err)
 			}
 
 			// 4. Use page operation to get domain data from db
 			data, err := pageOperation.GetData(ctx, userID, params)
 			if err != nil {
+					ls.logger.Error("LIBRARY_SERVICE: Failed to get domain data",
+						"component", "library_service",
+						"function", "GetLibraryData",
+						"userID", userID,
+					)
 					return nil, fmt.Errorf("failed to get data: %w", err)
 			}
 
@@ -123,26 +160,53 @@ func (ls *LibraryService) GetLibraryData(
 			// 6. Use organizer factory to organize data based upon domain
 			organizer, err := ls.organizerFactory.GetOrganizer(params.Domain, params)
 			if err != nil {
+				ls.logger.Error("LIBRARY_SERVICE: Domain data type assertion failed",
+					"component", "library_service",
+					"function", "GetLibraryData",
+					"actualType", fmt.Sprintf("%T", data),
+					"userID", userID,
+        )
 				return nil, fmt.Errorf("failed to organize data based upon domain: %w", err)
 			}
 
 			// 7. Organize data into correct shape for home or library page
-			organizedData, err := organizer.OrganizeForLibrary(ctx, libraryPageData)
+			organizedData, err = organizer.OrganizeForLibrary(ctx, libraryPageData)
 			if err != nil {
+				ls.logger.Error("LIBRARY_SERVICE: Domain data type assertion failed",
+					"component", "library_service",
+					"function", "GetLibraryData",
+					"actualType", fmt.Sprintf("%T", data),
+					"userID", userID,
+				)
 				return nil, fmt.Errorf("failed to process data: %w", err)
 			}
+			ls.logger.Debug("LIBRARY_SERVICE: Getting organizer",
+				"component", "library_service",
+				"function", "GetLibraryData",
+				"domain", params.Domain,
+			)
+
 
 			// 7. Cache processed data
 			if err := ls.operations.Cache.Set(ctx, userID, params, organizedData); err != nil {
 					// Log but don't fail if cache update fails
-					ls.logger.Error("failed to cache library data",
-							"userId", userID,
-							"error", err,
-					)
+					ls.logger.Error("LIBRARY_SERVICE: Failed to cache data",
+                "component", "library_service",
+                "function", "GetLibraryData",
+                "error", err,
+                "userID", userID,
+          )
 			}
 	}
 
 // 8. Build response
+	ls.logger.Debug("LIBRARY_SERVICE: Building response",
+		"component", "library_service",
+		"function", "GetLibraryData",
+		"userID", userID,
+		"requestID", ctx.Value(core.RequestIDKey),
+  )
+
 	return ls.buildResponse(
     ctx.Value(core.RequestIDKey).(string),
     organizedData,
@@ -157,6 +221,14 @@ func (ls *LibraryService) buildResponse(
 	data *types.LibraryPageData,
 	source string,
 ) *types.LibraryResponse {
+		ls.logger.Debug("LIBRARY_SERVICE: Starting response build",
+			"component", "library_service",
+			"function", "buildResponse",
+			"requestID", requestID,
+			"source", source,
+			"hasData", data != nil,
+	)
+
 	if data == nil {
 			ls.logger.Error("attempt to build response with nil data",
 					"component", "library_service",
@@ -185,6 +257,13 @@ func (ls *LibraryService) buildResponse(
 					},
 			}
 	}
+
+	ls.logger.Debug("LIBRARY_SERVICE: Validating book data",
+		"component", "library_service",
+		"function", "buildResponse",
+		"requestID", requestID,
+		"bookCount", len(data.Books),
+	)
 
 	// Ensure all books meet frontend contract requirements
 	for i := range data.Books {
@@ -216,6 +295,13 @@ func (ls *LibraryService) buildResponse(
 	ls.validateBookCollection(data.BooksByGenres.ByGenre)
 	ls.validateBookCollection(data.BooksByTags.ByTag)
 	ls.validateFormatBooks(&data.BooksByFormat)
+
+	ls.logger.Debug("LIBRARY_SERVICE: Response built successfully",
+		"component", "library_service",
+		"function", "buildResponse",
+		"requestID", requestID,
+		"source", source,
+	)
 
 	return &types.LibraryResponse{
 			RequestID: requestID,
