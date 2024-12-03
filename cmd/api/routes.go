@@ -34,9 +34,9 @@ func (app *application) routes(
 	searchHandlers *handlers.SearchHandlers,
 	authHandlers *authhandlers.AuthHandlers,
 	libraryHandler *libraryhandlers.LibraryHandler,
-	homeHandler *homehandlers.HomeHandler,
 	baseValidator *validator.BaseValidator,
-) http.Handler {
+	homeHandler *homehandlers.HomeHandler,
+	) http.Handler {
 	mux := chi.NewRouter()
 
 	// Panic Recovery

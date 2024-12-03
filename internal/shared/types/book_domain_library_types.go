@@ -9,16 +9,9 @@ import (
 	"time"
 
 	"github.com/lokeam/bravo-kilo/internal/books/repository"
+	binaryMarshaler "github.com/lokeam/bravo-kilo/internal/shared/binary"
 	"github.com/lokeam/bravo-kilo/internal/shared/core"
 )
-
-const maxMemoryLimit = 10 * 1024 * 1024 // 10MB limit
-
-type LibraryResponse struct {
-	RequestID   string            `json:"requestId"`
-	Data        *LibraryPageData  `json:"data"`
-	Source      string            `json:"source"`
-}
 
 type LibraryQueryParams struct {
 	Domain    core.DomainType     `json:"domain" validate:"required,oneof=books games movies"`
@@ -439,14 +432,6 @@ func (l *LibraryPageData) validateTagsConsistency() error {
 	return nil
 }
 
-
-
-
-
-
-
-
-
 // New validation methods
 func (l *LibraryPageData) validateBooks() error {
 	if l.Books == nil {
@@ -632,53 +617,15 @@ func (l *LibraryPageData) validateTagsData() error {
 
 // MarshalBinary implements the encoding.BinaryMarshaler interface.
 func (lpd *LibraryPageData) MarshalBinary() ([]byte, error) {
-    // First convert the struct to JSON
-    jsonData, err := json.Marshal(lpd)
-    if err != nil {
-			lpd.logger.Error("json marshal failed",
-					"error", err,
-					"dataType", fmt.Sprintf("%T", lpd),
-			)
-			return nil, fmt.Errorf("json marshal failed: %w", err)
-		}
-
-    // Check memory limit before proceeding
-    if len(jsonData) > maxMemoryLimit {
-			lpd.logger.Error("data exceeds memory limit",
-					"size", len(jsonData),
-					"limit", maxMemoryLimit,
-			)
-			return nil, fmt.Errorf("data size %d exceeds memory limit %d", len(jsonData), maxMemoryLimit)
+	// Directly use the shared binary marshaler
+	data, err := binaryMarshaler.MarshalBinary(lpd)
+	if err != nil {
+		lpd.logger.Error("library types binary marshal failed",
+			"error", err,
+		)
+		return nil, fmt.Errorf("library types binary marshal failed: %w", err)
 	}
-
-    // Create a buffer with capacity hint to avoid reallocations
-    buf := bytes.NewBuffer(make([]byte, 0, len(jsonData)+4)) // +4 for length prefix
-
-    // Write length as uint32 (4 bytes)
-    if err := binary.Write(buf, binary.LittleEndian, uint32(len(jsonData))); err != nil {
-			lpd.logger.Error("failed to write length prefix",
-					"error", err,
-					"dataLength", len(jsonData),
-			)
-			return nil, fmt.Errorf("failed to write length prefix: %w", err)
-	}
-
-    // Write JSON data
-    if _, err := buf.Write(jsonData); err != nil {
-			lpd.logger.Error("failed to write json data",
-					"error", err,
-					"bufferSize", buf.Len(),
-					"jsonLength", len(jsonData),
-			)
-			return nil, fmt.Errorf("failed to write json data: %w", err)
-		}
-
-    lpd.logger.Debug("binary marshaling completed",
-        "totalSize", buf.Len(),
-        "jsonSize", len(jsonData),
-    )
-
-    return buf.Bytes(), nil
+	return data, nil
 }
 
 func (lpd *LibraryPageData) UnmarshalBinary(data []byte) error {
@@ -697,12 +644,12 @@ func (lpd *LibraryPageData) UnmarshalBinary(data []byte) error {
 
 	// Total size check
 	totalSize := len(data)
-	if totalSize > maxMemoryLimit {
+	if totalSize > binaryMarshaler.MaxMemoryLimit {
 		lpd.logger.Error("total data exceeds limit",
       "size", totalSize,
-      "limit", maxMemoryLimit,
+      "limit", binaryMarshaler.MaxMemoryLimit,
     )
-		return fmt.Errorf("total data size %d exceeds limit %d", totalSize, maxMemoryLimit)
+		return fmt.Errorf("total data size %d exceeds limit %d", totalSize, binaryMarshaler.MaxMemoryLimit)
 	}
 
 	// Read and validate length prefix
@@ -716,12 +663,12 @@ func (lpd *LibraryPageData) UnmarshalBinary(data []byte) error {
 	}
 
 	// Validate claimed length before using it
-	if claimedLength > uint32(maxMemoryLimit) {
+	if claimedLength > uint32(binaryMarshaler.MaxMemoryLimit) {
 		lpd.logger.Error("claimed length exceeds limit",
 				"claimedLength", claimedLength,
-				"limit", maxMemoryLimit,
+				"limit", binaryMarshaler.MaxMemoryLimit,
 		)
-		return fmt.Errorf("claimed length %d exceeds limit %d", claimedLength, maxMemoryLimit)
+		return fmt.Errorf("claimed length %d exceeds limit %d", claimedLength, binaryMarshaler.MaxMemoryLimit)
 	}
 
 	// Verify actual data matches claimed length

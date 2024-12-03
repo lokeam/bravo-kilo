@@ -1,19 +1,23 @@
 package organizer
 
 import (
+	"context"
+
 	"github.com/lokeam/bravo-kilo/internal/shared/types"
 )
 
+// DomainOrganizer defines the interface for all domain organizers
 type DomainOrganizer interface {
-	// Organizes items for Library Page
-	OrganizeForLibrary(items interface{}) (types.LibraryPageData, error)
+	// OrganizeForLibrary handles library page organization
+	OrganizeForLibrary(ctx context.Context, data *types.LibraryPageData) (*types.LibraryPageData, error)
 
-	// Organizes items for Home page
-	OrganizeForStats(items interface{}) (interface{}, error)
+	// OrganizeForHome handles home page organization
+	OrganizeForHome(ctx context.Context, data *types.HomePageData) (*types.HomePageData, error)
 
 	// Returns metrics for Organizer
 	GetMetrics() OrganizerMetrics
 }
+
 
 type OrganizerMetrics struct {
 	OrganizationErrors int64

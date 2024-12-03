@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/url"
+	"strconv"
 	"time"
 
 	"github.com/lokeam/bravo-kilo/internal/shared/core"
@@ -17,7 +18,7 @@ type ValidationService struct {
 	queryValidator         *validator.QueryValidator
 	baseValidator          *validator.BaseValidator
 	logger                 *slog.Logger
-	executor               *operations.OperationExecutor[*types.LibraryQueryParams]
+	executor               *operations.OperationExecutor[*types.PageQueryParams]
 }
 
 const (
@@ -40,7 +41,7 @@ func NewValidationService(
 		return nil, fmt.Errorf("logger cannot be nil")
 	}
 
-	executor := operations.NewOperationExecutor[*types.LibraryQueryParams](
+	executor := operations.NewOperationExecutor[*types.PageQueryParams](
 		"validation",
 		defaultTimeout,
 		logger.With("component", "validation_executor"),
@@ -54,35 +55,40 @@ func NewValidationService(
 	}, nil
 }
 
-func (vs *ValidationService) ValidateLibraryRequest(
+func (vs *ValidationService) ValidatePageRequest(
 	ctx context.Context,
 	query url.Values,
-) (*types.LibraryQueryParams, error) {
-	return vs.executor.Execute(ctx, func(opCtx context.Context) (*types.LibraryQueryParams, error) {
-        // 1. Extract domain
-        domainStr := query.Get("domain")
+) (*types.PageQueryParams, error) {
+	return vs.executor.Execute(ctx, func(opCtx context.Context) (*types.PageQueryParams, error) {
+			// 1. Extract UserID
+			userID, err := strconv.Atoi(query.Get("userID"))
+			if err != nil {
+					return nil, fmt.Errorf("invalid userID: %w", err)
+			}
 
-        // 2. Set default if empty
-        if domainStr == "" {
-            domainStr = string(core.BookDomainType)
-        }
+			// 2. Extract domain
+			domainStr := query.Get("domain")
+			if domainStr == "" {
+					domainStr = string(core.BookDomainType)
+			}
 
-        // 3. Validate domain is one of the allowed values
-        domain := core.DomainType(domainStr)
-        if domain != core.BookDomainType &&
-           domain != core.MovieDomainType &&
-           domain != core.GameDomainType {
-            return nil, fmt.Errorf("invalid domain: %s", domainStr)
-        }
+			// 3.Validate domain is one of the allowed values
+			domain := core.DomainType(domainStr)
+			if domain != core.BookDomainType &&
+				 domain != core.MovieDomainType &&
+				 domain != core.GameDomainType {
+					return nil, fmt.Errorf("invalid domain: %s", domainStr)
+			}
 
-        params := &types.LibraryQueryParams{
-            Domain: domain,
-        }
+			params := &types.PageQueryParams{
+					UserID: userID,
+					Domain: domain,
+			}
 
-        if err := vs.baseValidator.ValidateStruct(opCtx, params); err != nil {
-            return nil, fmt.Errorf("validation failed: %v", err)
-        }
+			if err := vs.baseValidator.ValidateStruct(opCtx, params); err != nil {
+					return nil, fmt.Errorf("validation failed: %v", err)
+			}
 
-        return params, nil
+			return params, nil
 	})
 }

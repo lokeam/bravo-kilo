@@ -19,14 +19,15 @@ import (
 	"github.com/lokeam/bravo-kilo/internal/shared/cache"
 	"github.com/lokeam/bravo-kilo/internal/shared/core"
 	"github.com/lokeam/bravo-kilo/internal/shared/domains"
+	"github.com/lokeam/bravo-kilo/internal/shared/home"
 	"github.com/lokeam/bravo-kilo/internal/shared/library"
 	"github.com/lokeam/bravo-kilo/internal/shared/models"
 	"github.com/lokeam/bravo-kilo/internal/shared/operations"
 	"github.com/lokeam/bravo-kilo/internal/shared/organizer"
-	"github.com/lokeam/bravo-kilo/internal/shared/processor/bookprocessor"
 	"github.com/lokeam/bravo-kilo/internal/shared/rueidis"
 	sharedservices "github.com/lokeam/bravo-kilo/internal/shared/services"
 	"github.com/lokeam/bravo-kilo/internal/shared/transaction"
+	"github.com/lokeam/bravo-kilo/internal/shared/types"
 	"github.com/lokeam/bravo-kilo/internal/shared/validator"
 	"github.com/lokeam/bravo-kilo/internal/shared/workers"
 )
@@ -41,6 +42,7 @@ type Factory struct {
     CacheManager          *cache.CacheManager
     LibraryHandler        *library.LibraryHandler
     BaseValidator         *validator.BaseValidator
+    HomeHandler           *home.HomeHandler
 }
 
 func NewFactory(
@@ -142,15 +144,6 @@ func NewFactory(
 
     tokenModel := models.NewTokenModel(db, log)
 
-    bookProcessor, err := bookprocessor.NewBookProcessor(
-        log.With("component", "book_processor"),
-    )
-    if err != nil {
-        log.Error("failed to create book processor", "error", err)
-        return nil, fmt.Errorf("failed to create book processor: %w", err)
-    }
-
-
     bookOrganizer, err := organizer.NewBookOrganizer(
         log.With("component", "book_organizer"),
     )
@@ -159,15 +152,23 @@ func NewFactory(
         return nil, fmt.Errorf("failed to create book organizer: %w", err)
     }
 
+    organizerFactory, err := organizer.NewOrganizerFactory(
+        bookOrganizer,
+        log.With("component", "organizer_factory"),
+    )
+    if err != nil {
+        log.Error("failed to create organizer factory", "error", err)
+        return nil, fmt.Errorf("failed to create organizer factory: %w", err)
+    }
+
     bookDomainAdapter := operations.NewBookDomainAdapter(
         bookRepo,
         log.With("component", "book_domain_adapter"),
     )
 
-    domainOperation := operations.NewDomainOperation(
-        core.BookDomainType,
+    operationsFactory := operations.NewOperationFactory(
         bookDomainAdapter,
-        log.With("component", "domain_operation"),
+        log.With("component", "operation_factory"),
     )
 
     baseValidator, err := validator.NewBaseValidator(
@@ -179,29 +180,17 @@ func NewFactory(
     }
 
 
-    cacheOperation := operations.NewCacheOperation(
+    cacheOperation := operations.NewCacheOperation[types.PageData](
         redisClient,
         30 * time.Second,
         log.With("component", "cache_operation"),
         baseValidator,
     )
-    processorOperation, err := operations.NewProcessorOperation(
-        bookProcessor,
-        bookOrganizer,
-        30 * time.Second,
-        log.With("component", "processor_operation"),
-    )
-    if err != nil {
-        log.Error("failed to create processor operation", "error", err)
-        return nil, fmt.Errorf("failed to create processor operation: %w", err)
-    }
-
 
     // Initialize auth-related services
     operationsManager := operations.NewManager(
         cacheOperation,
-        domainOperation,
-        processorOperation,
+        operationsFactory,
     )
 
     tokenService := authservices.NewTokenService(
@@ -342,6 +331,8 @@ func NewFactory(
 
     libraryService, err := library.NewLibraryService(
         operationsManager,
+        operationsFactory,
+        organizerFactory,
         validationService,
         log.With("component", "library_service"),
     )
@@ -367,6 +358,23 @@ func NewFactory(
         log.With("worker", "deletion"),
     )
 
+    homeService, err := home.NewHomeService(
+        operationsManager,
+        operationsFactory,
+        organizerFactory,
+        validationService,
+        log.With("service", "home"),
+    )
+    if err != nil {
+        return nil, fmt.Errorf("error initializing home service: %v", err)
+    }
+
+    homeHandler := home.NewHomeHandler(
+        log.With("handler", "home"),
+        validationService,
+        homeService,
+    )
+
     return &Factory{
         RedisClient:           redisClient,
         BookHandlers:          bookHandlers,
@@ -375,7 +383,8 @@ func NewFactory(
         DeletionWorker:        deletionWorker,
         CacheWorker:           cacheWorker,
         CacheManager:          cacheManager,
-        LibraryHandler:    libraryHandler,
+        LibraryHandler:        libraryHandler,
         BaseValidator:         baseValidator,
+        HomeHandler:           homeHandler,
     }, nil
 }

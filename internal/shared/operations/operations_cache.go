@@ -2,19 +2,19 @@ package operations
 
 import (
 	"context"
-	"errors"
+	"encoding"
 	"fmt"
 	"log/slog"
 	"time"
 
+	"github.com/lokeam/bravo-kilo/internal/shared/binary"
 	"github.com/lokeam/bravo-kilo/internal/shared/redis"
 	"github.com/lokeam/bravo-kilo/internal/shared/rueidis"
 	"github.com/lokeam/bravo-kilo/internal/shared/types"
 )
 
-
-type CacheOperation struct {
-	executor     types.OperationExecutor[*types.LibraryPageData]
+type CacheOperation[T types.PageData] struct {
+	executor     *OperationExecutor[T]
 	validator    types.Validator
 	client       *rueidis.Client
 	metrics      *redis.Metrics
@@ -22,12 +22,12 @@ type CacheOperation struct {
 	config       *rueidis.Config
 }
 
-func NewCacheOperation(
+func NewCacheOperation[T types.PageData](
 	client *rueidis.Client,
 	timeout time.Duration,
 	logger *slog.Logger,
 	validator types.Validator,
-) *CacheOperation {
+) *CacheOperation[T] {
 	metrics := redis.NewMetrics()
 
 	// Get config safely
@@ -45,111 +45,71 @@ func NewCacheOperation(
 					"configNull", config == nil)
 	}
 
-	return &CacheOperation{
-			executor: NewOperationExecutor[*types.LibraryPageData](
-					"cache",
-					timeout,
-					logger,
-			),
-			client: client,
-			logger: logger,
-			config: config,
-			validator: validator,
-			metrics: metrics,
-	}
+	return &CacheOperation[T]{
+		executor: NewOperationExecutor[T](
+				"cache",
+				timeout,
+				logger,
+		),
+		client: client,
+		logger: logger,
+		config: config,
+		validator: validator,
+		metrics: metrics,
+}
 }
 
 // Get executor to wrap cache retrieval
-func (co *CacheOperation) Get(
+func (co *CacheOperation[T]) GetTyped(
 	ctx context.Context,
 	userID int,
-	params *types.LibraryQueryParams,
-) (*types.LibraryPageData, error) {
-	// Safety check for nil dependencies
+	params *types.PageQueryParams,
+) (T, error) {
+	var zero T
 	if co.client == nil {
-			return nil, fmt.Errorf("redis client not initialized")
+			return zero, fmt.Errorf("redis client not initialized")
+	}
+	if params == nil {
+			return zero, fmt.Errorf("params cannot be nil")
 	}
 
-	return co.executor.Execute(ctx, func(ctx context.Context) (*types.LibraryPageData, error) {
-			cacheKey := fmt.Sprintf("library:%d", userID)
+    return co.executor.Execute(ctx, func(ctx context.Context) (T, error) {
+      cacheKey := fmt.Sprintf("%s:%d", params.Domain, userID)
 
-			// Get string data from Redis
 			stringData, err := co.client.Get(ctx, cacheKey)
 			if err != nil {
-					// Safely increment cache miss metric
 					if co.metrics != nil {
 							co.metrics.IncrementCacheMisses()
 					}
 
-					// Let rueidis client handle error mapping
-					mappedErr := co.client.MapError(err, "GET")
-					switch {
-					case errors.Is(mappedErr, rueidis.ErrNotFound):  // Rueidis specific nil check
-							if co.logger != nil {
-									co.logger.Debug("cache miss",
-											"operation", "GET",
-											"key", cacheKey)
-							}
-							return nil, nil
-
-					case err == context.DeadlineExceeded:
-						return nil, redis.NewOperationError("GET", cacheKey, redis.ErrTimeout)
-
-					case errors.Is(err, context.DeadlineExceeded):
-							return nil, redis.NewOperationError("GET", cacheKey, redis.ErrTimeout)
-					case errors.Is(mappedErr, rueidis.ErrConnectionFailed):
-							return nil, redis.NewOperationError("GET", cacheKey, err)
-					case errors.Is(mappedErr, redis.ErrClientNotReady):
-							return nil, redis.NewOperationError("GET", cacheKey, err)
-					default:
-							if co.logger != nil {
-									co.logger.Error("unexpected redis error",
-											"operation", "GET",
-											"key", cacheKey,
-											"error", mappedErr)
-							}
-							return nil, rueidis.NewOperationError("GET", cacheKey, mappedErr)
-					}
+					return zero, err
 			}
 
-			// Don't try to unmarshal empty data
 			if stringData == "" {
-				if co.metrics != nil {
-						co.metrics.IncrementCacheMisses()
-				}
-				if co.logger != nil {
-						co.logger.Debug("empty cache data",
-								"operation", "GET",
-								"key", cacheKey)
-				}
-				return nil, nil
-		}
-
-
-			// Create and unmarshal data
-			pageData := types.NewLibraryPageData(co.logger)
-			if err := pageData.UnmarshalBinary([]byte(stringData)); err != nil {
 					if co.metrics != nil {
 							co.metrics.IncrementCacheMisses()
 					}
-					return nil, redis.NewOperationError("GET", cacheKey, redis.ErrInvalidData)
+					return zero, nil
 			}
 
-			// Validate data if validator is available
-			if co.validator != nil {
-					if validationErrs := co.validator.ValidateStruct(ctx, pageData); len(validationErrs) > 0 {
+			// Create appropriate type based on T
+			var pageData T
+			switch any(pageData).(type) {
+			case *types.LibraryPageData:
+					pageData = any(types.NewLibraryPageData(co.logger)).(T)
+			case *types.HomePageData:
+					pageData = any(types.NewHomePageData(co.logger)).(T)
+			default:
+					return zero, fmt.Errorf("unsupported page type")
+			}
+
+			// Type assert to access UnmarshalBinary
+			if unmarshaler, ok := any(pageData).(encoding.BinaryUnmarshaler); ok {
+					if err := unmarshaler.UnmarshalBinary([]byte(stringData)); err != nil {
 							if co.metrics != nil {
 									co.metrics.IncrementCacheMisses()
 							}
-							primaryErr := validationErrs[0]
-
-							if co.logger != nil {
-									co.logger.Error("validation failed",
-											"operation", "GET",
-											"key", cacheKey,
-											"errors", validationErrs)
-							}
-							return nil, redis.NewOperationError("GET", cacheKey, primaryErr)
+							return zero, redis.NewOperationError("GET", cacheKey, redis.ErrInvalidData)
 					}
 			}
 
@@ -157,33 +117,34 @@ func (co *CacheOperation) Get(
 			if co.metrics != nil {
 					co.metrics.IncrementCacheHits()
 			}
-			if co.logger != nil {
-					co.logger.Debug("cache hit",
-							"operation", "GET",
-							"key", cacheKey)
-			}
 
 			return pageData, nil
 	})
 }
 
 // Set executor to wrap cache update
-func (co *CacheOperation) Set(
+func (co *CacheOperation[T]) SetTyped(
 	ctx context.Context,
 	userID int,
-	params *types.LibraryQueryParams,
-	data *types.LibraryPageData,
+	params *types.PageQueryParams,
+	data T,
 ) error {
+	var zero T  // Add zero value at the start
+
 	// Safety check for nil dependencies
 	if co.client == nil {
 			return fmt.Errorf("redis client not initialized")
 	}
-	if data == nil {
-			return fmt.Errorf("cannot cache nil data")
+	if params == nil {
+		return fmt.Errorf("params cannot be nil")
+	}
+    // Check for nil using type assertion
+  if any(data) == nil {
+		return fmt.Errorf("cannot cache nil data")
 	}
 
-	_, err := co.executor.Execute(ctx, func(ctx context.Context) (*types.LibraryPageData, error) {
-			cacheKey := fmt.Sprintf("library:%d", userID)
+	_, err := co.executor.Execute(ctx, func(ctx context.Context) (T, error) {
+			cacheKey := fmt.Sprintf("library:%s:%d", params.Domain,userID)
 
 			// Validate data before caching if validator exists
 			if co.validator != nil {
@@ -199,17 +160,17 @@ func (co *CacheOperation) Set(
 											"key", cacheKey,
 											"errors", validationErrs)
 							}
-							return nil, redis.NewOperationError("SET", cacheKey, primaryErr)
+							return zero, redis.NewOperationError("SET", cacheKey, primaryErr)
 					}
 			}
 
 			// Marshal data for storage
-			marshaledData, err := data.MarshalBinary()
+			marshaledData, err := binary.MarshalBinary(data)
 			if err != nil {
 					if co.metrics != nil {
 							co.metrics.IncrementCacheMisses()
 					}
-					return nil, redis.NewOperationError("SET", cacheKey, fmt.Errorf("marshal failed: %w", err))
+					return zero, redis.NewOperationError("SET", cacheKey, fmt.Errorf("marshal failed: %w", err))
 			}
 
 			// Get TTL from config or use default
@@ -226,9 +187,9 @@ func (co *CacheOperation) Set(
 
 					switch err {
 					case redis.ErrConnectionFailed:
-							return nil, redis.NewOperationError("SET", cacheKey, err)
+							return zero, redis.NewOperationError("SET", cacheKey, err)
 					case redis.ErrClientNotReady:
-							return nil, redis.NewOperationError("SET", cacheKey, err)
+							return zero, redis.NewOperationError("SET", cacheKey, err)
 					default:
 							if co.logger != nil {
 									co.logger.Error("unexpected redis error during SET",
@@ -236,7 +197,7 @@ func (co *CacheOperation) Set(
 											"key", cacheKey,
 											"error", err)
 							}
-							return nil, redis.NewOperationError("SET", cacheKey, err)
+							return zero, redis.NewOperationError("SET", cacheKey, err)
 					}
 			}
 
@@ -254,4 +215,21 @@ func (co *CacheOperation) Set(
 	})
 
 	return err
+}
+
+// Wrapper methods to satisfy CacheOperator interface by converting between specific types and any
+
+// Get satisfies the CacheOperator interface
+func (co *CacheOperation[T]) Get(ctx context.Context, userID int, params *types.PageQueryParams) (interface{}, error) {
+	result, err := co.GetTyped(ctx, userID, params)
+	return result, err
+}
+
+// Set satisfies the CacheOperator interface
+func (co *CacheOperation[T]) Set(ctx context.Context, userID int, params *types.PageQueryParams, data interface{}) error {
+	typedData, ok := data.(T)
+	if !ok {
+		return fmt.Errorf("invalid data type for cache operation")
+	}
+	return co.SetTyped(ctx, userID, params, typedData)
 }

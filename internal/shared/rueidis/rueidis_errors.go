@@ -14,7 +14,6 @@ type OperationError struct {
 	Err       error
 }
 
-
 var (
 	ErrNotFound          = errors.New("key not found in redis")
 	ErrConnectionFailed  = errors.New("redis connection failed")

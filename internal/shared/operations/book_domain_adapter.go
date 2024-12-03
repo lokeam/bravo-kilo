@@ -38,7 +38,7 @@ func NewBookDomainAdapter(
 
 
 // Get Library Items implements domainDataProvider interface
-func (a *BookDomainAdapter) GetLibraryItems(ctx context.Context, userID int) ([]repository.Book, error) {
+func (a *BookDomainAdapter) GetAllUserBooksDomain(ctx context.Context, userID int) ([]repository.Book, error) {
 	// Use existing BookRepo methods to get library items
 	books, err := a.bookRepo.GetAllBooksByUserID(userID)  // Use correct method name
 	if err != nil {

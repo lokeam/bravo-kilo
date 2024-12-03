@@ -22,6 +22,12 @@ type BookOrganizer struct {
 	metrics  *OrganizerMetrics
 }
 
+// Struct for homepage stat calculator
+type statCalculator struct {
+	getItems func(book repository.Book) []string
+	targetSlice *[]types.StatItem
+}
+
 func NewBookOrganizer(logger *slog.Logger) (*BookOrganizer, error) {
 	if logger == nil {
 		return nil, fmt.Errorf("logger cannot be nil")
@@ -34,7 +40,10 @@ func NewBookOrganizer(logger *slog.Logger) (*BookOrganizer, error) {
 }
 
 // Sort these books into different views (by author, genre, etc.)
-func (bo *BookOrganizer) OrganizeForLibrary(ctx context.Context, items *types.LibraryPageData) (*types.LibraryPageData, error) {
+func (bo *BookOrganizer) OrganizeForLibrary(
+	ctx context.Context,
+	items *types.LibraryPageData,
+	) (*types.LibraryPageData, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf("context cannot be nil")
 	}
@@ -126,6 +135,71 @@ func (bo *BookOrganizer) OrganizeForLibrary(ctx context.Context, items *types.Li
 		return result, nil
 }
 
+func (bo *BookOrganizer) OrganizeForHome(ctx context.Context, items *types.HomePageData) (*types.HomePageData, error) {
+	// 1. Guard clauses
+	if ctx == nil {
+		return nil, fmt.Errorf("context cannot be nil")
+	}
+	if err := ctx.Err(); err != nil {
+			atomic.AddInt64(&bo.metrics.OrganizationErrors, 1)
+			return nil, fmt.Errorf("context error before organization: %w", err)
+	}
+	if items == nil {
+			atomic.AddInt64(&bo.metrics.OrganizationErrors, 1)
+			return &types.HomePageData{}, fmt.Errorf("items cannot be nil")
+	}
+
+	// 2. Initialize result with empty collections
+	books := items.Books
+
+	bo.logger.Debug("ORGANIZER: Starting home organization",
+			"component", "book_organizer",
+			"function", "OrganizeForHome",
+			"booksCount", len(books),
+	)
+
+	result := types.NewHomePageData(bo.logger)
+	result.Books = books
+
+	// 3. Track organization errors
+	var hadErrors bool
+
+	// 4. Organize format counts
+	formatCounts, err := bo.calculateFormatCounts(books)
+	if err != nil {
+			hadErrors = true
+			bo.logger.Error("format count calculation failed",
+					"error", err)
+			atomic.AddInt64(&bo.metrics.OrganizationErrors, 1)
+	} else {
+			result.BooksByFormat = formatCounts
+	}
+
+	// 5. Organize homepage statistics
+	stats, err := bo.calculateHomePageStats(books)
+	if err != nil {
+			hadErrors = true
+			bo.logger.Error("homepage stats calculation failed",
+					"error", err)
+			atomic.AddInt64(&bo.metrics.OrganizationErrors, 1)
+	} else {
+			result.HomePageStats = stats
+	}
+
+	bo.logger.Debug("ORGANIZER: Completed home organization",
+	"component", "book_organizer",
+	"function", "OrganizeForHome",
+	"resultBooksCount", len(result.Books),
+	"hadErrors", hadErrors,
+	)
+
+	if hadErrors {
+		return result, fmt.Errorf("some organization operations failed, partial results returned")
+	}
+
+	return result, nil
+}
+
 
 func (bo *BookOrganizer) GetMetrics() OrganizerMetrics {
 	return OrganizerMetrics{
@@ -134,7 +208,7 @@ func (bo *BookOrganizer) GetMetrics() OrganizerMetrics {
 	}
 }
 
-// Helper functions
+// Helper functions - OrganizeForLibrary
 
 func (bo *BookOrganizer) organizeByAuthors(ctx context.Context, books []repository.Book) (types.AuthorData, error) {
 	bo.logger.Debug("ORGANIZER: raw books received",
@@ -362,4 +436,97 @@ func logBookDetails(book repository.Book) map[string]interface{} {
 			"tagCount":     len(book.Tags),
 			"tags":         book.Tags,
 	}
+}
+
+
+
+// Helper functions - OrganizeForHome
+// Calculate stats for individual book attribute
+func (bo *BookOrganizer) calculateStats(
+	books []repository.Book,
+	getItems func(repository.Book) []string,
+	target *[]types.StatItem,
+) {
+	// Count occurences of each item in the target slice
+	countMap := make(map[string]int)
+	for _, book := range books {
+		for _, item := range getItems(book) {
+			countMap[item]++
+		}
+	}
+
+	// Convert to StatItem type slice
+	*target = make([]types.StatItem, 0, len(countMap))
+	for label, count := range countMap {
+		*target = append(*target, types.StatItem{
+			Label: label,
+			Count: count,
+		})
+	}
+}
+
+
+func (bo *BookOrganizer) calculateHomePageStats(
+	books []repository.Book,
+) (types.HomePageStats, error) {
+	stats := types.HomePageStats{
+		UserBkLang:  types.LanguageStats{BooksByLang: make([]types.StatItem, 0)},
+		UserBkGenre: types.GenreStats{BooksByGenre: make([]types.StatItem, 0)},
+		UserTags:    types.TagStats{UserTags: make([]types.StatItem, 0)},
+		UserAuthors: types.AuthorStats{BooksByAuthor: make([]types.StatItem, 0)},
+	}
+
+	// Define calculations
+	calculations := []statCalculator{
+		{
+				// Language stats (single string)
+				getItems:    func(book repository.Book) []string { return []string{book.Language} },
+				targetSlice: &stats.UserBkLang.BooksByLang,
+		},
+		{
+				// Genre stats (slice)
+				getItems:    func(book repository.Book) []string { return book.Genres },
+				targetSlice: &stats.UserBkGenre.BooksByGenre,
+		},
+		{
+				// Tag stats (slice)
+				getItems:    func(book repository.Book) []string { return book.Tags },
+				targetSlice: &stats.UserTags.UserTags,
+		},
+		{
+				// Author stats (slice)
+				getItems:    func(book repository.Book) []string { return book.Authors },
+				targetSlice: &stats.UserAuthors.BooksByAuthor,
+		},
+	}
+
+	// Calculate all stats using the same pattern
+	for _, calc := range calculations {
+			bo.calculateStats(books, calc.getItems, calc.targetSlice)
+	}
+
+return stats, nil
+
+
+}
+
+func (bo *BookOrganizer) calculateFormatCounts(
+	books []repository.Book,
+) (types.FormatCountStats, error) {
+	counts := types.FormatCountStats{}
+
+	for _, book := range books {
+			for _, format := range book.Formats {
+					switch format {
+					case "physical":
+							counts.Physical++
+					case "eBook":
+							counts.Digital++
+					case "audioBook":
+							counts.AudioBook++
+					}
+			}
+	}
+
+	return counts, nil
 }

@@ -1,6 +1,9 @@
 package types
 
-import "context"
+import (
+	"context"
+	"encoding"
+)
 
 // Validator defines the validation contract
 type Validator interface {
@@ -10,4 +13,8 @@ type Validator interface {
 // OperationExecutor defines the operation execution contract
 type OperationExecutor[T any] interface {
 	Execute(ctx context.Context, fn func(context.Context) (T, error)) (T, error)
+}
+type PageData interface {
+	encoding.BinaryMarshaler
+	encoding.BinaryUnmarshaler
 }

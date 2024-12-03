@@ -9,14 +9,17 @@ import (
 	"github.com/lokeam/bravo-kilo/internal/books/repository"
 	"github.com/lokeam/bravo-kilo/internal/shared/core"
 	"github.com/lokeam/bravo-kilo/internal/shared/operations"
+	"github.com/lokeam/bravo-kilo/internal/shared/organizer"
 	"github.com/lokeam/bravo-kilo/internal/shared/redis"
 	"github.com/lokeam/bravo-kilo/internal/shared/services"
 	"github.com/lokeam/bravo-kilo/internal/shared/types"
 )
 
 type LibraryService struct {
-	operations *operations.Manager
-	logger     *slog.Logger
+	operations         *operations.Manager
+	operationFactory   *operations.OperationFactory
+	organizerFactory   *organizer.OrganizerFactory
+	logger             *slog.Logger
 }
 
 // RESPONSIBILITIES:
@@ -28,12 +31,20 @@ type LibraryService struct {
 	- Type safe response building
 */
 func NewLibraryService(
-	operationsManager *operations.Manager,
-	validationService *services.ValidationService,
+	operationsManager    *operations.Manager,
+	operationFactory     *operations.OperationFactory,
+	organizerFactory     *organizer.OrganizerFactory,
+	validationService    *services.ValidationService,
 	logger *slog.Logger,
 ) (*LibraryService, error) {
 	if operationsManager == nil {
 		return nil, fmt.Errorf("operations manager cannot be nil")
+	}
+	if operationFactory == nil {
+		return nil, fmt.Errorf("operation factory cannot be nil")
+	}
+	if organizerFactory == nil {
+		return nil, fmt.Errorf("organizer factory cannot be nil")
 	}
 	if validationService == nil {
 		panic("validation service is required")
@@ -43,14 +54,18 @@ func NewLibraryService(
 	}
 	return &LibraryService{
 		operations: operationsManager,
+		operationFactory: operationFactory,
+		organizerFactory: organizerFactory,
 		logger:              logger,
 	}, nil
 }
 
-
-
 // 1. Primary business logic flow
-func (ls *LibraryService) GetLibraryData(ctx context.Context, userID int, params *types.LibraryQueryParams) (*types.LibraryResponse, error) {
+func (ls *LibraryService) GetLibraryData(
+	ctx context.Context,
+	userID int,
+	params *types.PageQueryParams,
+	) (*types.LibraryResponse, error) {
 	/*
 	Responsibilities:
 		1. Try cache first
@@ -69,6 +84,7 @@ func (ls *LibraryService) GetLibraryData(ctx context.Context, userID int, params
 			- Return formatted response
 	*/
 
+
 	// 1. Try cache
 	data, err := ls.operations.Cache.Get(ctx, userID, params)
 	if err != nil && !errors.Is(err, redis.ErrNotFound) {
@@ -76,22 +92,48 @@ func (ls *LibraryService) GetLibraryData(ctx context.Context, userID int, params
 			return nil, fmt.Errorf("cache operation failed: %w", err)
 	}
 
+	// Type assertion to ensure data is of correct type
+	organizedData, ok := data.(*types.LibraryPageData)
+	if !ok {
+		return nil, fmt.Errorf("unexpected data type during library service type assertion: %T", data)
+	}
+
 	// 2. If cache miss OR data is nil, get fresh data
 	if errors.Is(err, redis.ErrNotFound) || data == nil {
-			// Get domain data
-			data, err = ls.operations.Domain.GetData(ctx, userID, params)
+
+			// 3. Determine page-specific (library/home) operation for domain
+			// TODO: Add other domain types as needed
+			pageOperation, err := ls.operationFactory.CreateOperation(params.Domain, core.LibraryPage)
 			if err != nil {
-					return nil, err
+					return nil, fmt.Errorf("failed to create operation: %w", err)
 			}
 
-			// 3. Organize data into correct shape
-			data, err = ls.operations.Processor.Process(ctx, data)
+			// 4. Use page operation to get domain data from db
+			data, err := pageOperation.GetData(ctx, userID, params)
 			if err != nil {
-					return nil, err
+					return nil, fmt.Errorf("failed to get data: %w", err)
 			}
 
-			// 4. Cache processed data
-			if err := ls.operations.Cache.Set(ctx, userID, params, data); err != nil {
+			// 5. Type assertion to ensure data is of correct type
+			libraryPageData, ok := data.(*types.LibraryPageData)
+			if !ok {
+				return nil, fmt.Errorf("unexpected data type during library service type assertion: %T", data)
+			}
+
+			// 6. Use organizer factory to organize data based upon domain
+			organizer, err := ls.organizerFactory.GetOrganizer(params.Domain, params)
+			if err != nil {
+				return nil, fmt.Errorf("failed to organize data based upon domain: %w", err)
+			}
+
+			// 7. Organize data into correct shape for home or library page
+			organizedData, err := organizer.OrganizeForLibrary(ctx, libraryPageData)
+			if err != nil {
+				return nil, fmt.Errorf("failed to process data: %w", err)
+			}
+
+			// 7. Cache processed data
+			if err := ls.operations.Cache.Set(ctx, userID, params, organizedData); err != nil {
 					// Log but don't fail if cache update fails
 					ls.logger.Error("failed to cache library data",
 							"userId", userID,
@@ -100,10 +142,10 @@ func (ls *LibraryService) GetLibraryData(ctx context.Context, userID int, params
 			}
 	}
 
-// 5. Build response
+// 8. Build response
 	return ls.buildResponse(
     ctx.Value(core.RequestIDKey).(string),
-    data,
+    organizedData,
     "database",
 	), nil
 }

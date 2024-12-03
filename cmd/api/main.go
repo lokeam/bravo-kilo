@@ -18,6 +18,7 @@ import (
 	authHandlers "github.com/lokeam/bravo-kilo/internal/auth/handlers"
 	"github.com/lokeam/bravo-kilo/internal/books/handlers"
 	"github.com/lokeam/bravo-kilo/internal/shared/driver"
+	"github.com/lokeam/bravo-kilo/internal/shared/home"
 	"github.com/lokeam/bravo-kilo/internal/shared/jwt"
 	libraryhandlers "github.com/lokeam/bravo-kilo/internal/shared/library"
 	"github.com/lokeam/bravo-kilo/internal/shared/logger"
@@ -91,6 +92,7 @@ func main() {
 		f.AuthHandlers,
 		f.LibraryHandler,
 		f.BaseValidator,
+		f.HomeHandler,
 	)
 
 	// Start background workers
@@ -155,12 +157,20 @@ func (app *application) serve(
 	authHandlers *authHandlers.AuthHandlers,
 	libraryHandlers *libraryhandlers.LibraryHandler,
 	baseValidator *validator.BaseValidator,
+	homeHandler *home.HomeHandler,
 ) *http.Server {
 	app.logger.Info("Initializing server", "port", app.config.port)
 
 	return &http.Server{
 		Addr:         fmt.Sprintf(":%d", app.config.port),
-		Handler:      app.routes(bookHandlers, searchHandlers, authHandlers, libraryHandlers, baseValidator),
+		Handler:      app.routes(
+			bookHandlers,
+			searchHandlers,
+			authHandlers,
+			libraryHandlers,
+			baseValidator,
+			homeHandler,
+		),
 		IdleTimeout:  time.Minute,
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 30 * time.Second,
