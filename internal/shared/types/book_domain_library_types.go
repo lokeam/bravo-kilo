@@ -188,34 +188,34 @@ func (l *LibraryPageData) validateDataConsistency() error {
 func (l *LibraryPageData) validateStructureInitialization() error {
 	// Check Books array
 	if l.Books == nil {
-			return fmt.Errorf("Books array is nil")
+			return fmt.Errorf("books array is nil")
 	}
 
 	// Check BooksByAuthors
 	if l.BooksByAuthors.AllAuthors == nil {
-			return fmt.Errorf("AllAuthors array is nil")
+			return fmt.Errorf("allAuthors array is nil")
 	}
 	if l.BooksByAuthors.ByAuthor == nil {
-			return fmt.Errorf("ByAuthor map is nil")
+			return fmt.Errorf("byAuthor map is nil")
 	}
 
 	// Check BooksByGenres
 	if l.BooksByGenres.AllGenres == nil {
-			return fmt.Errorf("AllGenres array is nil")
+			return fmt.Errorf("allGenres array is nil")
 	}
 	if l.BooksByGenres.ByGenre == nil {
-			return fmt.Errorf("ByGenre map is nil")
+			return fmt.Errorf("byGenre map is nil")
 	}
 
 	// Check BooksByFormat
 	if l.BooksByFormat.AudioBook == nil {
-			return fmt.Errorf("AudioBook array is nil")
+			return fmt.Errorf("audioBook array is nil")
 	}
 	if l.BooksByFormat.EBook == nil {
-			return fmt.Errorf("EBook array is nil")
+			return fmt.Errorf("eBook array is nil")
 	}
 	if l.BooksByFormat.Physical == nil {
-			return fmt.Errorf("Physical array is nil")
+			return fmt.Errorf("physical array is nil")
 	}
 
 	// Check BooksByTags

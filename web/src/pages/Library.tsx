@@ -9,7 +9,7 @@ import Loading from '../components/Loading/Loading';
 import EmptyLibraryCard from '../components/ErrorMessages/EmptyLibraryCard';
 import PageWithErrorBoundary from '../components/ErrorMessages/PageWithErrorBoundary';
 import { sortBooks } from '../utils/ui';
-import { Book } from '../types/api';
+import { Book, LibraryPageResponse, isBookAuthorsData, defaultBookAuthors } from '../types/api';
 import {
   defaultBookGenres,
   isBookGenresData,
@@ -47,14 +47,21 @@ function Library() {
     domain: 'books'
   });
 
+  const isLibraryPageResponse = (data: any): data is LibraryPageResponse => {
+    return data && typeof data.books !== 'undefined';
+  };
+
   // Destructure and provide type-safe defaults
   const {
     books = [],
-    booksByAuthors: bookAuthors = { allAuthors: [] },
+    booksByAuthors: bookAuthors = {
+      allAuthors: [],
+      byAuthor: {}
+    },
     booksByGenres: bookGenres = defaultBookGenres,
     booksByFormat: bookFormats = { audioBook: [], eBook: [], physical: [] },
     booksByTags: bookTags = defaultBookTags,
-  } = libraryData?.data || {};
+  } = isLibraryPageResponse(libraryData) ? libraryData : {};
 
   const sortedBooks = useMemo(() => {
     if (!books || books.length === 0) {
@@ -82,6 +89,8 @@ function Library() {
     return sortBooks(booksToSort, sortCriteria, sortOrder);
   }, [activeTab, books, bookFormats, sortCriteria, sortOrder]);
 
+
+  const safeBookAuthors= isBookAuthorsData(bookAuthors) ? bookAuthors : defaultBookAuthors;
   const safeBookGenres = isBookGenresData(bookGenres) ? bookGenres : defaultBookGenres;
   const { allGenres, ...remainingGenres } = safeBookGenres;
   const genreBooks = remainingGenres as { [key: string]: GenreData };
@@ -94,7 +103,13 @@ function Library() {
 
   const renderCardList = () => {
     if (activeTab === 'Authors' && bookAuthors?.allAuthors?.length > 0) {
-      return <CardList allAuthors={bookAuthors.allAuthors} authorBooks={bookAuthors} />;
+      console.log('Library: Rendering authors section', {
+        bookAuthors,
+        allAuthors: bookAuthors.allAuthors,
+        authorBooksKeys: Object.keys(bookAuthors)
+      });
+
+      return <CardList allAuthors={safeBookAuthors.allAuthors} authorBooks={safeBookAuthors} />;
     }
     if (activeTab === 'Genres' && bookGenres?.allGenres?.length > 0) {
       return <CardList allGenres={allGenres} genreBooks={genreBooks} />;

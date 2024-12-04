@@ -3,21 +3,19 @@ import CardListItemAuthor from './CardListItemAuthor';
 import CardListItemGenre from './CardListItemGenre';
 import CardListItemTag from './CardListItemTag';
 import { motion } from 'framer-motion';
-import { Book } from '../../types/api';
+import { Book, BookAuthorsData } from '../../types/api';
 
 type CardListItemDefault = {
   books: Book[];
   isSearchPage?: boolean;
 }
 
-type CardListItemAuthor = {
+interface CardListItemAuthor {
   allAuthors: string[];
-  authorBooks: {
-    [key: string]: Book[] | string[];
-  };
+  authorBooks: BookAuthorsData;
 }
 
-export interface CardListItemGenre {
+interface CardListItemGenre {
   allGenres: string[];
   genreBooks: {
     [index: string]: {
@@ -27,7 +25,7 @@ export interface CardListItemGenre {
   };
 }
 
-export interface CardListItemTag {
+interface CardListItemTag {
   allTags: string[];
   tagBooks: {
     [index: string]: {
@@ -60,6 +58,16 @@ export default function CardList(props: CardListItemProps) {
 
   // Author Card List
   if (isCardListItemAuthor(props)) {
+    console.log('CardList: Author section', {
+      allAuthors: props.allAuthors,
+      authorBooks: props.authorBooks
+    });
+
+    if (!props.allAuthors.length) {
+      console.warn('No authors available');
+      return null;
+    }
+
     return (
       <motion.div
         className="card_list__wrapper pb-20 md:pb-4 flex flex-col relative w-full max-w-7xl mt-8"
@@ -70,7 +78,13 @@ export default function CardList(props: CardListItemProps) {
       >
       <ul className="flex flex-col justify-center rounded text-white">
         {props.allAuthors.map((authorName: string, index: number) => {
-          const books = props.authorBooks[String(index)];
+          const books = props.authorBooks.byAuthor[authorName];
+          console.log(`Processing author: ${authorName}`, {
+            authorName,
+            books,
+            hasBooks: Boolean(books?.length)
+          });
+
           // Type guard to ensure we're passing Book[] to CardListItemAuthor
           if (!Array.isArray(books) || !books.length || typeof books[0] === 'string') {
             return null;

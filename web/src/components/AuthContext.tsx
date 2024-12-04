@@ -11,7 +11,7 @@ export interface User {
   firstName?: string;
   lastName?: string;
   picture?: string;
-  createdAt?: string;
+  created_at?: string;
   updatedAt?: string;
 }
 

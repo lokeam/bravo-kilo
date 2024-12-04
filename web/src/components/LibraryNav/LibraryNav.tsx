@@ -13,9 +13,13 @@ function LibraryNav() {
   const handleTabClick = useCallback(
     (tab: string) => {
       console.log(`Switching to tab: ${tab}`);
+      console.log('Tab clicked:', {
+        previous: activeTab,
+        new: tab
+      });
       setActiveTab(tab);
     },
-    [setActiveTab]
+    [setActiveTab, activeTab]
   );
 
   return (

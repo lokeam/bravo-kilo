@@ -1,12 +1,20 @@
-import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
+import axios, { AxiosError, InternalAxiosRequestConfig, AxiosResponse } from 'axios';
 import {
   AggregatedHomePageData,
   Book,
   BookAPIPayload,
+  HomePageDataResponse,
   HomepageStatistics,
-  defaultHomePageStats
+  defaultBookAuthors,
+  defaultHomePageStats,
+  defaultBookGenres,
+  defaultBookTags,
+  LibraryPageResponse,
+  isBookAuthorsData,
+  isBookGenresData,
+  isBookTagsData,
 } from '../types/api';
-import { LibraryPageResponse } from '../queries/types/responses';
+//import { LibraryPageResponse } from '../queries/types/responses';
 
 
 interface RetryConfig extends InternalAxiosRequestConfig {
@@ -56,6 +64,7 @@ apiClient.interceptors.response.use(
     });
     console.groupEnd();
 
+    // Handle CSRF token
     const csrfTokenFromHeader = response.headers['x-csrf-token'];
     if (csrfTokenFromHeader) {
       csrfToken = csrfTokenFromHeader;
@@ -63,9 +72,18 @@ apiClient.interceptors.response.use(
       console.log('CSRF token captured:', csrfToken);
       console.log('Full response headers:', response.headers);
       console.log('*********************');
-      // Set the CSRF token in the axios defaults
-      // apiClient.defaults.headers.common['X-CSRF-Token'] = csrfTokenFromHeader;
     }
+
+    // Unwrap extra data attribute from Axios response
+    if (response.data &&
+      typeof response.data === 'object' &&
+      'data' in response.data &&
+      response.config.url !== '/api/v1/csrf-token'
+    ) {
+      console.log('Unwrapping nested data attribute from Axios response');
+      response.data = response.data.data;
+    }
+
     return response;
   },
   // Error handler with proper typing
@@ -197,6 +215,13 @@ function isValidHomepageStats(stats: unknown): stats is HomepageStatistics {
   );
 }
 
+// Helper function: transform API response to match library page types
+function transformBookApiResponse(apiResponse: any): Book[] {
+  return apiResponse.books.map((book: any) => ({
+    ...book,
+  }));
+}
+
 export const fetchUserBooks = async (userID: number): Promise<Book[]> => {
   console.log('apiClient.service - fetchUserBooks called');
   console.log('apiClient.service - fetchUserBooks called with userID: ', userID);
@@ -288,7 +313,7 @@ export const fetchBookIDByTitle = async (bookTitle: string) => {
   }
 };
 
-export const fetchHomepageData = async (userID: number): Promise<AggregatedHomePageData> => {
+export const fetchHomepageData = async (userID: number): Promise<HomePageDataResponse> => {
   try {
     console.log('Fetching homepage data: ', {
       userID,
@@ -313,8 +338,9 @@ export const fetchHomepageData = async (userID: number): Promise<AggregatedHomeP
       throw new Error('No data received from homepage endpoint');
     }
 
+
     // Check if books is an array
-    if (!Array.isArray(response.data.books)) {
+    if (!response.data?.books || !Array.isArray(response.data.books)) {
       console.error('Invalid books format:', response.data.books);
       response.data.books = [];
     }
@@ -377,57 +403,63 @@ export const fetchHomepageData = async (userID: number): Promise<AggregatedHomeP
 
 export const fetchLibraryPageData = async (userID: number): Promise<LibraryPageResponse> => {
   try {
-    console.log('Fetching library page data:', {
+    console.log('Fetching library page data: ', {
       userID,
       endpoint: '/api/v1/pages/library',
-      domain: 'books' // Log domain parameter
+      domain: 'books'
     });
 
-    // Add request validation
+    // Request validation
     if (!userID) {
       throw new Error('UserID is required');
     }
 
-    const response = await apiClient.get<LibraryPageResponse>('/api/v1/pages/library', {
+    const response: AxiosResponse<LibraryPageResponse> = await apiClient.get('/api/v1/pages/library', {
       params: {
         userID,
-        domain: 'books' // Explicitly send domain parameter
+        domain: 'books'
       }
     });
 
-    // Enhanced response validation
-    if (!response.data) {
-      throw new Error('No data received from library endpoint');
-    }
+    console.log('Raw response data:', response.data);
 
-    // Log response structure for debugging
-    console.log('Library response structure:', {
-      hasRequestId: !!response.data.requestId,
-      dataKeys: Object.keys(response.data),
-      status: response.status
-    });
+    // Type guard for response data
+    const responseData = response.data as LibraryPageResponse;
 
-    // Type guard
-    if (!response.data || typeof response.data.requestId !== 'string') {
-      console.error('Invalid response format:', response.data);
-      throw new Error('Invalid response format');
-    }
+    // Validate core data structures and provide defaults
+    const validatedResponse: LibraryPageResponse = {
+      booksByAuthors: isBookAuthorsData(responseData.booksByAuthors) ? responseData.booksByAuthors : defaultBookAuthors,
+      booksByGenres: isBookGenresData(responseData.booksByGenres) ? responseData.booksByGenres : defaultBookGenres,
+      booksByFormat: responseData.booksByFormat || { audioBook: [], eBook: [], physical: [] },
+      booksByTags: isBookTagsData(responseData.booksByTags) ? responseData.booksByTags : defaultBookTags,
+      books: Array.isArray(responseData.books) ? responseData.books : [],
+      source: responseData.source,
+      requestID: responseData.requestID
+    };
 
-    return response.data;
+    console.log('Validated response data:', validatedResponse);
+
+    return validatedResponse;
+
   } catch (error) {
     if (error instanceof AxiosError) {
-      // Enhanced error logging
-      console.error('Library page data fetch failed:', {
+      console.error('Library page data fetch failed: ', {
         status: error.response?.status,
         statusText: error.response?.statusText,
         data: error.response?.data,
         params: error.config?.params,
-        headers: error.response?.headers
+        headers: error.response?.headers,
+        config: {
+          url: error.config?.url,
+          params: error.config?.params
+        }
       });
+    } else {
+      console.error('Unknown error fetching library data:', error);
     }
     throw error;
   }
-}
+};
 
 
 export const exportUserBooks = async (userID: number) => {

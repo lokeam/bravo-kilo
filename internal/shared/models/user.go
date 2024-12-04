@@ -30,7 +30,7 @@ type User struct {
 	Email               string    `json:"email"`
 	FirstName           string    `json:"firstName,omitempty"`
 	LastName            string    `json:"lastName,omitempty"`
-	CreatedAt           time.Time `json:"createdAt"`
+	CreatedAt           time.Time `json:"created_at"`
 	UpdatedAt           time.Time `json:"updatedAt"`
 	Picture             string    `json:"picture,omitempty"`
 	IsPendingDeletion   bool      `json:"isPendingDeletion"`

@@ -15,7 +15,7 @@ export type Book = {
   tags: string[];       // Changed from string[] | undefined to string[]
   notes: string | null; // Changed from optional string to string | null
   formats: ('physical' | 'eBook' | 'audioBook')[]; // Changed from optional to required
-  createdAt?: string;
+  created_at?: string;
   lastUpdated?: string;
   isbn10?: string;
   isbn13?: string;
@@ -86,9 +86,10 @@ export type BookTagsData = {
 
 // Book Authors/Genres intersection types
 export type BookAuthorsData = {
-  allAuthors: string[]
-} & {
-  [index: string]: Book[];
+  allAuthors: string[];
+  byAuthor: {
+    [authorName: string]: Book[];
+  };
 };
 
 // Data structure for Books sorted by Format, used on Library page
@@ -98,17 +99,44 @@ export type BookFormatData = {
   physical: Book[];
 };
 
+// Library page response type
+export type LibraryPageResponse = {
+  books: Book[];
+  booksByAuthors: BookAuthorsData;
+  booksByGenres: BookGenresData;
+  booksByFormat: BookFormatData;
+  booksByTags: BookTagsData;
+  source?: string;
+  requestID?: string;
+};
+
+
 // Data structure for aggregated data used on Homepage for statistics
 export type AggregatedHomePageData = {
   books: Book[];
   booksByFormat: BooksByFormat;
   homepageStats: HomepageStatistics;
+  source?: string;
+  requestID?: string;
 };
+
+// Axios wraps backend response in an extra data attribute, apiClientinterceptor removes it
+export type HomePageDataResponse = AggregatedHomePageData;
 
 /****** Type Guards ******/
 // Type guard for Quill Delta object
 export function isQuillDelta(content: any): content is Delta {
   return content && typeof content.ops !== 'undefined';
+}
+
+// Type guard for BookAuthorsData
+export function isBookAuthorsData(data: any): data is BookAuthorsData {
+  return (
+    data &&
+    Array.isArray(data.allAuthors) &&
+    typeof data.byAuthor === 'object' &&
+    data.byAuthor !== null
+  );
 }
 
 // Type guard for BookFormData
@@ -159,10 +187,15 @@ export function isBookTagsData(data: any): data is BookTagsData {
 }
 
 /****** Default Data Constants ******/
+export const defaultBookAuthors: BookAuthorsData = {
+  allAuthors: [],
+  byAuthor: {}
+};
+
 export const defaultBookFormats: BooksByFormat = {
-  audioBook: [],
-  physical: [],
-  eBook: [],
+  audioBook: 0,
+  physical: 0,
+  eBook: 0
 };
 
 export const defaultBookGenres: BookGenresData = {
@@ -229,9 +262,9 @@ export type RawHomepageStats = {
 };
 
 export type BooksByFormat = {
-  physical: Book[];
-  eBook: Book[];
-  audioBook: Book[];
+  physical: number;
+  eBook: number;
+  audioBook: number;
 };
 
 // Type for transformed format data on Homepage
@@ -245,7 +278,7 @@ export type HomepageStatistics = {
     booksByLang: Array<{ label: string; count: number }>;
   };
   userBkGenres: {
-    booksByGenre: Array<{ label: string; count: number }>;
+    booksByGenre: Array<{ label: string; count: number }>; // Ensure this is correct
   };
   userAuthors: {
     booksByAuthor: Array<{ label: string; count: number }>;

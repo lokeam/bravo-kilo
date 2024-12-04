@@ -75,6 +75,7 @@ func (hs *HomeService) GetHomeData(
 		4. Cache results
 		5. Return response
 
+
 		Flow:
 			- Generate cache key
 			- Try cache operation
@@ -93,7 +94,7 @@ func (hs *HomeService) GetHomeData(
 
 	// Type assertion to ensure data is of correct type
 	organizedData, ok := data.(*types.HomePageData)
-	if !ok {
+	if !ok && data != nil {
 		return nil, fmt.Errorf("unexpected data type during home service type assertion: %T", data)
 	}
 
@@ -137,6 +138,7 @@ func (hs *HomeService) GetHomeData(
 					"error", err,
 			)
 		}
+
 	}
 
 	// 5. Build response

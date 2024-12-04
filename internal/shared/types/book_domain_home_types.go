@@ -42,7 +42,7 @@ type LanguageStats struct {
 }
 
 type GenreStats struct {
-	BooksByGenre []StatItem `json:"bookByGenre"`
+	BooksByGenre []StatItem `json:"booksByGenre"`
 }
 
 type TagStats struct {
@@ -548,6 +548,36 @@ func (hpd *HomePageData) UnmarshalBinary(data []byte) error {
         "jsonSize", claimedLength,
         "totalSize", len(data),
     )
+
+	return nil
+}
+
+// Add this method to HomePageData
+func (h *HomePageData) CalculateFormatCounts() error {
+	h.logger.Debug("starting format count calculation",
+			"bookCount", len(h.Books))
+
+	// Reset counts
+	h.BooksByFormat = FormatCountStats{}
+
+	// Count formats from books
+	for _, book := range h.Books {
+			for _, format := range book.Formats {
+					switch format {
+					case "physical":
+							h.BooksByFormat.Physical++
+					case "eBook":
+							h.BooksByFormat.Digital++
+					case "audioBook":
+							h.BooksByFormat.AudioBook++
+					}
+			}
+	}
+
+	h.logger.Debug("completed format count calculation",
+			"physical", h.BooksByFormat.Physical,
+			"digital", h.BooksByFormat.Digital,
+			"audioBook", h.BooksByFormat.AudioBook)
 
 	return nil
 }

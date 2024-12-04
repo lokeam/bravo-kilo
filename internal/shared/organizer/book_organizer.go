@@ -165,7 +165,7 @@ func (bo *BookOrganizer) OrganizeForHome(ctx context.Context, items *types.HomeP
 	var hadErrors bool
 
 	// 4. Organize format counts
-	formatCounts, err := bo.calculateFormatCounts(books)
+	formatCounts, err := bo.CalculateFormatCounts(books)
 	if err != nil {
 			hadErrors = true
 			bo.logger.Error("format count calculation failed",
@@ -510,23 +510,52 @@ return stats, nil
 
 }
 
-func (bo *BookOrganizer) calculateFormatCounts(
-	books []repository.Book,
-) (types.FormatCountStats, error) {
+func (bo *BookOrganizer) CalculateFormatCounts(books []repository.Book) (types.FormatCountStats, error) {
 	counts := types.FormatCountStats{}
 
+	bo.logger.Debug("ORGANIZER: Starting format count calculation",
+			slog.String("function", "github.com/lokeam/bravo-kilo/internal/shared/organizer.CalculateFormatCounts"),
+			slog.String("file", "internal/shared/organizer/book_organizer.go"),
+			slog.Int("total_books", len(books)))
+
 	for _, book := range books {
+			bo.logger.Debug("ORGANIZER: Processing book formats",
+					slog.String("function", "github.com/lokeam/bravo-kilo/internal/shared/organizer.CalculateFormatCounts"),
+					slog.String("file", "internal/shared/organizer/book_organizer.go"),
+					slog.Int("bookID", book.ID),
+					slog.Any("formats", book.Formats))
+
 			for _, format := range book.Formats {
-					switch format {
+					normalizedFormat := strings.ToLower(format)
+
+					bo.logger.Debug("ORGANIZER: Processing format",
+							slog.String("function", "github.com/lokeam/bravo-kilo/internal/shared/organizer.CalculateFormatCounts"),
+							slog.String("file", "internal/shared/organizer/book_organizer.go"),
+							slog.Int("bookID", book.ID),
+							slog.String("original_format", format),
+							slog.String("normalized_format", normalizedFormat))
+
+					switch normalizedFormat {
 					case "physical":
 							counts.Physical++
-					case "eBook":
+							bo.logger.Debug("ORGANIZER: Incremented physical count",
+									slog.String("function", "github.com/lokeam/bravo-kilo/internal/shared/organizer.CalculateFormatCounts"),
+									slog.String("file", "internal/shared/organizer/book_organizer.go"),
+									slog.Int("current_count", counts.Physical))
+					case "digital":
 							counts.Digital++
-					case "audioBook":
+					case "audiobook":
 							counts.AudioBook++
 					}
 			}
 	}
+
+	bo.logger.Debug("ORGANIZER: Final format counts",
+			slog.String("function", "github.com/lokeam/bravo-kilo/internal/shared/organizer.CalculateFormatCounts"),
+			slog.String("file", "internal/shared/organizer/book_organizer.go"),
+			slog.Int("physical", counts.Physical),
+			slog.Int("digital", counts.Digital),
+			slog.Int("audiobook", counts.AudioBook))
 
 	return counts, nil
 }

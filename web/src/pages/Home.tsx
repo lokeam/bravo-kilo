@@ -38,20 +38,22 @@ function Home() {
     userID: user.id,
     domain: 'books'
   });
+
+
   // Extract homepageStats for debugging
-  const homepageStats = homeData?.homepageStats;
+  //const homepageStats = homeData?.homepageStats;
 
   useEffect(() => {
-    if (homepageStats) {
-      console.log('Homepage stats received:', homepageStats);
+    if (homeData?.homepageStats) {  // Access nested data
+      console.log('Homepage stats received:', homeData.homepageStats);
       console.log('Processed stats:', {
-        authors: homepageStats.userAuthors?.booksByAuthor,
-        genres: homepageStats.userBkGenres?.booksByGenre,
-        languages: homepageStats.userBkLang?.booksByLang,
-        tags: homepageStats.userTags?.userTags
+        authors: homeData.homepageStats.userAuthors?.booksByAuthor || [],
+        genres: homeData.homepageStats.userBkGenres?.booksByGenre || [],
+        languages: homeData.homepageStats.userBkLang?.booksByLang || [],
+        tags: homeData.homepageStats.userTags?.userTags || []
       });
     }
-  }, [homepageStats]);
+  }, [homeData]);
 
   // Data transformation memoization
   const {
@@ -64,7 +66,6 @@ function Home() {
     booksByAuthor
   }: TransformedHomeData = useMemo(() => {
     if (!homeData) {
-      // Return properly formatted default data
       return defaultHomePageData;
     }
 
@@ -72,13 +73,13 @@ function Home() {
       books = [],
       booksByFormat = defaultBookFormats,
       homepageStats = defaultHomePageStats,
-    } = homeData;
+    } = homeData;  // Ensure access from homeData.data
 
     // Transform booksByFormat into array of FormatCount
     const transformedBooksByFormat: FormatCount[] = [
-      { label: 'Physical', count: booksByFormat.physical?.length || 0 },
-      { label: 'eBook', count: booksByFormat.eBook?.length || 0 },
-      { label: 'Audio', count: booksByFormat.audioBook?.length || 0 },
+      { label: 'Physical', count: booksByFormat.physical || 0 },
+      { label: 'eBook', count: booksByFormat.eBook || 0 },
+      { label: 'Audio', count: booksByFormat.audioBook || 0 },
     ];
 
     return {
