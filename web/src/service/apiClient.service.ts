@@ -13,7 +13,9 @@ import {
   isBookAuthorsData,
   isBookGenresData,
   isBookTagsData,
+  TokenResponse,
 } from '../types/api';
+import Cookies from 'js-cookie';
 //import { LibraryPageResponse } from '../queries/types/responses';
 
 
@@ -121,8 +123,32 @@ apiClient.interceptors.response.use(
       originalRequest._retry = true;
 
       try {
-        console.log('apiClient, trying token refresh');
-        await apiClient.post('/auth/token/refresh');
+        console.log('Attempting to refresh auth token');
+        // Get new auth token
+        const tokenResponse = await refreshAuthToken();
+
+        // Save it in cookies for future requests
+        Cookies.set('token', tokenResponse.token, {
+          expires: new Date(tokenResponse.expiresAt),
+          secure: true,
+          sameSite: 'strict'
+        });
+
+        // Verify cookie was set
+        const savedToken = Cookies.get('token');
+        console.log('Cookie verification:', {
+          tokenSaved: !!savedToken,
+          matchesNew: savedToken === tokenResponse.token
+        });
+
+        // Update the current failed request with new token
+        originalRequest.headers['Authorization'] = `Bearer ${tokenResponse.token}`;
+        console.log('Request headers after token refresh:', {
+          auth: originalRequest.headers['Authorization'],
+          hasBearer: originalRequest.headers['Authorization']?.startsWith('Bearer ')
+        });
+
+        // Retry the failed request
         return apiClient(originalRequest);
       } catch (refreshError) {
         console.error('Token refresh failed', refreshError);
@@ -587,6 +613,23 @@ export const initiateAccountRecovery = async () => {
   }
 };
 
+export const refreshAuthToken = async (): Promise<TokenResponse> => {
+  try {
+    const response = await apiClient.post('/auth/token/refresh');
+    console.log('Token refresh response:', {
+      hasToken: !!response.data.token,
+      hasExpiry: !!response.data.expiresAt,
+      response: response.data
+    });
 
+    return response.data;
+  } catch (error) {
+    console.error('Failed to refresh authentication token:', error);
+
+    // If refresh fails, redirect to login
+    window.location.href = '/login';
+    throw error;
+  }
+};
 
 export default apiClient;

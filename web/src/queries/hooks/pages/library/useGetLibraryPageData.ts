@@ -1,3 +1,5 @@
+
+//import { invalidateQueries } from './../../../../hooks/useFetchData';
 import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '../../../constants/queryKeys';
 import { fetchLibraryPageData } from '../../../../service/apiClient.service';
@@ -10,6 +12,11 @@ interface UseGetLibraryPageDataOptions {
   gcTime?: number;
   maxRetries?: number;
 }
+// Helper function to generate the query key for the library page data
+export const getLibraryPageQueryKey = (domain: string, userID: number) => {
+  return [...queryKeys.library.page.byDomain(domain), userID];
+};
+
 
 export function useGetLibraryPageData({
   domain = 'books',
@@ -18,6 +25,7 @@ export function useGetLibraryPageData({
   gcTime = 10 * 60 * 1000,  // 10min
   maxRetries = 3,
 }: UseGetLibraryPageDataOptions) {
+  const queryKey = getLibraryPageQueryKey(domain, userID);
 
   if (!userID) {
     console.error('useGetLibraryPageData called without userID');
@@ -25,7 +33,7 @@ export function useGetLibraryPageData({
 
   return useQuery({
     // Include ID for cache management
-    queryKey: [...queryKeys.library.page.byDomain(domain), userID],
+    queryKey,
     queryFn: async () =>  {
       try {
         // Log query execution
@@ -38,7 +46,7 @@ export function useGetLibraryPageData({
         const response = await fetchLibraryPageData(userID);
         // Log successful response
         console.log('Library page query successful:', {
-          requestId: response.requestId,
+          requestId: response.requestID,
           dataPresent: !!response
         });
 

@@ -1,20 +1,24 @@
 import { useCallback, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { addBook, updateBook, deleteBook, fetchUserBooks, fetchBooksAuthors, fetchBooksGenres, fetchBooksFormat, fetchBooksTags } from '../service/apiClient.service';
+import { addBook, updateBook, deleteBook } from '../service/apiClient.service';
 import { useUser } from './useUser';
 import { Book, BookAPIPayload, StringifiedBookFormData, isStringifiedBookFormData } from '../types/api';
 import { invalidateLibraryQueries } from '../utils/invalidateQueries';
+import { getLibraryPageQueryKey } from '../queries/hooks/pages/library/useGetLibraryPageData';
 
 type BookOperation = 'add' | 'update' | 'delete';
-
-const MAX_RETRIES = 3;
-const RETRY_DELAY = 1000;
 
 type BookOperationContext = {
   previousBook?: Book;
 };
 
-const useBookOperation = (operation: BookOperation, bookID?: string) => {
+const MAX_RETRIES = 3;
+const RETRY_DELAY = 1000;
+
+type OperationPayload<T extends BookOperation> = T extends 'delete'
+  ? string
+  : StringifiedBookFormData;
+const useBookOperation = <T extends BookOperation>(operation: T, bookID?: string) => {
   const queryClient = useQueryClient();
   const { data: user } = useUser();
   const [isLoading, setIsLoading] = useState(false);
@@ -23,6 +27,9 @@ const useBookOperation = (operation: BookOperation, bookID?: string) => {
   const refetchLibraryData = useCallback(async () => {
     if (user?.id) {
       await Promise.all([
+        queryClient.refetchQueries({
+          queryKey: getLibraryPageQueryKey('books', user.id)
+        }),
         queryClient.refetchQueries({ queryKey: ['books', user.id] }),
         queryClient.refetchQueries({ queryKey: ['booksAuthors', user.id] }),
         queryClient.refetchQueries({ queryKey: ['booksGenres', user.id] }),
@@ -34,31 +41,31 @@ const useBookOperation = (operation: BookOperation, bookID?: string) => {
   }, [queryClient, user?.id]);
 
   // Prefetch library data
-  const prefetchData = useCallback(() => {
-    if (user?.id) {
-      // Prefetch library data before navigation
-      queryClient.prefetchQuery({
-        queryKey: ['books', user.id],
-        queryFn: () => fetchUserBooks(user.id),
-      });
-      queryClient.prefetchQuery({
-        queryKey: ['booksAuthors', user.id],
-        queryFn: () => fetchBooksAuthors(user.id),
-      });
-      queryClient.prefetchQuery({
-        queryKey: ['booksGenres', user.id],
-        queryFn: () => fetchBooksGenres(user.id),
-      });
-      queryClient.prefetchQuery({
-        queryKey: ['booksFormats', user.id],
-        queryFn: () => fetchBooksFormat(user.id),
-      });
-      queryClient.prefetchQuery({
-        queryKey: ['booksTags', user.id],
-        queryFn: () => fetchBooksTags(user.id),
-      });
-    }
-  }, [queryClient, user?.id]);
+  // const prefetchData = useCallback(() => {
+  //   if (user?.id) {
+  //     // Prefetch library data before navigation
+  //     queryClient.prefetchQuery({
+  //       queryKey: ['books', user.id],
+  //       queryFn: () => fetchUserBooks(user.id),
+  //     });
+  //     queryClient.prefetchQuery({
+  //       queryKey: ['booksAuthors', user.id],
+  //       queryFn: () => fetchBooksAuthors(user.id),
+  //     });
+  //     queryClient.prefetchQuery({
+  //       queryKey: ['booksGenres', user.id],
+  //       queryFn: () => fetchBooksGenres(user.id),
+  //     });
+  //     queryClient.prefetchQuery({
+  //       queryKey: ['booksFormats', user.id],
+  //       queryFn: () => fetchBooksFormat(user.id),
+  //     });
+  //     queryClient.prefetchQuery({
+  //       queryKey: ['booksTags', user.id],
+  //       queryFn: () => fetchBooksTags(user.id),
+  //     });
+  //   }
+  // }, [queryClient, user?.id]);
 
   const mutationFn = (book: StringifiedBookFormData | string):Promise<Book> => {
     switch (operation) {
@@ -93,6 +100,9 @@ const useBookOperation = (operation: BookOperation, bookID?: string) => {
         }
         return deleteBook(book);
       }
+      default: {
+        throw new Error(`Unsupported operation: ${operation}`);
+      }
     }
   };
 
@@ -121,12 +131,21 @@ const useBookOperation = (operation: BookOperation, bookID?: string) => {
     },
     onSuccess: async (result) => {
       if (user?.id) {
-        invalidateLibraryQueries(queryClient, user.id);
+
+        // Immediately invalidate all library-related queries
+        await Promise.all([
+          queryClient.invalidateQueries({
+            queryKey: getLibraryPageQueryKey('books', user.id)
+          }),
+          // Existing invalidations
+          invalidateLibraryQueries(queryClient, user.id)
+        ])
       }
       if (operation === 'update' && bookID) {
         queryClient.setQueryData<Book>(['book', bookID], result as Book);
       }
-      prefetchData();
+      await refetchLibraryData();
+      //prefetchData();
     },
     onError: (error, _, context) => {
       if (operation === 'update' && bookID && context?.previousBook) {
@@ -134,41 +153,42 @@ const useBookOperation = (operation: BookOperation, bookID?: string) => {
       }
       console.error(`Error ${operation} book:`, error);
     },
-    onSettled: () => {
+    onSettled: async () => {
       setIsLoading(false);
       if (bookID) {
         queryClient.invalidateQueries({ queryKey: ['book', bookID] });
       }
       // Force a refetch of homepage data
       if (user?.id) {
-        queryClient.invalidateQueries({ queryKey: ['booksHomepage', user.id] });
+        await Promise.all([
+          queryClient.invalidateQueries({
+            queryKey: ['booksHomepage', user.id]
+          })
+        ]);
+        // Force immediate refetch
+        await refetchLibraryData();
       }
     }
   });
 
-  const performOperationWithLoading = async (book: Book | StringifiedBookFormData) => {
+  const performOperationWithLoading = async (payload: OperationPayload<T>) => {
     setIsLoading(true);
     try {
       if (operation === 'delete') {
         // For delete operations, we expect either a string ID or a Book with an ID
-        const bookId = typeof book === 'string'
-          ? book
-          : ('id' in book && book.id)
-            ? book.id.toString()
-            : null;
-        if (!bookId) {
-          throw new Error('Cannot delete a book without an id');
+        if (typeof payload !== 'string') {
+          throw new Error('Invalid book data format');
         }
-        await mutation.mutateAsync(bookId);
+        await mutation.mutateAsync(payload);
       } else {
         // For add/update operations, ensure we're using StringifiedBookFormData
-        if (typeof book === 'string') {
+        if (typeof payload === 'string') {
           throw new Error('Invalid book data format');
         }
-        if (!isStringifiedBookFormData(book)) {
+        if (!isStringifiedBookFormData(payload)) {
           throw new Error('Invalid book data format');
         }
-        await mutation.mutateAsync(book);
+        await mutation.mutateAsync(payload);
       }
     } finally {
       setIsLoading(false);

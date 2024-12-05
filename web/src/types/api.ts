@@ -287,3 +287,14 @@ export type HomepageStatistics = {
     userTags: Array<{ label: string; count: number }>;
   };
 };
+
+
+// Token data structure
+export interface TokenResponse {
+  token: string;
+  expiresAt: string;
+}
+
+export interface CSRFResponse {
+  token: string;
+}

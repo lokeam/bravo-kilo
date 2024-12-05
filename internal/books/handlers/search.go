@@ -10,10 +10,13 @@ import (
 
 	authhandlers "github.com/lokeam/bravo-kilo/internal/auth/handlers"
 	"github.com/lokeam/bravo-kilo/internal/books/repository"
+	searchconfig "github.com/lokeam/bravo-kilo/internal/searchconfig"
 	"github.com/lokeam/bravo-kilo/internal/shared/core"
 	"github.com/lokeam/bravo-kilo/internal/shared/utils"
 	"golang.org/x/oauth2"
 )
+
+
 
 type SearchHandlers struct {
 	logger        *slog.Logger
@@ -59,10 +62,8 @@ func checkEmptyFields(book repository.Book) (bool, []string) {
 	if book.PublishDate == "" {
 		emptyFields = append(emptyFields, "Publish date")
 	}
-	if book.ISBN10 == "" {
+	if book.ISBN10 == "" && book.ISBN13 == "" {
 		emptyFields = append(emptyFields, "ISBN-10")
-	}
-	if book.ISBN13 == "" {
 		emptyFields = append(emptyFields, "ISBN-13")
 	}
 
@@ -147,7 +148,11 @@ func (h *SearchHandlers) formatGoogleBooksResponse(response http.ResponseWriter,
 		if authors, ok := volumeInfo["authors"].([]interface{}); ok {
 			for _, author := range authors {
 				if authorStr, ok := author.(string); ok {
-					formattedBook.Authors = append(formattedBook.Authors, authorStr)
+					formattedBook.Authors = append(
+						formattedBook.Authors,
+						// Normalize author name based on searchconfig listing
+						h.normalizeAuthorName(authorStr),
+					)
 				}
 			}
 		}
@@ -300,4 +305,11 @@ func (h *SearchHandlers) HandleSearchBooks(response http.ResponseWriter, request
 			h.logger.Error("Error encoding response", "error", err)
 			http.Error(response, "Error encoding response", http.StatusInternalServerError)
 	}
+}
+
+func (h *SearchHandlers) normalizeAuthorName(author string) string {
+	if correctName, exists := searchconfig.BookDomainAuthorNameMappings[author]; exists {
+		return correctName
+	}
+	return author
 }

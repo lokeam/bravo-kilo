@@ -120,13 +120,14 @@ const BookDetail = () => {
     }
   }
 
+  const hasNotes = book.notes && Array.isArray(book.notes.ops) && book.notes.ops.length > 0;
   const description = parseRichTextContent(book.description);
-  const notes = parseRichTextContent(book.notes);
+  const notes = hasNotes ? parseRichTextContent(book.notes) : null;
 
   console.log('book.description: ', description);
   console.log('notes: ', notes);
 
-  const hasNotes = notes.ops && notes.ops.length > 0;
+
 
   return (
     <PageWithErrorBoundary fallbackMessage="Error loading book detail page">

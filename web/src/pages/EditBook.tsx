@@ -34,8 +34,8 @@ const EditBook = () => {
   const { showSnackbar } = useStore();
 
   const { data: book, isLoading: isFetchLoading, isError } = useFetchBookById(bookID as string, !!bookID);
-  const { updateBook, isLoading: isUpdateLoading } = useUpdateBook(bookID as string);
-  const { deleteBook } = useDeleteBook();
+  const { updateBook, isLoading: isUpdateLoading, refetchLibraryData } = useUpdateBook(bookID as string);
+  const { deleteBook, refetchLibraryData: refetchAfterDelete } = useDeleteBook();
 
   if (isFetchLoading) return <Loading />;
   if (isError || !book) return <div>Error loading book data</div>;
@@ -46,6 +46,10 @@ const EditBook = () => {
     try {
       const stringifiedData = transformFormData(data);
       await updateBook(stringifiedData);
+
+      // Invalidate queries immediately after successful update
+      await refetchLibraryData();
+
       showSnackbar('Book updated successfully', 'updated');
       navigate('/library');
     } catch (error) {
@@ -85,6 +89,10 @@ const EditBook = () => {
 
     try {
       await deleteBook(bookID as string);
+
+      // Invalidate queries immediately after successful delete
+      refetchAfterDelete();
+
       showSnackbar('Book deleted successfully', 'removed');
       navigate('/library');
     } catch (error) {
