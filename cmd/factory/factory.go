@@ -39,6 +39,7 @@ type Factory struct {
     AuthHandlers          *authhandlers.AuthHandlers
     DeletionWorker        *workers.DeletionWorker
     CacheWorker           *workers.CacheWorker
+    TokenCleanupWorker    *workers.TokenCleanupWorker
     CacheManager          *cache.CacheManager
     LibraryHandler        *library.LibraryHandler
     BaseValidator         *validator.BaseValidator
@@ -67,6 +68,11 @@ func NewFactory(
     if cacheWorker == nil {
         return nil, fmt.Errorf("error initializing factory: cache worker is required")
     }
+
+    tokenCleanupWorker := workers.NewTokenCleanupWorker(
+        models.NewTokenModel(db, log),
+        log.With("worker", "token_cleanup"),
+    )
 
     // Initialize book-related repositories
     authorRepo, err := repository.NewAuthorRepository(db, log)
@@ -277,6 +283,7 @@ func NewFactory(
         authService,
         oauthService,
         tokenService,
+        oauthService.GetConfig(),
     )
 
     bookHandlers, err := handlers.NewBookHandlers(
@@ -382,6 +389,7 @@ func NewFactory(
         SearchHandlers:        searchHandlers,
         DeletionWorker:        deletionWorker,
         CacheWorker:           cacheWorker,
+        TokenCleanupWorker:    tokenCleanupWorker,
         CacheManager:          cacheManager,
         LibraryHandler:        libraryHandler,
         BaseValidator:         baseValidator,

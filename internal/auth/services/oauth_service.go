@@ -19,6 +19,7 @@ type OAuthService interface {
 	RefreshAccessToken(ctx context.Context, refreshToken string) (*oauth2.Token, error)
 	ExchangeCode(ctx context.Context, code string) (*oauth2.Token, error)
 	VerifyIDToken(ctx context.Context, rawIDToken string) (*oidc.IDToken, error)
+	GetConfig() *oauth2.Config
 }
 
 type OAuthServiceImpl struct {
@@ -82,8 +83,9 @@ func NewOAuthService(
 
 func (s *OAuthServiceImpl) GetAuthURL(state string) string {
 	return s.config.AuthCodeURL(
-			state,
-			oauth2.AccessTypeOffline,
+		state,
+		oauth2.AccessTypeOffline,
+		oauth2.ApprovalForce,
 	)
 }
 
@@ -166,16 +168,118 @@ func (s *OAuthServiceImpl) GetUserInfo(ctx context.Context, token *oauth2.Token)
 // GetAccessToken retrieves a valid OAuth access token for the user
 func (s *OAuthServiceImpl) GetAccessToken(ctx context.Context, userID int) (*oauth2.Token, error) {
 	// Get refresh token from repository
-	refreshToken, err := s.tokenRepo.GetRefreshTokenByUserID(userID)
+	//refreshToken, err := s.tokenRepo.GetRefreshTokenByUserID(userID)
+	s.logger.Info("Starting access token retrieval",
+		"userID", userID,
+		"component", "oauth_service",
+	)
+
+	tokenRecord, err := s.tokenRepo.GetLatestActiveToken(userID)
 	if err != nil {
-			return nil, fmt.Errorf("failed to get refresh token: %w", err)
+		s.logger.Error("Failed to get active token",
+				"error", err,
+				"userID", userID,
+				"component", "oauth_service",
+		)
+		return nil, fmt.Errorf("token retrieval error: %w", err)
 	}
-	if refreshToken == "" {
+	if tokenRecord == nil {
 			return nil, ErrNoRefreshToken
 	}
+	s.logger.Debug("Active token found",
+		"userID", userID,
+		"tokenID", tokenRecord.ID,
+		"tokenExpiry", tokenRecord.TokenExpiry,
+		"lastUsed", tokenRecord.LastUsedAt,
+		"component", "oauth_service",
+	)
 
-	// Use refresh token to get new access token
-	return s.RefreshAccessToken(ctx, refreshToken)
+	// Track token usage
+	if err := s.tokenRepo.UpdateLastUsed(tokenRecord.ID); err != nil {
+		s.logger.Error("Failed to update token usage",
+				"error", err,
+				"tokenID", tokenRecord.ID,
+				"component", "oauth_service",
+		)
+		// Non-critical error, continue
+	} else {
+		s.logger.Debug("Updated token last used timestamp",
+			"tokenID", tokenRecord.ID,
+			"userID", userID,
+			"component", "oauth_service",
+		)
+	}
+
+	// Use existing RefreshAccessToken method
+	newToken, err := s.RefreshAccessToken(ctx, tokenRecord.RefreshToken)
+	if err != nil {
+			s.logger.Error("Token refresh failed",
+				"error", err,
+				"tokenID", tokenRecord.ID,
+				"userID", userID,
+				"component", "oauth_service",
+      )
+
+			// Record failed refresh attempt
+			if recordErr := s.tokenRepo.RecordRefreshAttempt(tokenRecord.ID, false, err.Error()); recordErr != nil {
+				s.logger.Error("Failed to record refresh attempt",
+					"error", recordErr,
+					"tokenID", tokenRecord.ID,
+					"userID", userID,
+					"component", "oauth_service",
+				)
+			}
+			return nil, fmt.Errorf("token refresh failed: %w", err)
+	}
+
+	// Record successful refresh
+	if err := s.tokenRepo.RecordRefreshAttempt(tokenRecord.ID, true, ""); err != nil {
+		s.logger.Error("Failed to record successful refresh attempt",
+				"error", err,
+				"tokenID", tokenRecord.ID,
+				"component", "oauth_service",
+		)
+	}
+	s.logger.Info("Successfully refreshed access token",
+		"userID", userID,
+		"tokenID", tokenRecord.ID,
+		"newTokenExpiry", newToken.Expiry,
+		"hasNewRefreshToken", newToken.RefreshToken != "",
+		"component", "oauth_service",
+	)
+
+	// Handle token rotation if we got a new refresh token
+	if newToken.RefreshToken != "" && newToken.RefreshToken != tokenRecord.RefreshToken {
+		s.logger.Info("New refresh token received, attempting rotation",
+			"userID", userID,
+			"tokenID", tokenRecord.ID,
+			"component", "oauth_service",
+		)
+
+		err = s.tokenRepo.Rotate(
+				userID,
+				newToken.RefreshToken,
+				tokenRecord.RefreshToken,
+				newToken.Expiry,
+		)
+		if err != nil {
+				s.logger.Error("Token rotation failed",
+						"error", err,
+						"userID", userID,
+						"component", "oauth_service",
+				)
+				// Continue as we still have valid token
+		} else {
+			s.logger.Info("Token rotation successful",
+				"userID", userID,
+				"tokenID", tokenRecord.ID,
+				"newExpiry", newToken.Expiry,
+				"component", "oauth_service",
+			)
+		}
+	}
+
+	return newToken, nil
 }
 
 func (s *OAuthServiceImpl) RefreshAccessToken(ctx context.Context, refreshToken string) (*oauth2.Token, error) {
@@ -189,4 +293,8 @@ func (s *OAuthServiceImpl) RefreshAccessToken(ctx context.Context, refreshToken 
 	}
 
 	return newToken, nil
+}
+
+func (s *OAuthServiceImpl) GetConfig() *oauth2.Config {
+	return s.config
 }

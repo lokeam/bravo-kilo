@@ -25,6 +25,7 @@ type AuthResponse struct {
     Token     string         `json:"token"`
     ExpiresAt time.Time      `json:"expiresAt"`
     User      *models.User   `json:"user"`
+    RefreshToken string      `json:"refreshToken"`
 }
 
 type UserSession struct {
@@ -45,6 +46,11 @@ type AuthServiceImpl struct {
 var (
     ErrInvalidToken = errors.New("invalid token")
     ErrUserNotFound = errors.New("user not found")
+)
+
+const (
+    // 30 days for refresh tokens
+    RefreshTokenDuration = 30 * 24 * time.Hour
 )
 
 func NewAuthService(
@@ -94,11 +100,22 @@ func (as *AuthServiceImpl) ProcessGoogleAuth(ctx context.Context, code string) (
         return nil, fmt.Errorf("code exchange failed: %w", err)
     }
 
+    as.logger.Info("OAuth token received",
+        "hasRefreshToken", token.RefreshToken != "",
+        "accessTokenExpiry", token.Expiry,
+        "tokenType", token.TokenType,
+        "expiresIn", int(time.Until(token.Expiry).Seconds()),
+    )
+
     // 2. Get user info from token
     userInfo, err := as.oauthService.GetUserInfo(ctx, token)
     if err != nil {
         return nil, fmt.Errorf("failed to get user info: %w", err)
     }
+    as.logger.Info("User info received",
+        "email", userInfo.Email,
+        "emailVerified", userInfo.EmailVerified,
+    )
 
     // Verify email is present and verified
     if !userInfo.EmailVerified {
@@ -132,9 +149,26 @@ func (as *AuthServiceImpl) ProcessGoogleAuth(ctx context.Context, code string) (
             RefreshToken: token.RefreshToken,
             TokenExpiry:  token.Expiry,
         }
+        as.logger.Info("Attempting to store refresh token",
+            "userID", user.ID,
+            "tokenExpiry", token.Expiry,
+        )
+
         if err := as.tokenRepo.Insert(tokenRecord); err != nil {
+            as.logger.Error("Failed to store refresh token",
+                "error", err,
+                "userID", user.ID,
+            )
             return nil, fmt.Errorf("failed to store refresh token: %w", err)
         }
+
+        as.logger.Info("Successfully stored refresh token",
+            "userID", user.ID,
+        )
+    } else {
+        as.logger.Warn("No refresh token received from Google",
+            "userID", user.ID,
+        )
     }
 
     // 5. Create JWT
@@ -148,6 +182,7 @@ func (as *AuthServiceImpl) ProcessGoogleAuth(ctx context.Context, code string) (
         Token:     jwtString,
         ExpiresAt: expirationTime,
         User:      user,
+        RefreshToken: token.RefreshToken,
     }, nil
 }
 

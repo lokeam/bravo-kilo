@@ -97,6 +97,8 @@ func main() {
 
 	// Start background workers
 	f.DeletionWorker.StartDeletionWorker()
+	f.TokenCleanupWorker.Start()
+	defer f.TokenCleanupWorker.Stop()
 	defer f.DeletionWorker.StopDeletionWorker()
 	defer f.CacheWorker.Shutdown()
 

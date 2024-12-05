@@ -20,6 +20,7 @@ type AuthHandlers struct {
 	oauthService authservice.OAuthService
 	tokenService authservice.TokenService
 	isProduction bool
+	config       *oauth2.Config
 }
 
 type DeleteAccountResponse struct {
@@ -40,6 +41,7 @@ func NewAuthHandlers(
 	authService authservice.AuthService,
 	oauthService authservice.OAuthService,
 	tokenService authservice.TokenService,
+	config *oauth2.Config,
 ) *AuthHandlers {
 	if logger == nil {
 			panic("logger cannot be nil")
@@ -67,6 +69,7 @@ func NewAuthHandlers(
 			oauthService: oauthService,
 			tokenService: tokenService,
 			isProduction: isProduction,
+			config:       config,
 	}
 }
 
@@ -99,14 +102,30 @@ func (h *AuthHandlers) HandleGoogleCallback(w http.ResponseWriter, r *http.Reque
 			h.handleOAuthError(w, r, "state_mismatch", err)
 			return
 	}
+	h.logger.Info("Starting OAuth callback processing",
+		"state", state,
+		"handler", "auth",
+	)
+
 
 	// 2. Process OAuth callback
 	code := r.URL.Query().Get("code")
 	authResponse, err := h.authService.ProcessGoogleAuth(r.Context(), code)
 	if err != nil {
-			h.handleOAuthError(w, r, "auth_failed", err)
-			return
+		h.logger.Error("Failed to exchange code for token",
+			"error", err,
+			"handler", "auth")
+		h.handleOAuthError(w, r, "auth_failed", err)
+		return
 	}
+
+    // Add check for refresh token
+		if authResponse.RefreshToken == "" {
+			h.logger.Warn("No refresh token received, redirecting for reauthorization",
+					"handler", "auth")
+			h.handleMissingRefreshToken(w, r)
+			return
+		}
 
 	// 3. Set session cookie
 	h.tokenService.CreateSessionCookie(w, authResponse.Token, authResponse.ExpiresAt)
@@ -133,12 +152,16 @@ func (h *AuthHandlers) HandleRefreshCSRFToken(w http.ResponseWriter, r *http.Req
 
 // Retrieve valid JWT access token for user
 func (h *AuthHandlers) GetUserAccessToken(r *http.Request) (*oauth2.Token, error) {
+
 	// 1. Get userID from JWT
 	userID, err := h.tokenService.GetUserIDFromToken(r)
 	if err != nil {
 			h.logger.Error("Failed to get user ID from token", "error", err)
 			return nil, fmt.Errorf("invalid token: %w", err)
 	}
+
+	h.logger.Debug("GetUserAccessToken called",
+		"userID", userID)
 
 	// 2. Get access token using userID
 	token, err := h.oauthService.GetAccessToken(r.Context(), userID)
@@ -374,3 +397,21 @@ func (h *AuthHandlers) handleTokenVerificationError(w http.ResponseWriter, error
 	w.WriteHeader(statusCode)
 	json.NewEncoder(w).Encode(map[string]string{"error": message})
 }
+
+func (h *AuthHandlers) handleMissingRefreshToken(w http.ResponseWriter, r *http.Request) {
+    // Generate state using the existing tokenService
+    state := h.tokenService.GenerateState()
+
+    // Set the state cookie
+    h.tokenService.SetStateCookie(w, state)
+
+    // Revoke current access and redirect to auth with force prompt
+    redirectURL := h.config.AuthCodeURL(
+        state,
+        oauth2.AccessTypeOffline,
+        oauth2.ApprovalForce,
+    )
+    http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
+}
+
+

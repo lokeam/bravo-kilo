@@ -46,6 +46,12 @@ type TokenResponse struct {
 	ExpiresAt time.Time `json:"expiresAt"`
 }
 
+// MaxRefreshCount represents the maximum number of times a token can be refreshed
+// Based on: 7 days * 24 hours * 60 minutes / 55 minutes ≈ 183 legitimate refreshes
+// Adding ~30% buffer for network issues and retries
+const MaxRefreshCount = 250
+
+
 func NewTokenService(
 	logger *slog.Logger,
 	tokenModel models.TokenModel,
@@ -154,33 +160,113 @@ func (s *TokenServiceImpl) RefreshJWT(oldToken string) (string, error) {
 }
 
 func (s *TokenServiceImpl) RefreshToken(r *http.Request) (*TokenResponse, error) {
+	s.logger.Debug("Starting token refresh process",
+		"component", "token_service",
+	)
+
 	// 1. Get and verify current token
 	cookie, err := r.Cookie("token")
 	if err != nil {
+			s.logger.Error("No token cookie found",
+				"error", err,
+				"component", "token_service",
+			)
 			return nil, fmt.Errorf("no token cookie: %w", err)
 	}
 
 	claims, err := s.VerifyJWT(cookie.Value)
 	if err != nil {
+		s.logger.Error("Invalid token during refresh",
+			"error", err,
+			"component", "token_service",
+		)
 			return nil, fmt.Errorf("invalid token: %w", err)
 	}
 
-	// 2. Check if token needs refresh (within 5 minutes of expiration)
-	if time.Until(claims.ExpiresAt.Time) > 5*time.Minute {
+	s.logger.Debug("Token verification successful",
+		"userID", claims.UserID,
+		"tokenExpiresAt", claims.ExpiresAt.Time,
+		"component", "token_service",
+  )
+
+	// 2. Check if token needs refresh
+	timeUntilExpiry := time.Until(claims.ExpiresAt.Time)
+	if timeUntilExpiry > 5*time.Minute {
+			s.logger.Info("Token refresh rejected - not close to expiration",
+					"userID", claims.UserID,
+					"timeUntilExpiry", timeUntilExpiry,
+					"component", "token_service",
+			)
 			return nil, fmt.Errorf("token is not close to expiration")
+	}
+
+	// UPDATED - Invalidate all previous tokens for user
+	currentToken, err := s.tokenModel.GetLatestActiveToken(claims.UserID)
+	if err != nil {
+		s.logger.Error("Failed to get latest active token",
+			"error", err,
+			"userID", claims.UserID,
+			"component", "token_service",
+		)
+    } else if currentToken != nil {
+			s.logger.Info("Current token status",
+					"userID", claims.UserID,
+					"refreshCount", currentToken.RefreshCount,
+					"maxAllowed", MaxRefreshCount,
+					"component", "token_service",
+			)
+
+			if currentToken.RefreshCount > MaxRefreshCount {
+					s.logger.Warn("Excessive token refreshes detected",
+							"userID", claims.UserID,
+							"refreshCount", currentToken.RefreshCount,
+							"maxAllowed", MaxRefreshCount,
+							"component", "token_service",
+					)
+			}
+	}
+
+  // Invalidate previous tokens
+  if err := s.tokenModel.DeleteByUserID(claims.UserID); err != nil {
+			s.logger.Error("Failed to invalidate previous tokens",
+					"error", err,
+					"userID", claims.UserID,
+					"component", "token_service",
+			)
+	} else {
+			s.logger.Debug("Successfully invalidated previous tokens",
+					"userID", claims.UserID,
+					"component", "token_service",
+			)
 	}
 
 	// 3. Generate new token with extended expiration (1 week)
 	expirationTime := time.Now().Add(7 * 24 * time.Hour)
 	newToken, err := s.CreateJWT(claims.UserID, expirationTime)
 	if err != nil {
-			return nil, fmt.Errorf("failed to create new token: %w", err)
+		s.logger.Error("Failed to create new JWT",
+			"error", err,
+			"userID", claims.UserID,
+			"component", "token_service",
+		)
+		return nil, fmt.Errorf("failed to create new token: %w", err)
 	}
 
 	// 4. Rotate token in database
 	if err := s.tokenModel.Rotate(claims.UserID, newToken, cookie.Value, expirationTime); err != nil {
-			return nil, fmt.Errorf("failed to rotate token: %w", err)
+		s.logger.Error("Failed to rotate token",
+			"error", err,
+			"userID", claims.UserID,
+			"component", "token_service",
+    )
+		return nil, fmt.Errorf("failed to rotate token: %w", err)
 	}
+
+	s.logger.Info("Successfully refreshed token",
+		"userID", claims.UserID,
+		"newExpiryTime", expirationTime,
+		"component", "token_service",
+	)
 
 	return &TokenResponse{
 			Token:     newToken,
