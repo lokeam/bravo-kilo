@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"net/http"
 	"sync"
 	"time"
 
@@ -8,10 +9,43 @@ import (
 )
 
 type RateLimitConfig struct {
-    RequestsPerMinute int
-    BurstSize        int
-    TokenExpiration  time.Duration
+	  Type                  RateLimitType
+    RequestsPerMinute     int
+    BurstSize             int
+    TokenExpiration       time.Duration
 }
+
+type RateLimitType string
+
+const (
+	TypeCritical     RateLimitType = "critical"   // Security-sensitive ops
+	TypeIntensive    RateLimitType = "intensive"  // Resource-heavy ops
+	TypeStandard     RateLimitType = "standard"   // Normal API ops
+)
+
+var configs = map[RateLimitType]RateLimitConfig{
+	TypeCritical: {
+		RequestsPerMinute: 20,                    // OWASP Auth Guidelines recommends max 20 attempts per min
+		BurstSize:         2,
+		TokenExpiration:   5 * time.Minute,       // AWS Cognito limits auth attempts to 5 per second
+	},
+	TypeIntensive:{
+		RequestsPerMinute: 6,                    // GCS Recommends limiting large uploads to 1 per 10 sec
+		BurstSize:         1,                    // No bursts for heavy ops
+		TokenExpiration:   30 * time.Minute,
+	},
+	TypeStandard: {
+		RequestsPerMinute: 300,                  // Github API limits approx 85 per min
+		BurstSize:         10,                   // No burst for heavy ops
+		TokenExpiration:   15 * time.Minute,     // Twitter API limites 450 requests per 15min
+	},
+}
+
+var (
+	criticalLimiter = NewRateLimiterService(configs[TypeCritical])
+	intensiveLimiter = NewRateLimiterService(configs[TypeIntensive])
+	standardLimiter = NewRateLimiterService(configs[TypeStandard])
+)
 
 type userLimiter struct {
 	limiter *rate.Limiter
@@ -25,30 +59,6 @@ type RateLimiterService struct {
 	cleanup  time.Duration
 }
 
-// Define rate limits for different endpoint types
-// var endpointLimits = map[string]RateLimitConfig{
-//     "read": {
-//         RequestsPerMinute: 300,  // Higher limit for read operations
-//         BurstSize:        50,
-//         TokenExpiration:  24 * time.Hour,
-//     },
-//     "write": {
-//         RequestsPerMinute: 60,   // Stricter limit for write operations
-//         BurstSize:        10,
-//         TokenExpiration:  24 * time.Hour,
-//     },
-//     "export": {
-//         RequestsPerMinute: 10,   // Very strict for resource-intensive operations
-//         BurstSize:        2,
-//         TokenExpiration:  24 * time.Hour,
-//     },
-//     "auth": {
-//         RequestsPerMinute: 30,   // Strict for auth operations
-//         BurstSize:        5,
-//         TokenExpiration:  15 * time.Minute,
-//     },
-// }
-
 func NewRateLimiterService(config RateLimitConfig) *RateLimiterService {
   service := &RateLimiterService{
 		limiters: make(map[string]*userLimiter),
@@ -58,7 +68,6 @@ func NewRateLimiterService(config RateLimitConfig) *RateLimiterService {
 
 	// Start cleanup goroutine
 	go service.cleanupLoop()
-
 	return service
 }
 
@@ -104,4 +113,49 @@ func (s *RateLimiterService) cleanupLoop() {
 		}
 		s.mu.Unlock()
 	}
+}
+
+// Specific middleware fns for each rate limit type
+
+// Rate limiting for auth/security ops
+func CriticalRateLimiter(next http.Handler) http.Handler {
+	return createRateLimiter(criticalLimiter, next)
+}
+
+// Rate limiting for resource-heavy ops
+func IntensiveRateLimiter(next http.Handler) http.Handler {
+	return createRateLimiter(intensiveLimiter, next)
+}
+
+// Standard rate limiting for normal API ops
+func StandardRateLimiter(next http.Handler) http.Handler {
+	return createRateLimiter(standardLimiter, next)
+}
+
+// Helper fn to create consistent rate limiting behavior
+func createRateLimiter(service *RateLimiterService, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		logger.Info("RateLimiter middleware called",
+			"path", r.URL.Path,
+			"method", r.Method,
+			"type", service.config.Type) // Add type for better debugging
+
+			if !service.Allow(r.RemoteAddr) {
+				logger.Warn("Rate limit exceeded",
+						"path", r.URL.Path,
+						"method", r.Method,
+						"remoteAddr", r.RemoteAddr,
+						"type", service.config.Type)
+
+				w.Header().Set("Retry-After", "30")
+				http.Error(w, "You've exceeded your rate limit. Please try again later.", http.StatusTooManyRequests)
+				return
+		}
+
+		logger.Info("Request passed rate limiter",
+		"path", r.URL.Path,
+		"method", r.Method)
+
+		next.ServeHTTP(w, r)
+	})
 }

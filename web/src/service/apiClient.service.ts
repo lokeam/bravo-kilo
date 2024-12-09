@@ -15,6 +15,7 @@ import {
   isBookTagsData,
   TokenResponse,
 } from '../types/api';
+import { useDomainStore } from '../store/useDomainStore';
 import Cookies from 'js-cookie';
 //import { LibraryPageResponse } from '../queries/types/responses';
 
@@ -188,6 +189,13 @@ apiClient.interceptors.request.use(
       baseURL: config.baseURL
     });
     console.groupEnd();
+
+    // Set domain and params
+    const { currentDomain } = useDomainStore.getState();
+    config.params = {
+      ...config.params,
+      domain: currentDomain
+    };
 
     // For POST, PUT, DELETE requests
     if (['post', 'put', 'delete'].includes(config.method?.toLowerCase() || '')) {

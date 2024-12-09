@@ -2,6 +2,9 @@ import SettingsItemThemeBtn from './SettingItemThemeBtn';
 import SettingsItemExportBtn from './SettingItemExportBtn';
 import SettingsItemAnimationBtn from './SettingItemAnimationBtn';
 import SettingsItemDeleteAcctBtn from './SettingItemDeleteAcctBtn';
+import SettingsItemDomainBookBtn from './SettingItemDomainBookBtn';
+import SettingsItemDomainGameBtn from './SettingItemDomainGameBtn';
+
 
 type SettingsItemProps = {
   settingsData: {
@@ -21,6 +24,8 @@ function SettingsItem({ settingsData, isLastItem, variant }: SettingsItemProps) 
         <p className="text-nevada-gray">{settingsData.copy}</p>
       </div>
       <div className="grid w-full">
+        { variant === 'domain-book' && <SettingsItemDomainBookBtn /> }
+        { variant === 'domain-game' && <SettingsItemDomainGameBtn />}
         { variant === 'theme' && <SettingsItemThemeBtn /> }
         { variant === 'export' && <SettingsItemExportBtn /> }
         { variant === 'animation' && <SettingsItemAnimationBtn /> }

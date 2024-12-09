@@ -6,6 +6,8 @@ import { useThemeStore } from '../../store/useThemeStore';
 import Avatar from '../Avatar/Avatar';
 import Modal from '../Modal/Modal';
 import AutoComplete from '../AutoComplete/AutoComplete';
+import DomainToggle from '../DomainToggle/DomainToggle';
+
 
 import BrandLogo from '../CustomSVGs/BrandLogo';
 import { IoSearchOutline } from 'react-icons/io5';
@@ -80,6 +82,7 @@ function TopNavigation() {
               >
                 <IoSearchOutline size={20} className="text-black dark:text-az-white"/>
               </Link>
+              <DomainToggle />
               <button
                 className="flex border-none bg-transparent antialiased translate-x-0 mid:translate-x-0"
                 onClick={openModal}

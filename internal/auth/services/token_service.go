@@ -1,6 +1,7 @@
 package authservices
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/base64"
@@ -14,6 +15,7 @@ import (
 	"github.com/lokeam/bravo-kilo/internal/shared/models"
 	"github.com/lokeam/bravo-kilo/internal/shared/types"
 )
+
 type Claims struct {
 	UserID int `json:"user_id"`
 	jwt.RegisteredClaims
@@ -22,15 +24,15 @@ type Claims struct {
 type TokenService interface {
 	CreateJWT(userID int, expirationTime time.Time) (string, error)
 	VerifyJWT(tokenStr string) (*types.Claims, error)
-	RefreshJWT(oldToken string) (string, error)
-	RefreshToken(r *http.Request) (*TokenResponse, error)
+	RefreshToken(ctx context.Context,r *http.Request) (*TokenResponse, error)
 	GetUserIDFromToken(r *http.Request) (int, error)
 	CreateSessionCookie(w http.ResponseWriter, token string, expiry time.Time)
 	ClearSessionCookie(w http.ResponseWriter)
 	GenerateState() string
 	SetStateCookie(w http.ResponseWriter, state string)
 	VerifyStateCookie(r *http.Request, state string) error
-	Rotate(userID int, newToken, oldToken string, expiry time.Time) error
+	Rotate(ctx context.Context, userID int, newToken, oldToken string, expiry time.Time) error
+	ShouldRefreshToken(token *models.Token) bool
 }
 
 type TokenServiceImpl struct {
@@ -46,10 +48,27 @@ type TokenResponse struct {
 	ExpiresAt time.Time `json:"expiresAt"`
 }
 
-// MaxRefreshCount represents the maximum number of times a token can be refreshed
-// Based on: 7 days * 24 hours * 60 minutes / 55 minutes ≈ 183 legitimate refreshes
-// Adding ~30% buffer for network issues and retries
-const MaxRefreshCount = 250
+const (
+
+	// MaxRefreshCount represents the maximum number of times a token can be refreshed
+	// Based on: 7 days * 24 hours * 60 minutes / 55 minutes ≈ 183 legitimate refreshes
+	// Adding ~30% buffer for network issues and retries
+	MaxRefreshCount = 250
+
+	// Token lifetime is 24 hours
+	TokenLifetime = 24 * time.Hour
+
+	// Start refresh attempts when token has 30% of lifetime remaining (17 hours into token lifetime)
+	RefreshThreshold = TokenLifetime * 7 / 10
+)
+
+var (
+	ErrTokenExpired        = fmt.Errorf("token expired")
+	ErrTokenInvalid        = fmt.Errorf("token invalid")
+	ErrTokenReused         = fmt.Errorf("token reuse detected")
+	ErrRefreshRateExceeded = fmt.Errorf("refresh rate exceeded")
+	ErrTokenFamilyRevoked  = fmt.Errorf("token family revoked")
+)
 
 
 func NewTokenService(
@@ -106,12 +125,12 @@ func (s *TokenServiceImpl) CreateJWT(userID int, expirationTime time.Time) (stri
 func (s *TokenServiceImpl) VerifyJWT(tokenStr string) (*types.Claims, error) {
 	token, err := crypto.VerifyToken(tokenStr, s.publicKey)
 	if err != nil || !token.Valid {
-			return nil, fmt.Errorf("invalid token: %w", err)
+			return nil, ErrTokenInvalid
 	}
 
 	claims, ok := token.Claims.(*types.Claims)
 	if !ok {
-			return nil, fmt.Errorf("invalid token claims")
+			return nil, ErrTokenInvalid
 	}
 
 	return claims, nil
@@ -121,45 +140,18 @@ func (s *TokenServiceImpl) VerifyJWT(tokenStr string) (*types.Claims, error) {
 func (s *TokenServiceImpl) GetUserIDFromToken(r *http.Request) (int, error) {
 	cookie, err := r.Cookie("token")
 	if err != nil {
-			return 0, fmt.Errorf("no token cookie: %w", err)
+			return 0, ErrTokenInvalid
 	}
 
 	claims, err := s.VerifyJWT(cookie.Value)
 	if err != nil {
-			return 0, fmt.Errorf("invalid token: %w", err)
+			return 0, ErrTokenInvalid
 	}
 
 	return claims.UserID, nil
 }
 
-func (s *TokenServiceImpl) RefreshJWT(oldToken string) (string, error) {
-	// Verify the old token
-	claims, err := s.VerifyJWT(oldToken)
-	if err != nil {
-			return "", fmt.Errorf("invalid token: %w", err)
-	}
-
-	// Check if token needs refresh (within 5 minutes of expiration)
-	if time.Until(claims.ExpiresAt.Time) > 5*time.Minute {
-			return "", fmt.Errorf("token is not close to expiration")
-	}
-
-	// Generate new token with extended expiration
-	expirationTime := time.Now().Add(7 * 24 * time.Hour)
-	newToken, err := s.CreateJWT(claims.UserID, expirationTime)
-	if err != nil {
-			return "", fmt.Errorf("failed to create new token: %w", err)
-	}
-
-	// Rotate token in database
-	if err := s.tokenModel.Rotate(claims.UserID, newToken, oldToken, expirationTime); err != nil {
-			return "", fmt.Errorf("failed to rotate token: %w", err)
-	}
-
-	return newToken, nil
-}
-
-func (s *TokenServiceImpl) RefreshToken(r *http.Request) (*TokenResponse, error) {
+func (s *TokenServiceImpl) RefreshToken(ctx context.Context, r *http.Request) (*TokenResponse, error) {
 	s.logger.Debug("Starting token refresh process",
 		"component", "token_service",
 	)
@@ -171,16 +163,26 @@ func (s *TokenServiceImpl) RefreshToken(r *http.Request) (*TokenResponse, error)
 				"error", err,
 				"component", "token_service",
 			)
-			return nil, fmt.Errorf("no token cookie: %w", err)
+			return nil, ErrNoRefreshToken
 	}
 
+	// 2. Verify JWT signature and claims
 	claims, err := s.VerifyJWT(cookie.Value)
 	if err != nil {
 		s.logger.Error("Invalid token during refresh",
 			"error", err,
 			"component", "token_service",
 		)
-			return nil, fmt.Errorf("invalid token: %w", err)
+			return nil, ErrTokenInvalid
+	}
+
+	// Check context before proceeding
+	if err := ctx.Err(); err != nil {
+		s.logger.Error("Context cancelled during refresh",
+			"error", err,
+			"component", "token_service",
+		)
+		return nil, fmt.Errorf("operation cancelled: %w", err)
 	}
 
 	s.logger.Debug("Token verification successful",
@@ -189,59 +191,56 @@ func (s *TokenServiceImpl) RefreshToken(r *http.Request) (*TokenResponse, error)
 		"component", "token_service",
   )
 
-	// 2. Check if token needs refresh
-	timeUntilExpiry := time.Until(claims.ExpiresAt.Time)
-	if timeUntilExpiry > 5*time.Minute {
-			s.logger.Info("Token refresh rejected - not close to expiration",
-					"userID", claims.UserID,
-					"timeUntilExpiry", timeUntilExpiry,
-					"component", "token_service",
-			)
-			return nil, fmt.Errorf("token is not close to expiration")
-	}
-
-	// UPDATED - Invalidate all previous tokens for user
-	currentToken, err := s.tokenModel.GetLatestActiveToken(claims.UserID)
+	// 3. Validate refresh token record
+	currentToken, err := s.tokenModel.GetLatestActiveToken(ctx, claims.UserID)
 	if err != nil {
-		s.logger.Error("Failed to get latest active token",
+		s.logger.Error("Failed to validate refresh token",
 			"error", err,
 			"userID", claims.UserID,
 			"component", "token_service",
 		)
-    } else if currentToken != nil {
-			s.logger.Info("Current token status",
-					"userID", claims.UserID,
-					"refreshCount", currentToken.RefreshCount,
-					"maxAllowed", MaxRefreshCount,
-					"component", "token_service",
-			)
-
-			if currentToken.RefreshCount > MaxRefreshCount {
-					s.logger.Warn("Excessive token refreshes detected",
-							"userID", claims.UserID,
-							"refreshCount", currentToken.RefreshCount,
-							"maxAllowed", MaxRefreshCount,
-							"component", "token_service",
-					)
-			}
+		return nil, ErrTokenExpired
+	}
+	if currentToken == nil {
+		return nil, fmt.Errorf("token not found or expired")
 	}
 
-  // Invalidate previous tokens
-  if err := s.tokenModel.DeleteByUserID(claims.UserID); err != nil {
-			s.logger.Error("Failed to invalidate previous tokens",
-					"error", err,
-					"userID", claims.UserID,
-					"component", "token_service",
-			)
-	} else {
-			s.logger.Debug("Successfully invalidated previous tokens",
-					"userID", claims.UserID,
-					"component", "token_service",
-			)
+	// Validate token family
+	if err := s.validateTokenFamily(ctx, currentToken); err != nil {
+		s.logger.Error("Token family validation failed",
+			"error", err,
+			"userID", claims.UserID,
+			"component", "token_service",
+		)
+		return nil, err
 	}
 
-	// 3. Generate new token with extended expiration (1 week)
-	expirationTime := time.Now().Add(7 * 24 * time.Hour)
+	// 4. Verify userID matches JWT and refresh token record
+	if claims.UserID != currentToken.UserID {
+		s.logger.Error("User ID mismatch between JWT and token record",
+			"jwtUserID", claims.UserID,
+			"tokenUserID", currentToken.UserID,
+			"component", "token_service",
+		)
+		return nil, fmt.Errorf("user ID mismatch between JWT and token record")
+	}
+
+	// 5. Check if refresh is needed
+	if !s.ShouldRefreshToken(currentToken) {
+		s.logger.Debug("Token refresh not needed yet",
+			"userID", claims.UserID,
+			"tokenID", currentToken.ID,
+			"expiresIn", time.Until(currentToken.TokenExpiry),
+			"component", "token_service",
+		)
+		return &TokenResponse{
+			Token:     cookie.Value,
+			ExpiresAt: currentToken.TokenExpiry,
+		}, nil
+	}
+
+	// 6. Generate new token
+	expirationTime := time.Now().Add(TokenLifetime)
 	newToken, err := s.CreateJWT(claims.UserID, expirationTime)
 	if err != nil {
 		s.logger.Error("Failed to create new JWT",
@@ -252,18 +251,19 @@ func (s *TokenServiceImpl) RefreshToken(r *http.Request) (*TokenResponse, error)
 		return nil, fmt.Errorf("failed to create new token: %w", err)
 	}
 
-	// 4. Rotate token in database
-	if err := s.tokenModel.Rotate(claims.UserID, newToken, cookie.Value, expirationTime); err != nil {
+	// 7. Rotate token in database, maintain family
+	if err := s.tokenModel.Rotate(ctx, claims.UserID, newToken, cookie.Value, expirationTime); err != nil {
 		s.logger.Error("Failed to rotate token",
 			"error", err,
 			"userID", claims.UserID,
 			"component", "token_service",
-    )
-		return nil, fmt.Errorf("failed to rotate token: %w", err)
+		)
 	}
 
 	s.logger.Info("Successfully refreshed token",
 		"userID", claims.UserID,
+		"tokenID", currentToken.ID,
+		"familyID", currentToken.FamilyID,
 		"newExpiryTime", expirationTime,
 		"component", "token_service",
 	)
@@ -321,8 +321,53 @@ func (s *TokenServiceImpl) ClearSessionCookie(w http.ResponseWriter) {
 	})
 }
 
-
 // Todo: refactor h.models.TokenModel.Rotate
-func (s *TokenServiceImpl) Rotate(userID int, newToken, oldToken string, expiry time.Time) error {
-	return s.tokenModel.Rotate(userID, newToken, oldToken, expiry)
+func (s *TokenServiceImpl) Rotate(ctx context.Context,userID int, newToken, oldToken string, expiry time.Time) error {
+	return s.tokenModel.Rotate(ctx,userID, newToken, oldToken, expiry)
+}
+
+func (s *TokenServiceImpl) ShouldRefreshToken(token *models.Token) bool {
+	if token == nil {
+		return false
+	}
+
+	timeUntilExpiry := time.Until(token.TokenExpiry)
+
+	s.logger.Debug("Checking token refresh status",
+		"tokenID", token.ID,
+		"timeUntilExpiry", timeUntilExpiry,
+		"refreshThreshold", RefreshThreshold,
+		"component", "token_service",
+	)
+
+	return timeUntilExpiry < RefreshThreshold
+}
+
+func (s *TokenServiceImpl) validateTokenFamily(ctx context.Context, token *models.Token) error {
+	if token.FamilyID == "" {
+			s.logger.Error("Invalid token family",
+					"userID", token.UserID,
+					"component", "token_service",
+			)
+			return fmt.Errorf("invalid token family")
+	}
+
+	isRevoked, err := s.tokenModel.IsFamilyRevoked(ctx, token.FamilyID)
+	if err != nil {
+			s.logger.Error("Failed to check family status",
+					"error", err,
+					"familyID", token.FamilyID,
+					"component", "token_service",
+			)
+			return fmt.Errorf("check family status: %w", err)
+	}
+	if isRevoked {
+			s.logger.Warn("Attempt to use token from revoked family",
+					"familyID", token.FamilyID,
+					"userID", token.UserID,
+					"component", "token_service",
+			)
+			return ErrTokenFamilyRevoked
+	}
+	return nil
 }

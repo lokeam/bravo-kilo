@@ -80,19 +80,22 @@ func (app *application) routes(
 		r.Use(csrfMiddleware)
 		r.Use(middleware.CSRFTokens)
 
-		r.Get("/api/v1/csrf-token", authHandlers.HandleRefreshCSRFToken)
+		r.With(middleware.StandardRateLimiter).Get("/api/v1/csrf-token", authHandlers.HandleRefreshCSRFToken)
 
 		r.Route("/api/v1/user", func(r chi.Router) {
 			r.Use(middleware.VerifyJWT)
+			r.Use(middleware.StandardRateLimiter)
+
 			r.Get("/books", bookHandlers.HandleGetAllUserBooks)
 			r.Get("/books/authors", bookHandlers.HandleGetBooksByAuthors)
 			r.Get("/books/format", bookHandlers.HandleGetBooksByFormat)
 			r.Get("/books/genres", bookHandlers.HandleGetBooksByGenres)
 			r.Get("/books/homepage", bookHandlers.HandleGetHomepageData)
 			r.Get("/books/tags", bookHandlers.HandleGetBooksByTags)
-			// Apply rate limiting on uploads + exports
-			r.With(middleware.RateLimiter).Post("/upload", bookHandlers.UploadCSV)
-			r.With(middleware.RateLimiter).Get("/export", bookHandlers.HandleExportUserBooks)
+
+			// Apply intensive rate limiting on uploads + exports
+			r.With(middleware.IntensiveRateLimiter).Post("/upload", bookHandlers.UploadCSV)
+			r.With(middleware.IntensiveRateLimiter).Get("/export", bookHandlers.HandleExportUserBooks)
 		})
 
 		r.Route("/api/v1/books", func(r chi.Router) {
@@ -101,13 +104,20 @@ func (app *application) routes(
 				Domain: core.BookDomainType,
 				Timeout: 30 * time.Second,
 			}))
-			r.Get("/by-id/{bookID}", bookHandlers.HandleGetBookByID)
-			r.Get("/search", searchHandlers.HandleSearchBooks)
-			r.With(middleware.RateLimiter).Get("/summary", bookHandlers.HandleGetGeminiBookSummary)
-			r.Get("/by-title", bookHandlers.HandleGetBookIDByTitle)
-			r.With(middleware.RateLimiter).Put("/{bookID}", bookHandlers.HandleUpdateBook)
-			r.With(middleware.RateLimiter).Post("/add", bookHandlers.HandleInsertBook)
-			r.With(middleware.RateLimiter).Delete("/{bookID}", bookHandlers.HandleDeleteBook)
+
+			// Standard rate limiting for bookID
+			r.With(middleware.StandardRateLimiter).Get("/by-id/{bookID}", bookHandlers.HandleGetBookByID)
+
+			// More restrictive rate limiting for search
+			r.With(middleware.IntensiveRateLimiter).Get("/search", searchHandlers.HandleSearchBooks)
+
+			// Standard rate limiting for summary + bookID
+			r.With(middleware.StandardRateLimiter).Get("/summary", bookHandlers.HandleGetGeminiBookSummary)
+			r.With(middleware.StandardRateLimiter).Get("/by-title", bookHandlers.HandleGetBookIDByTitle)
+
+			r.With(middleware.StandardRateLimiter).Put("/{bookID}", bookHandlers.HandleUpdateBook)
+			r.With(middleware.StandardRateLimiter).Post("/add", bookHandlers.HandleInsertBook)
+			r.With(middleware.StandardRateLimiter).Delete("/{bookID}", bookHandlers.HandleDeleteBook)
 		})
 
 		r.Route("/api/v1/pages", func(r chi.Router) {
@@ -118,6 +128,7 @@ func (app *application) routes(
 			}))
 
 			r.Use(middleware.NewAdaptiveCompression(app.compressionMonitor))
+			r.Use(middleware.StandardRateLimiter)
 
 			r.Get("/library", libraryHandler.HandleGetLibraryPageData)
 			r.Get("/home", homeHandler.HandleGetHomePageData)
@@ -126,12 +137,12 @@ func (app *application) routes(
 
 	// OAuth2 routes without CSRF protection
 	mux.Group(func(r chi.Router) {
-		r.With(middleware.RateLimiter).Get("/auth/google/signin", authHandlers.HandleGoogleSignIn)
-		r.With(middleware.RateLimiter).Get("/auth/google/callback", authHandlers.HandleGoogleCallback)
-		r.With(middleware.RateLimiter).Get("/auth/token/verify", authHandlers.HandleVerifyToken)
-		r.With(middleware.RateLimiter).Post("/auth/token/refresh", authHandlers.HandleRefreshToken)
-		r.With(middleware.RateLimiter).Post("/auth/signout", authHandlers.HandleSignOut)
-		r.With(middleware.RateLimiter).Delete("/auth/delete-account", authHandlers.HandleDeleteAccount)
+		r.With(middleware.CriticalRateLimiter).Get("/auth/google/signin", authHandlers.HandleGoogleSignIn)
+		r.With(middleware.CriticalRateLimiter).Get("/auth/google/callback", authHandlers.HandleGoogleCallback)
+		r.With(middleware.CriticalRateLimiter).Get("/auth/token/verify", authHandlers.HandleVerifyToken)
+		r.With(middleware.CriticalRateLimiter).Post("/auth/token/refresh", authHandlers.HandleRefreshToken)
+		r.With(middleware.CriticalRateLimiter).Post("/auth/signout", authHandlers.HandleSignOut)
+		r.With(middleware.CriticalRateLimiter).Delete("/auth/delete-account", authHandlers.HandleDeleteAccount)
 	})
 
 	return mux

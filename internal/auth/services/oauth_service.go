@@ -174,7 +174,7 @@ func (s *OAuthServiceImpl) GetAccessToken(ctx context.Context, userID int) (*oau
 		"component", "oauth_service",
 	)
 
-	tokenRecord, err := s.tokenRepo.GetLatestActiveToken(userID)
+	tokenRecord, err := s.tokenRepo.GetLatestActiveToken(ctx,userID)
 	if err != nil {
 		s.logger.Error("Failed to get active token",
 				"error", err,
@@ -257,10 +257,11 @@ func (s *OAuthServiceImpl) GetAccessToken(ctx context.Context, userID int) (*oau
 		)
 
 		err = s.tokenRepo.Rotate(
-				userID,
-				newToken.RefreshToken,
-				tokenRecord.RefreshToken,
-				newToken.Expiry,
+			ctx,
+			userID,
+			newToken.RefreshToken,
+			tokenRecord.RefreshToken,
+			newToken.Expiry,
 		)
 		if err != nil {
 				s.logger.Error("Token rotation failed",

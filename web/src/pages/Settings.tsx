@@ -4,6 +4,16 @@ import PageWithErrorBoundary from '../components/ErrorMessages/PageWithErrorBoun
 function Settings() {
   const settingsData = [
     {
+      label: "Domains: Books",
+      copy: "Curate the books in your personal library",
+      variant: "domain-book",
+    },
+    {
+      label: "Domains: Games (Coming Soon!)",
+      copy: "Manage the games in your personal collection",
+      variant: "domain-game",
+    },
+    {
       label: "Appearance",
       copy: "Customize how Bravo Kilo looks",
       variant: "theme",

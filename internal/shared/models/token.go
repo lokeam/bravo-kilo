@@ -3,9 +3,11 @@ package models
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"log/slog"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/lokeam/bravo-kilo/internal/dbconfig"
 )
 
@@ -18,6 +20,10 @@ type Token struct {
 	CreatedAt     time.Time `json:"created_at"`
 	LastUsedAt    time.Time `json:"last_used_at"`
 	RefreshCount  int       `json:"refresh_count"`
+
+	// Token Family Pattern
+	FamilyID      string    `json:"family_id"`
+	IsRevoked     bool      `json:"is_revoked"`
 }
 
 // Define the interface
@@ -25,15 +31,21 @@ type TokenModel interface {
 	Insert(token Token) error
 	Delete(userID int) error
 	GetRefreshTokenByUserID(userID int) (string, error)
-	Rotate(userID int, newToken, oldToken string, expiry time.Time) error
+	Rotate(ctx context.Context, userID int, newToken, oldToken string, expiry time.Time) error
 	DeleteByUserID(userID int) error
 	DeleteExpiredTokens(ctx context.Context) error
 	UpdateLastUsed(tokenID int) error
 	IncrementRefreshCount(tokenID int) error
 
+
 	// Monitoring
-	GetLatestActiveToken(userID int) (*Token, error)
+	GetLatestActiveToken(ctx context.Context, userID int) (*Token, error)
   RecordRefreshAttempt(tokenID int, success bool, error string) error
+
+	// Token Family Pattern
+	ValidateRefreshToken(refreshToken string) (*Token, error)
+	RevokeFamilyByID(familyID string) error
+	IsFamilyRevoked(ctx context.Context, familyID string) (bool, error)
 }
 
 // Implementation struct
@@ -56,16 +68,23 @@ func (t *TokenModelImpl) Insert(token Token) error {
 	// Set expiry to a future time (e.g., 7 days from now)
 	token.TokenExpiry = time.Now().Add(7 * 24 * time.Hour)
 
+	// Generate new family ID if one is not provided
+	if token.FamilyID == "" {
+		token.FamilyID = uuid.New().String()
+	}
+
 	statement := `
 		INSERT INTO tokens (
 				user_id, refresh_token, token_expiry,
-				previous_token, created_at, last_used_at
-		) VALUES ($1, $2, $3, $4, NOW(), NOW())
+				previous_token, created_at, last_used_at,
+				family_id, is_revoked
+		) VALUES ($1, $2, $3, $4, NOW(), NOW(), $5, false)
 	`
 
 	t.logger.Debug("Inserting new token",
 		"userID", token.UserID,
 		"expiry", token.TokenExpiry,
+		"familyID", token.FamilyID,
 		"component", "token_model",
 	)
 
@@ -74,21 +93,19 @@ func (t *TokenModelImpl) Insert(token Token) error {
 		token.RefreshToken,
 		token.TokenExpiry,
 		token.PreviousToken,
+		token.FamilyID,
 	)
 	if err != nil {
 		t.logger.Error("Failed to insert token",
 			"error", err,
 			"userID", token.UserID,
+			"familyID", token.FamilyID,
 			"component", "token_model",
     )
 		return err
 	}
 
-	t.logger.Debug("Setting token expiry",
-		"userID", token.UserID,
-		"expiry", token.TokenExpiry,
-		"component", "token_model",
-	)
+
 
 	return nil
 }
@@ -145,9 +162,16 @@ func (t *TokenModelImpl) GetRefreshTokenByUserID(userID int) (string, error) {
 	return refreshToken, nil
 }
 
-func (t *TokenModelImpl) Rotate(userID int, newToken, oldToken string, expiry time.Time) error {
-	ctx, cancel := context.WithTimeout(context.Background(), dbconfig.DBTimeout)
+func (t *TokenModelImpl) Rotate(ctx context.Context,userID int, newToken, oldToken string, expiry time.Time) error {
+	// Create child context with timeout
+	timeoutCtx, cancel := context.WithTimeout(context.Background(), dbconfig.DBTimeout)
 	defer cancel()
+
+	tx, err := t.db.BeginTx(timeoutCtx, nil)
+	if err != nil {
+		return fmt.Errorf("begin transaction: %w", err)
+	}
+	defer tx.Rollback()
 
 	t.logger.Debug("Attempting token rotation",
 		"userID", userID,
@@ -155,39 +179,82 @@ func (t *TokenModelImpl) Rotate(userID int, newToken, oldToken string, expiry ti
 		"component", "token_model",
   )
 
-	statement := `UPDATE tokens
-	SET refresh_token = $1,
-			previous_token = $2,
-			token_expiry = $3
-	WHERE user_id = $4 AND refresh_token = $5`
+	// 1. Validate old token
+	var currentToken Token
+	err = tx.QueryRowContext(ctx, `
+		SELECT id, family_id, is_revoked, token_expiry
+		FROM tokens
+		WHERE user_id = $1 AND refresh_token = $2
+	`, userID, oldToken).Scan(
+		&currentToken.ID,
+		&currentToken.FamilyID,
+		&currentToken.IsRevoked,
+		&currentToken.TokenExpiry,
+	)
 
-	result, err := t.db.ExecContext(ctx, statement, newToken, oldToken, expiry, userID, oldToken)
-	if err != nil {
-		t.logger.Error("Failed to rotate token",
-				"error", err,
-				"userID", userID,
-				"component", "token_model",
+	if err == sql.ErrNoRows {
+		t.logger.Error("Token not found during rotation",
+			"userID", userID,
+			"component", "token_model",
 		)
-		return err
+		return fmt.Errorf("token not found: %w", err)
+	}
+	if err != nil {
+		return fmt.Errorf("query token: %w", err)
 	}
 
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		t.logger.Error("Error checking rows affected during rotation",
+	// 2. Check if token is revoked
+	if currentToken.IsRevoked {
+		t.logger.Warn("Attempt to rotate revoked token",
+			"userID", userID,
+			"familyID", currentToken.FamilyID,
+			"component", "token_model",
+		)
+
+		// Revoke entire family and return error
+		if err := t.RevokeFamilyByID(currentToken.FamilyID); err != nil {
+			t.logger.Error("Failed to revoke token family",
 				"error", err,
-				"userID", userID,
+				"familyID", currentToken.FamilyID,
 				"component", "token_model",
-		)
-	} else if rowsAffected == 0 {
-		t.logger.Warn("No tokens were rotated",
-				"userID", userID,
-				"component", "token_model",
-		)
+			)
+		}
+		return fmt.Errorf("token is revoked: %w", err)
+	}
+
+	// 3. Insert new token in same family
+	_, err = tx.ExecContext(ctx, `
+        INSERT INTO tokens (
+            user_id, refresh_token, token_expiry,
+            family_id, last_used_at, is_revoked,
+            refresh_count
+        ) VALUES ($1, $2, $3, $4, NOW(), false, 0)
+	`, userID, newToken, expiry, currentToken.FamilyID)
+
+	if err != nil {
+		return fmt.Errorf("insert new token: %w", err)
+	}
+
+	// 4. Revoke old token
+	_, err = tx.ExecContext(ctx, `
+        UPDATE tokens
+        SET is_revoked = true,
+            last_used_at = NOW()
+        WHERE id = $1
+	`)
+
+	if err != nil {
+		return fmt.Errorf("revoke old token: %w", err)
+	}
+
+	// 5. Commit transaction
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit transaction: %w", err)
 	}
 
 	t.logger.Info("Token rotation completed",
 		"userID", userID,
-		"rowsAffected", rowsAffected,
+		"familyID", currentToken.FamilyID,
 		"newExpiry", expiry,
 		"component", "token_model",
 	)
@@ -315,8 +382,9 @@ func (t *TokenModelImpl) UpdateLastUsed(tokenID int) error {
 	return nil
 }
 
-func (t *TokenModelImpl) GetLatestActiveToken(userID int) (*Token, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), dbconfig.DBTimeout)
+func (t *TokenModelImpl) GetLatestActiveToken(ctx context.Context,userID int) (*Token, error) {
+	// Create child context with Timeout
+	timeoutCtx, cancel := context.WithTimeout(context.Background(), dbconfig.DBTimeout)
 	defer cancel()
 
 	var token Token
@@ -329,7 +397,7 @@ func (t *TokenModelImpl) GetLatestActiveToken(userID int) (*Token, error) {
 			LIMIT 1
 	`
 
-	err := t.db.QueryRowContext(ctx, statement, userID).Scan(
+	err := t.db.QueryRowContext(timeoutCtx, statement, userID).Scan(
 			&token.ID,
 			&token.UserID,
 			&token.RefreshToken,
@@ -425,4 +493,179 @@ func (t *TokenModelImpl) IncrementRefreshCount(tokenID int) error {
 			"component", "token_model",
 	)
 	return nil
+}
+
+// Looks up token record by refresh token value to check validity + family status
+func (t *TokenModelImpl) ValidateRefreshToken(refreshToken string) (*Token, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), dbconfig.DBTimeout)
+	defer cancel()
+
+	t.logger.Debug("Validating refresh token",
+		"refreshToken", refreshToken,
+		"component", "token_model",
+	)
+
+	var token Token
+	statement := `
+		SELECT id, user_id, refresh_token, token_expiry,
+						family_id, is_revoked, created_at, last_used_at,
+						refresh_count
+		FROM tokens
+		WHERE refresh_token = $1
+	`
+
+	err := t.db.QueryRowContext(ctx, statement,  refreshToken).Scan(
+		&token.ID,
+		&token.UserID,
+		&token.RefreshToken,
+		&token.TokenExpiry,
+		&token.FamilyID,
+		&token.IsRevoked,
+		&token.CreatedAt,
+		&token.LastUsedAt,
+		&token.RefreshCount,
+	)
+
+	if err == sql.ErrNoRows {
+		t.logger.Warn("Refresh token not found",
+			"component", "token_model",
+		)
+		return nil, nil
+	}
+	if err != nil {
+		t.logger.Error("Database error validating refresh token",
+				"error", err,
+				"component", "token_model",
+		)
+		return nil, fmt.Errorf("query token: %w", err)
+	}
+
+	// Explicit expiration check
+	if time.Now().After(token.TokenExpiry) {
+		t.logger.Warn("Token expired",
+			"tokenID", token.ID,
+			"expiry", token.TokenExpiry,
+			"component", "token_model",
+		)
+		return nil, nil
+	}
+
+	t.logger.Debug("Refresh token validated",
+		"tokenID", token.ID,
+		"userID", token.UserID,
+		"isRevoked", token.IsRevoked,
+		"expiresIn", time.Until(token.TokenExpiry),
+		"component", "token_model",
+	)
+
+	return &token, nil
+}
+
+// Marks all tokens in a family as revoked
+func (t *TokenModelImpl) RevokeFamilyByID(familyID string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), dbconfig.DBTimeout)
+	defer cancel()
+
+	// Start transaction
+	tx, err := t.db.BeginTx(ctx, nil)
+	if err != nil {
+			return fmt.Errorf("begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	t.logger.Debug("Revoking family by ID",
+		"familyID", familyID,
+		"component", "token_model",
+	)
+
+	// Check if family exists
+	var familyExists bool
+	err = tx.QueryRowContext(ctx, `
+		SELECT EXISTS(
+			SELECT 1 from tokens WHERE family_id = $1
+		)
+	`, familyID).Scan(&familyExists)
+
+	if err != nil {
+		return fmt.Errorf("check family existence: %w", err)
+	}
+	if !familyExists {
+		t.logger.Warn("Token family not found",
+			"familyID", familyID,
+			"component", "token_model",
+		)
+		return nil
+	}
+
+	// Revoke all tokens in family
+	// Track when revocation occurred, only update non-revoked tokens
+	statement := `
+        UPDATE tokens
+        SET is_revoked = true,
+            last_used_at = NOW()
+        WHERE family_id = $1
+          AND is_revoked = false
+        RETURNING id
+	`
+
+	rows, err := t.db.QueryContext(ctx, statement, familyID)
+	if err != nil {
+		t.logger.Error("Failed to revoke token family",
+				"error", err,
+				"familyID", familyID,
+				"component", "token_model",
+		)
+		return fmt.Errorf("revoke family: %w", err)
+	}
+	defer rows.Close()
+
+	// Count the number of affected tokens
+	var revokedTokens []int
+	for rows.Next() {
+		var id int
+		if err := rows.Scan(&id); err != nil {
+				return fmt.Errorf("scan token id: %w", err)
+		}
+		revokedTokens = append(revokedTokens, id)
+	}
+
+	if err = rows.Err(); err != nil {
+		return fmt.Errorf("rows error: %w", err)
+	}
+	if err = tx.Commit(); err != nil {
+		return fmt.Errorf("commit transaction: %w", err)
+	}
+
+	t.logger.Info("Token family revoked",
+		"familyID", familyID,
+		"tokensRevoked", revokedTokens,
+		"component", "token_model",
+	)
+
+	return nil
+}
+
+// Check if token family is revoked
+func (t *TokenModelImpl) IsFamilyRevoked(ctx context.Context, familyID string) (bool, error) {
+	var isRevoked bool
+	statement := `
+        SELECT EXISTS (
+            SELECT 1
+            FROM tokens
+            WHERE family_id = $1
+            AND is_revoked = true
+        )
+	`
+
+	err := t.db.QueryRowContext(ctx, statement, familyID).Scan(&isRevoked)
+	if err != nil {
+			t.logger.Error("Failed to check family revocation status",
+					"error", err,
+					"familyID", familyID,
+					"component", "token_model",
+			)
+			return false, fmt.Errorf("check family revocation: %w", err)
+	}
+
+	return isRevoked, nil
 }

@@ -219,7 +219,7 @@ func (h *AuthHandlers) HandleRefreshToken(w http.ResponseWriter, r *http.Request
 	h.logger.Info("HandleRefreshToken called")
 
     // 1. Attempt to refresh token
-    newToken, err := h.tokenService.RefreshToken(r)
+    newToken, err := h.tokenService.RefreshToken(r.Context(), r)
     if err != nil {
         switch {
 					case errors.Is(err, ErrNoToken):
